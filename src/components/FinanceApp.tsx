@@ -7,8 +7,12 @@ import { BottomNavigation } from '@/components/layout/BottomNavigation';
 import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { AccountsList } from '@/components/accounts/AccountsList';
 import { AddTransactionForm } from '@/components/transactions/AddTransactionForm';
-import { SimpleReports } from '@/components/reports/SimpleReports';
+import { AdvancedReports } from '@/components/reports/AdvancedReports';
 import { SimpleGoals } from '@/components/goals/SimpleGoals';
+import { CreditCardsList } from '@/components/credit-cards/CreditCardsList';
+import { BudgetsList } from '@/components/budgets/BudgetsList';
+import { CategoryManager } from '@/components/categories/CategoryManager';
+import { ThemeProvider } from '@/contexts/ThemeContext';
 
 export const FinanceApp: React.FC = () => {
   const { user, loading } = useAuth();
@@ -35,10 +39,16 @@ export const FinanceApp: React.FC = () => {
         return <DashboardOverview />;
       case 'accounts':
         return <AccountsList />;
+      case 'cards':
+        return <CreditCardsList />;
       case 'add':
         return <AddTransactionForm />;
+      case 'budgets':
+        return <BudgetsList />;
+      case 'categories':
+        return <CategoryManager />;
       case 'reports':
-        return <SimpleReports />;
+        return <AdvancedReports />;
       case 'goals':
         return <SimpleGoals />;
       default:
@@ -47,14 +57,16 @@ export const FinanceApp: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <TopHeader />
-      
-      <main className="container mx-auto px-4 py-4 max-w-md">
-        {renderContent()}
-      </main>
+    <ThemeProvider>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 transition-colors">
+        <TopHeader />
+        
+        <main className="container mx-auto px-4 py-4 max-w-md">
+          {renderContent()}
+        </main>
 
-      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-    </div>
+        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+      </div>
+    </ThemeProvider>
   );
 };
