@@ -40,8 +40,8 @@ export const useTransactions = () => {
         .from('transactions')
         .select(`
           *,
-          categories!inner(id, name, icon, color),
-          accounts!inner(id, name, type)
+          categories!transactions_category_id_fkey(id, name, icon, color),
+          accounts!transactions_account_id_fkey(id, name, type)
         `)
         .eq('user_id', user.id)
         .order('date', { ascending: false })
@@ -91,8 +91,8 @@ export const useTransactions = () => {
         .insert([{ ...transactionData, user_id: user.id }])
         .select(`
           *,
-          categories!inner(id, name, icon, color),
-          accounts!inner(id, name, type)
+          categories!transactions_category_id_fkey(id, name, icon, color),
+          accounts!transactions_account_id_fkey(id, name, type)
         `)
         .single();
 
