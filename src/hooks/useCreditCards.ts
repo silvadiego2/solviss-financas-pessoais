@@ -33,7 +33,7 @@ export const useCreditCards = () => {
         .order('name', { ascending: true });
 
       if (error) throw error;
-      setCreditCards((data as CreditCard[]) || []);
+      setCreditCards((data as unknown as CreditCard[]) || []);
     } catch (error) {
       console.error('Erro ao buscar cartões:', error);
     } finally {
@@ -53,8 +53,8 @@ export const useCreditCards = () => {
 
       if (error) throw error;
       
-      setCreditCards(prev => [...prev, data as CreditCard]);
-      return data as CreditCard;
+      setCreditCards(prev => [...prev, data as unknown as CreditCard]);
+      return data as unknown as CreditCard;
     } catch (error) {
       console.error('Erro ao criar cartão:', error);
       throw error;
@@ -75,8 +75,8 @@ export const useCreditCards = () => {
 
       if (error) throw error;
       
-      setCreditCards(prev => prev.map(card => card.id === id ? (data as CreditCard) : card));
-      return data as CreditCard;
+      setCreditCards(prev => prev.map(card => card.id === id ? (data as unknown as CreditCard) : card));
+      return data as unknown as CreditCard;
     } catch (error) {
       console.error('Erro ao atualizar cartão:', error);
       throw error;
