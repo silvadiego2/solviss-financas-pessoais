@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import { TopHeader } from '@/components/layout/TopHeader';
@@ -13,11 +13,24 @@ import { SimpleGoals } from '@/components/goals/SimpleGoals';
 import { CreditCardsList } from '@/components/credit-cards/CreditCardsList';
 import { BudgetsList } from '@/components/budgets/BudgetsList';
 import { CategoryManager } from '@/components/categories/CategoryManager';
+import { MoreOptions } from '@/components/more/MoreOptions';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 
 export const FinanceApp: React.FC = () => {
   const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  // Listener para navegação do MoreOptions
+  useEffect(() => {
+    const handleNavigation = (event: CustomEvent) => {
+      setActiveTab(event.detail.tab);
+    };
+
+    window.addEventListener('navigate', handleNavigation as EventListener);
+    return () => {
+      window.removeEventListener('navigate', handleNavigation as EventListener);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -40,16 +53,18 @@ export const FinanceApp: React.FC = () => {
         return <DashboardOverview />;
       case 'accounts':
         return <AccountsList />;
-      case 'cards':
-        return <CreditCardsList />;
       case 'add':
         return <AddTransactionForm />;
       case 'budgets':
         return <BudgetsList />;
-      case 'categories':
-        return <CategoryManager />;
       case 'reports':
         return <AdvancedReports />;
+      case 'more':
+        return <MoreOptions onNavigate={setActiveTab} />;
+      case 'cards':
+        return <CreditCardsList />;
+      case 'categories':
+        return <CategoryManager />;
       case 'export':
         return <ExportReports />;
       case 'goals':

@@ -49,7 +49,7 @@ export const useBudgets = () => {
         id: item.id,
         category_id: item.category_id,
         amount: item.amount,
-        spent: item.spent,
+        spent: item.spent || 0,
         month: item.month,
         year: item.year,
         created_at: item.created_at,
@@ -65,6 +65,7 @@ export const useBudgets = () => {
       setBudgets(transformedData);
     } catch (error) {
       console.error('Erro ao buscar orçamentos:', error);
+      setBudgets([]);
     } finally {
       setLoading(false);
     }
@@ -89,7 +90,7 @@ export const useBudgets = () => {
         id: data.id,
         category_id: data.category_id,
         amount: data.amount,
-        spent: data.spent,
+        spent: data.spent || 0,
         month: data.month,
         year: data.year,
         created_at: data.created_at,
@@ -131,7 +132,7 @@ export const useBudgets = () => {
         id: data.id,
         category_id: data.category_id,
         amount: data.amount,
-        spent: data.spent,
+        spent: data.spent || 0,
         month: data.month,
         year: data.year,
         created_at: data.created_at,
