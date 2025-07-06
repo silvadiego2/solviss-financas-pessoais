@@ -26,7 +26,7 @@ export const useCreditCards = () => {
     
     try {
       const { data, error } = await supabase
-        .from('credit_cards')
+        .from('credit_cards' as any)
         .select('*')
         .eq('user_id', user.id)
         .eq('is_active', true)
@@ -46,7 +46,7 @@ export const useCreditCards = () => {
 
     try {
       const { data, error } = await supabase
-        .from('credit_cards')
+        .from('credit_cards' as any)
         .insert([{ ...cardData, user_id: user.id }])
         .select()
         .single();
@@ -66,7 +66,7 @@ export const useCreditCards = () => {
 
     try {
       const { data, error } = await supabase
-        .from('credit_cards')
+        .from('credit_cards' as any)
         .update(updates)
         .eq('id', id)
         .eq('user_id', user.id)
@@ -88,7 +88,7 @@ export const useCreditCards = () => {
 
     try {
       const { error } = await supabase
-        .from('credit_cards')
+        .from('credit_cards' as any)
         .update({ is_active: false })
         .eq('id', id)
         .eq('user_id', user.id);
