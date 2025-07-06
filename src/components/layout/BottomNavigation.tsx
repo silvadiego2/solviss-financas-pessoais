@@ -11,8 +11,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
   const navItems = [
     { id: 'dashboard', icon: Home, label: 'Início' },
     { id: 'accounts', icon: Wallet, label: 'Contas' },
-    { id: 'add', icon: PlusCircle, label: 'Adicionar' },
     { id: 'budgets', icon: Target, label: 'Orçamentos' },
+    { id: 'add', icon: PlusCircle, label: 'Adicionar' },
     { id: 'reports', icon: BarChart3, label: 'Gráficos' },
     { id: 'more', icon: Settings, label: 'Mais' },
   ];
