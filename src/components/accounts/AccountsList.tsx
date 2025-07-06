@@ -1,8 +1,10 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CreditCard, Wallet, Building, PiggyBank, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CreditCard, Wallet, Building, PiggyBank, TrendingUp, Plus } from 'lucide-react';
 import { useAccounts } from '@/hooks/useAccounts';
+import { AddAccountForm } from './AddAccountForm';
 
 const getAccountIcon = (type: string) => {
   switch (type) {
@@ -40,6 +42,7 @@ const getAccountTypeName = (type: string) => {
 
 export const AccountsList: React.FC = () => {
   const { accounts, loading } = useAccounts();
+  const [showAddForm, setShowAddForm] = useState(false);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -49,22 +52,43 @@ export const AccountsList: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="p-4">Carregando contas...</div>;
+    return (
+      <div className="flex items-center justify-center py-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+      </div>
+    );
+  }
+
+  if (showAddForm) {
+    return <AddAccountForm onClose={() => setShowAddForm(false)} />;
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Minhas Contas</h2>
+        <Button 
+          onClick={() => setShowAddForm(true)}
+          className="flex items-center space-x-2"
+        >
+          <Plus size={16} />
+          <span>Adicionar Conta</span>
+        </Button>
       </div>
 
       {accounts.length === 0 ? (
         <Card>
-          <CardContent className="text-center py-8">
-            <p className="text-gray-500">Nenhuma conta cadastrada</p>
-            <p className="text-sm text-gray-400 mt-2">
-              Adicione uma conta para começar a gerenciar suas finanças
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <Wallet size={48} className="text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Nenhuma conta encontrada
+            </h3>
+            <p className="text-gray-500 text-center mb-4">
+              Adicione suas contas para começar a controlar suas finanças
             </p>
+            <Button onClick={() => setShowAddForm(true)}>
+              Adicionar Primeira Conta
+            </Button>
           </CardContent>
         </Card>
       ) : (

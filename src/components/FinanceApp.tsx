@@ -8,6 +8,7 @@ import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
 import { AccountsList } from '@/components/accounts/AccountsList';
 import { AddTransactionForm } from '@/components/transactions/AddTransactionForm';
 import { AdvancedReports } from '@/components/reports/AdvancedReports';
+import { ExportReports } from '@/components/reports/ExportReports';
 import { SimpleGoals } from '@/components/goals/SimpleGoals';
 import { CreditCardsList } from '@/components/credit-cards/CreditCardsList';
 import { BudgetsList } from '@/components/budgets/BudgetsList';
@@ -49,6 +50,8 @@ export const FinanceApp: React.FC = () => {
         return <CategoryManager />;
       case 'reports':
         return <AdvancedReports />;
+      case 'export':
+        return <ExportReports />;
       case 'goals':
         return <SimpleGoals />;
       default:

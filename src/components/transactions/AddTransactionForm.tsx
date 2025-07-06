@@ -7,9 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAccounts } from '@/hooks/useAccounts';
+import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
 import { useTransactions } from '@/hooks/useTransactions';
 import { toast } from 'sonner';
+import { CreditCard, Building } from 'lucide-react';
 
 export const AddTransactionForm: React.FC = () => {
   const [type, setType] = useState<'income' | 'expense'>('expense');
@@ -21,10 +23,30 @@ export const AddTransactionForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   const { accounts } = useAccounts();
+  const { creditCards } = useCreditCards();
   const { categories } = useCategories();
   const { createTransaction } = useTransactions();
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
+
+  // Combinar contas e cartões de crédito
+  const allAccounts = [
+    ...accounts.map(account => ({
+      id: account.id,
+      name: account.name,
+      type: 'account' as const,
+      accountType: account.type,
+      icon: <Building size={16} />
+    })),
+    ...creditCards.map(card => ({
+      id: card.id,
+      name: card.name,
+      type: 'credit_card' as const,
+      accountType: 'credit_card',
+      bankName: card.bank_name,
+      icon: <CreditCard size={16} />
+    }))
+  ];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,15 +129,24 @@ export const AddTransactionForm: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="account">Conta *</Label>
+              <Label htmlFor="account">Conta/Cartão *</Label>
               <Select value={accountId} onValueChange={setAccountId} required>
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma conta" />
+                  <SelectValue placeholder="Selecione uma conta ou cartão" />
                 </SelectTrigger>
                 <SelectContent>
-                  {accounts.map((account) => (
+                  {allAccounts.map((account) => (
                     <SelectItem key={account.id} value={account.id}>
-                      {account.name}
+                      <div className="flex items-center space-x-2">
+                        {account.icon}
+                        <span>{account.name}</span>
+                        <span className="text-xs text-gray-500">
+                          {account.type === 'credit_card' ? 
+                            `(Cartão - ${account.bankName})` : 
+                            '(Conta)'
+                          }
+                        </span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>

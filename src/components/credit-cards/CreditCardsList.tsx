@@ -2,13 +2,17 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard as CreditCardIcon, Settings, Calendar } from 'lucide-react';
+import { Plus, CreditCard as CreditCardIcon, Settings, Calendar, Receipt, Eye } from 'lucide-react';
 import { useCreditCards } from '@/hooks/useCreditCards';
+import { useTransactions } from '@/hooks/useTransactions';
 import { AddCreditCardForm } from './AddCreditCardForm';
+import { CreditCardInvoices } from './CreditCardInvoices';
 
 export const CreditCardsList: React.FC = () => {
   const { creditCards, loading } = useCreditCards();
+  const { transactions } = useTransactions();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [selectedCardForInvoices, setSelectedCardForInvoices] = useState<any>(null);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -27,6 +31,35 @@ export const CreditCardsList: React.FC = () => {
     return 'bg-green-500';
   };
 
+  // Calcular estatísticas gerais dos cartões
+  const getCardStatistics = () => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+
+    let totalOpenInvoices = 0;
+    let totalExpenses = 0;
+
+    creditCards.forEach(card => {
+      const cardTransactions = transactions.filter(t => t.account_id === card.id);
+      
+      // Transações do mês atual para faturas abertas
+      const currentMonthTransactions = cardTransactions.filter(t => {
+        const transactionDate = new Date(t.date);
+        return transactionDate.getMonth() === currentMonth && 
+               transactionDate.getFullYear() === currentYear;
+      });
+      
+      const monthlyTotal = currentMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
+      totalOpenInvoices += monthlyTotal;
+      totalExpenses += cardTransactions.reduce((sum, t) => sum + t.amount, 0);
+    });
+
+    return { totalOpenInvoices, totalExpenses };
+  };
+
+  const { totalOpenInvoices, totalExpenses } = getCardStatistics();
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -37,6 +70,15 @@ export const CreditCardsList: React.FC = () => {
 
   if (showAddForm) {
     return <AddCreditCardForm onClose={() => setShowAddForm(false)} />;
+  }
+
+  if (selectedCardForInvoices) {
+    return (
+      <CreditCardInvoices 
+        card={selectedCardForInvoices} 
+        onClose={() => setSelectedCardForInvoices(null)} 
+      />
+    );
   }
 
   return (
@@ -51,6 +93,28 @@ export const CreditCardsList: React.FC = () => {
           <span>Adicionar Cartão</span>
         </Button>
       </div>
+
+      {/* Resumo Geral */}
+      {creditCards.length > 0 && (
+        <div className="grid grid-cols-2 gap-4">
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-sm text-gray-600">Faturas Abertas</p>
+              <p className="text-lg font-bold text-red-600">
+                {formatCurrency(totalOpenInvoices)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 text-center">
+              <p className="text-sm text-gray-600">Total Gasto</p>
+              <p className="text-lg font-bold text-gray-800">
+                {formatCurrency(totalExpenses)}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {creditCards.length === 0 ? (
         <Card>
@@ -131,11 +195,21 @@ export const CreditCardsList: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Botão de Configurações */}
-                    <Button variant="outline" size="sm" className="w-full">
-                      <Settings size={16} className="mr-2" />
-                      Configurações
-                    </Button>
+                    {/* Botões de Ação */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSelectedCardForInvoices(card)}
+                      >
+                        <Eye size={16} className="mr-2" />
+                        Ver Faturas
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        <Settings size={16} className="mr-2" />
+                        Configurar
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
