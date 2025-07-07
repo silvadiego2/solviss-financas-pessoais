@@ -11,7 +11,7 @@ import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
 import { useTransactions } from '@/hooks/useTransactions';
 import { toast } from 'sonner';
-import { CreditCard, Building } from 'lucide-react';
+import { CreditCard, Building, Upload } from 'lucide-react';
 
 export const AddTransactionForm: React.FC = () => {
   const [type, setType] = useState<'income' | 'expense'>('expense');
@@ -20,6 +20,7 @@ export const AddTransactionForm: React.FC = () => {
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
   const { accounts } = useAccounts();
@@ -48,6 +49,13 @@ export const AddTransactionForm: React.FC = () => {
     }))
   ];
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setReceiptFile(file);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -72,6 +80,7 @@ export const AddTransactionForm: React.FC = () => {
         category_id: categoryId,
         date,
         status: 'completed',
+        receiptFile: receiptFile || undefined,
       });
 
       toast.success(`${type === 'income' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
@@ -82,6 +91,7 @@ export const AddTransactionForm: React.FC = () => {
       setAccountId('');
       setCategoryId('');
       setDate(new Date().toISOString().split('T')[0]);
+      setReceiptFile(null);
     } catch (error: any) {
       toast.error(error.message || 'Erro ao adicionar transação');
     } finally {
@@ -180,6 +190,25 @@ export const AddTransactionForm: React.FC = () => {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="receipt">Anexar Comprovante/Nota Fiscal</Label>
+              <div className="flex items-center space-x-2">
+                <Input
+                  id="receipt"
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={handleFileChange}
+                  className="flex-1"
+                />
+                <Upload size={20} className="text-gray-400" />
+              </div>
+              {receiptFile && (
+                <p className="text-sm text-green-600">
+                  Arquivo selecionado: {receiptFile.name}
+                </p>
+              )}
             </div>
 
             <Button 

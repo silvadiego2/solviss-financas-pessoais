@@ -47,7 +47,7 @@ export const useTransactions = () => {
       .select(`
         *,
         category:categories(id, name, icon, color),
-        account:accounts(id, name)
+        account:accounts!transactions_account_id_fkey(id, name)
       `)
       .eq('user_id', user.id)
       .order('date', { ascending: false });
