@@ -35,6 +35,23 @@ export interface Transaction {
   };
 }
 
+export interface CreateTransactionInput {
+  type: 'income' | 'expense' | 'transfer';
+  amount: number;
+  description: string;
+  account_id: string;
+  category_id?: string;
+  date: string;
+  notes?: string;
+  tags?: string[];
+  status: 'pending' | 'completed' | 'cancelled';
+  transfer_account_id?: string;
+  is_recurring?: boolean;
+  recurrence_frequency?: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  recurrence_end_date?: string;
+  receiptFile?: File;
+}
+
 export const useTransactions = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -86,7 +103,7 @@ export const useTransactions = () => {
   };
 
   const createTransactionMutation = useMutation({
-    mutationFn: async ({ receiptFile, ...transactionData }: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'category' | 'account'> & { receiptFile?: File }) => {
+    mutationFn: async ({ receiptFile, ...transactionData }: CreateTransactionInput) => {
       if (!user) throw new Error('Usuário não autenticado');
 
       let receipt_image_url;
