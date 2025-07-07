@@ -1,7 +1,9 @@
 
 import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { toast } from 'sonner';
 
 export interface CreditCard {
   id: string;
@@ -17,101 +19,108 @@ export interface CreditCard {
 }
 
 export const useCreditCards = () => {
-  const [creditCards, setCreditCards] = useState<CreditCard[]>([]);
-  const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const fetchCreditCards = async () => {
-    if (!user) return;
+  const fetchCreditCards = async (): Promise<CreditCard[]> => {
+    if (!user) return [];
     
-    try {
-      const { data, error } = await supabase
-        .from('credit_cards' as any)
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_active', true)
-        .order('name', { ascending: true });
+    const { data, error } = await supabase
+      .from('credit_cards')
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('is_active', true)
+      .order('name', { ascending: true });
 
-      if (error) throw error;
-      setCreditCards((data as unknown as CreditCard[]) || []);
-    } catch (error) {
+    if (error) {
       console.error('Erro ao buscar cartões:', error);
-    } finally {
-      setLoading(false);
+      throw error;
     }
+    
+    return data || [];
   };
 
-  const createCreditCard = async (cardData: Omit<CreditCard, 'id' | 'created_at' | 'updated_at'>) => {
-    if (!user) return;
+  const { data: creditCards = [], isLoading, error } = useQuery({
+    queryKey: ['credit_cards', user?.id],
+    queryFn: fetchCreditCards,
+    enabled: !!user,
+  });
 
-    try {
+  const createCreditCardMutation = useMutation({
+    mutationFn: async (cardData: Omit<CreditCard, 'id' | 'created_at' | 'updated_at'>) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
       const { data, error } = await supabase
-        .from('credit_cards' as any)
+        .from('credit_cards')
         .insert([{ ...cardData, user_id: user.id }])
         .select()
         .single();
 
       if (error) throw error;
-      
-      setCreditCards(prev => [...prev, data as unknown as CreditCard]);
-      return data as unknown as CreditCard;
-    } catch (error) {
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
+      toast.success('Cartão adicionado com sucesso!');
+    },
+    onError: (error) => {
       console.error('Erro ao criar cartão:', error);
-      throw error;
-    }
-  };
+      toast.error('Erro ao adicionar cartão');
+    },
+  });
 
-  const updateCreditCard = async (id: string, updates: Partial<CreditCard>) => {
-    if (!user) return;
-
-    try {
+  const updateCreditCardMutation = useMutation({
+    mutationFn: async ({ id, ...updates }: Partial<CreditCard> & { id: string }) => {
       const { data, error } = await supabase
-        .from('credit_cards' as any)
+        .from('credit_cards')
         .update(updates)
         .eq('id', id)
-        .eq('user_id', user.id)
+        .eq('user_id', user?.id)
         .select()
         .single();
 
       if (error) throw error;
-      
-      setCreditCards(prev => prev.map(card => card.id === id ? (data as unknown as CreditCard) : card));
-      return data as unknown as CreditCard;
-    } catch (error) {
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
+      toast.success('Cartão atualizado com sucesso!');
+    },
+    onError: (error) => {
       console.error('Erro ao atualizar cartão:', error);
-      throw error;
-    }
-  };
+      toast.error('Erro ao atualizar cartão');
+    },
+  });
 
-  const deleteCreditCard = async (id: string) => {
-    if (!user) return;
-
-    try {
+  const deleteCreditCardMutation = useMutation({
+    mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('credit_cards' as any)
+        .from('credit_cards')
         .update({ is_active: false })
         .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('user_id', user?.id);
 
       if (error) throw error;
-      
-      setCreditCards(prev => prev.filter(card => card.id !== id));
-    } catch (error) {
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
+      toast.success('Cartão excluído com sucesso!');
+    },
+    onError: (error) => {
       console.error('Erro ao deletar cartão:', error);
-      throw error;
-    }
-  };
-
-  useEffect(() => {
-    fetchCreditCards();
-  }, [user]);
+      toast.error('Erro ao deletar cartão');
+    },
+  });
 
   return {
     creditCards,
-    loading,
-    createCreditCard,
-    updateCreditCard,
-    deleteCreditCard,
-    refetch: fetchCreditCards,
+    loading: isLoading,
+    createCreditCard: createCreditCardMutation.mutate,
+    updateCreditCard: updateCreditCardMutation.mutate,
+    deleteCreditCard: deleteCreditCardMutation.mutate,
+    isCreating: createCreditCardMutation.isPending,
+    isUpdating: updateCreditCardMutation.isPending,
+    isDeleting: deleteCreditCardMutation.isPending,
+    refetch: () => queryClient.invalidateQueries({ queryKey: ['credit_cards'] }),
   };
 };

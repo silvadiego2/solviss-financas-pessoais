@@ -1,51 +1,16 @@
 
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/components/auth/AuthProvider';
-import { AuthScreen } from '@/components/auth/AuthScreen';
-import { TopHeader } from '@/components/layout/TopHeader';
-import { BottomNavigation } from '@/components/layout/BottomNavigation';
-import { DashboardOverview } from '@/components/dashboard/DashboardOverview';
-import { AccountsList } from '@/components/accounts/AccountsList';
-import { AddTransactionForm } from '@/components/transactions/AddTransactionForm';
-import { AdvancedReports } from '@/components/reports/AdvancedReports';
-import { ExportReports } from '@/components/reports/ExportReports';
-import { SimpleGoals } from '@/components/goals/SimpleGoals';
-import { CreditCardsList } from '@/components/credit-cards/CreditCardsList';
-import { BudgetsList } from '@/components/budgets/BudgetsList';
-import { CategoryManager } from '@/components/categories/CategoryManager';
-import { MoreOptions } from '@/components/more/MoreOptions';
-import { ThemeProvider } from '@/contexts/ThemeContext';
+import React, { useState } from 'react';
+import { BottomNavigation } from './layout/BottomNavigation';
+import { TopHeader } from './layout/TopHeader';
+import { DashboardOverview } from './dashboard/DashboardOverview';
+import { AccountsList } from './accounts/AccountsList';
+import { AddTransactionForm } from './transactions/AddTransactionForm';
+import { BudgetsList } from './budgets/BudgetsList';
+import { SimpleReports } from './reports/SimpleReports';
+import { MoreOptions } from './more/MoreOptions';
 
 export const FinanceApp: React.FC = () => {
-  const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
-
-  // Listener para navegação do MoreOptions
-  useEffect(() => {
-    const handleNavigation = (event: CustomEvent) => {
-      setActiveTab(event.detail.tab);
-    };
-
-    window.addEventListener('navigate', handleNavigation as EventListener);
-    return () => {
-      window.removeEventListener('navigate', handleNavigation as EventListener);
-    };
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return <AuthScreen />;
-  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -53,38 +18,26 @@ export const FinanceApp: React.FC = () => {
         return <DashboardOverview />;
       case 'accounts':
         return <AccountsList />;
-      case 'add':
-        return <AddTransactionForm />;
       case 'budgets':
         return <BudgetsList />;
+      case 'add':
+        return <AddTransactionForm />;
       case 'reports':
-        return <AdvancedReports />;
+        return <SimpleReports />;
       case 'more':
-        return <MoreOptions onNavigate={setActiveTab} />;
-      case 'cards':
-        return <CreditCardsList />;
-      case 'categories':
-        return <CategoryManager />;
-      case 'export':
-        return <ExportReports />;
-      case 'goals':
-        return <SimpleGoals />;
+        return <MoreOptions />;
       default:
         return <DashboardOverview />;
     }
   };
 
   return (
-    <ThemeProvider>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 transition-colors">
-        <TopHeader />
-        
-        <main className="container mx-auto px-4 py-4 max-w-md">
-          {renderContent()}
-        </main>
-
-        <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-      </div>
-    </ThemeProvider>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+      <TopHeader />
+      <main className="container mx-auto px-4 py-4 max-w-md">
+        {renderContent()}
+      </main>
+      <BottomNavigation activeTab={activeTab} onTabChange={setActiveTab} />
+    </div>
   );
 };

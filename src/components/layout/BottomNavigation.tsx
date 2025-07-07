@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Home, CreditCard, PlusCircle, BarChart3, User, Wallet, Download, Target, Settings } from 'lucide-react';
 
@@ -13,7 +12,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
     { id: 'accounts', icon: Wallet, label: 'Contas' },
     { id: 'budgets', icon: Target, label: 'Orçamentos' },
     { id: 'add', icon: PlusCircle, label: 'Adicionar' },
-    { id: 'reports', icon: BarChart3, label: 'Gráficos' },
+    { id: 'reports', icon: BarChart3, label: 'Relatórios' },
     { id: 'more', icon: Settings, label: 'Mais' },
   ];
 

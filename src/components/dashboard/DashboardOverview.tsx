@@ -1,13 +1,15 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowUp, ArrowDown, Wallet, TrendingUp } from 'lucide-react';
+import { ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard, Plus } from 'lucide-react';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useTransactions } from '@/hooks/useTransactions';
+import { useCreditCards } from '@/hooks/useCreditCards';
 
 export const DashboardOverview: React.FC = () => {
   const { accounts } = useAccounts();
   const { transactions } = useTransactions();
+  const { creditCards } = useCreditCards();
 
   const totalBalance = accounts.reduce((sum, account) => sum + Number(account.balance), 0);
   
@@ -78,6 +80,81 @@ export const DashboardOverview: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Contas Widget */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <div className="flex items-center">
+              <Wallet size={16} className="mr-1" />
+              Contas ({accounts.length})
+            </div>
+            <Plus size={16} className="text-gray-400" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {accounts.length === 0 ? (
+            <p className="text-sm text-gray-500">Nenhuma conta cadastrada</p>
+          ) : (
+            <div className="space-y-2">
+              {accounts.slice(0, 3).map((account) => (
+                <div key={account.id} className="flex justify-between items-center">
+                  <span className="text-sm">{account.name}</span>
+                  <span className="text-sm font-medium">{formatCurrency(Number(account.balance))}</span>
+                </div>
+              ))}
+              {accounts.length > 3 && (
+                <p className="text-xs text-gray-500">+{accounts.length - 3} contas</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Cartões de Crédito Widget */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <div className="flex items-center">
+              <CreditCard size={16} className="mr-1" />
+              Cartões ({creditCards.length})
+            </div>
+            <Plus size={16} className="text-gray-400" />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {creditCards.length === 0 ? (
+            <p className="text-sm text-gray-500">Nenhum cartão cadastrado</p>
+          ) : (
+            <div className="space-y-2">
+              {creditCards.slice(0, 3).map((card) => {
+                const usagePercentage = ((card.used_amount / card.limit) * 100);
+                return (
+                  <div key={card.id} className="flex justify-between items-center">
+                    <div className="flex-1">
+                      <span className="text-sm">{card.name}</span>
+                      <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
+                        <div 
+                          className={`h-1 rounded-full ${
+                            usagePercentage >= 80 ? 'bg-red-500' : usagePercentage >= 60 ? 'bg-yellow-500' : 'bg-green-500'
+                          }`}
+                          style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="text-sm font-medium ml-2">
+                      {formatCurrency(card.limit - card.used_amount)}
+                    </span>
+                  </div>
+                );
+              })}
+              {creditCards.length > 3 && (
+                <p className="text-xs text-gray-500">+{creditCards.length - 3} cartões</p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Resultado do Mês */}
       <Card>
