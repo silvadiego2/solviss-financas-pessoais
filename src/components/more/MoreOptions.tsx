@@ -10,27 +10,16 @@ import {
   Moon, 
   Sun, 
   User, 
-  Settings,
-  FileText,
-  BarChart3
+  Settings
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface MoreOptionsProps {
-  onNavigate?: (tab: string) => void;
+  onNavigate: (tab: string) => void;
 }
 
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   const { theme, toggleTheme } = useTheme();
-
-  const handleNavigation = (tab: string) => {
-    if (onNavigate) {
-      onNavigate(tab);
-    } else {
-      // Fallback para quando usado no FinanceApp
-      window.dispatchEvent(new CustomEvent('navigate', { detail: { tab } }));
-    }
-  };
 
   const menuItems = [
     {
@@ -77,7 +66,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
             <Card key={item.id} className="cursor-pointer hover:shadow-md transition-shadow">
               <CardContent 
                 className="p-4"
-                onClick={() => handleNavigation(item.id)}
+                onClick={() => onNavigate(item.id)}
               >
                 <div className="flex items-center space-x-4">
                   <div className={`p-2 rounded-lg bg-gray-100 dark:bg-gray-800 ${item.color}`}>
@@ -136,7 +125,11 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => onNavigate('profile')}
+            >
               Editar
             </Button>
           </div>

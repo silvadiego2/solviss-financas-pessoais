@@ -19,10 +19,9 @@ export const AddBudgetForm: React.FC<AddBudgetFormProps> = ({ onClose }) => {
   const [amount, setAmount] = useState('');
   const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
   const [year, setYear] = useState(new Date().getFullYear().toString());
-  const [loading, setLoading] = useState(false);
 
   const { categories } = useCategories();
-  const { createBudget } = useBudgets();
+  const { createBudget, isCreating } = useBudgets();
 
   const expenseCategories = categories.filter(cat => cat.transaction_type === 'expense');
 
@@ -40,10 +39,8 @@ export const AddBudgetForm: React.FC<AddBudgetFormProps> = ({ onClose }) => {
       return;
     }
 
-    setLoading(true);
-    
     try {
-      await createBudget({
+      createBudget({
         category_id: categoryId,
         amount: numericAmount,
         spent: 0,
@@ -51,12 +48,9 @@ export const AddBudgetForm: React.FC<AddBudgetFormProps> = ({ onClose }) => {
         year: parseInt(year),
       });
 
-      toast.success('Orçamento criado com sucesso!');
       onClose();
     } catch (error: any) {
       toast.error(error.message || 'Erro ao criar orçamento');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -165,9 +159,9 @@ export const AddBudgetForm: React.FC<AddBudgetFormProps> = ({ onClose }) => {
               <Button 
                 type="submit" 
                 className="flex-1" 
-                disabled={loading}
+                disabled={isCreating}
               >
-                {loading ? 'Criando...' : 'Criar Orçamento'}
+                {isCreating ? 'Criando...' : 'Criar Orçamento'}
               </Button>
             </div>
           </form>

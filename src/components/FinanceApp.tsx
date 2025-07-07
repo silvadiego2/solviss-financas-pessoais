@@ -9,23 +9,15 @@ import { BudgetsList } from './budgets/BudgetsList';
 import { SimpleReports } from './reports/SimpleReports';
 import { CreditCardsList } from './credit-cards/CreditCardsList';
 import { MoreOptions } from './more/MoreOptions';
+import { SimpleGoals } from './goals/SimpleGoals';
+import { CategoryManager } from './categories/CategoryManager';
+import { ExportReports } from './reports/ExportReports';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Listen for navigation events from MoreOptions
-  useEffect(() => {
-    const handleNavigate = (event: CustomEvent) => {
-      setActiveTab(event.detail.tab);
-    };
-
-    window.addEventListener('navigate', handleNavigate as EventListener);
-    return () => {
-      window.removeEventListener('navigate', handleNavigate as EventListener);
-    };
-  }, []);
-
   const handleTabChange = (tab: string) => {
+    console.log('Changing tab to:', tab);
     setActiveTab(tab);
   };
 
@@ -43,6 +35,19 @@ export const FinanceApp: React.FC = () => {
         return <SimpleReports />;
       case 'cards':
         return <CreditCardsList />;
+      case 'goals':
+        return <SimpleGoals />;
+      case 'categories':
+        return <CategoryManager />;
+      case 'export':
+        return <ExportReports />;
+      case 'profile':
+        return (
+          <div className="text-center py-8">
+            <h2 className="text-lg font-semibold mb-4">Perfil do Usuário</h2>
+            <p className="text-gray-600">Funcionalidade em desenvolvimento</p>
+          </div>
+        );
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} />;
       default:
