@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 interface AddCreditCardFormProps {
   onClose: () => void;
+  editingCard?: any;
 }
 
 const banks = [
@@ -19,7 +20,7 @@ const banks = [
   'Safra', 'Votorantim', 'PicPay', 'Mercado Pago', 'Outros'
 ];
 
-export const AddCreditCardForm: React.FC<AddCreditCardFormProps> = ({ onClose }) => {
+export const AddCreditCardForm: React.FC<AddCreditCardFormProps> = ({ onClose, editingCard }) => {
   const [name, setName] = useState('');
   const [bankName, setBankName] = useState('');
   const [limit, setLimit] = useState('');
@@ -27,7 +28,17 @@ export const AddCreditCardForm: React.FC<AddCreditCardFormProps> = ({ onClose })
   const [dueDay, setDueDay] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { createCreditCard } = useCreditCards();
+  const { createCreditCard, updateCreditCard } = useCreditCards();
+
+  useEffect(() => {
+    if (editingCard) {
+      setName(editingCard.name || '');
+      setBankName(editingCard.bank_name || '');
+      setLimit(editingCard.limit?.toString() || '');
+      setClosingDay(editingCard.closing_day?.toString() || '');
+      setDueDay(editingCard.due_day?.toString() || '');
+    }
+  }, [editingCard]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,20 +65,27 @@ export const AddCreditCardForm: React.FC<AddCreditCardFormProps> = ({ onClose })
     setLoading(true);
     
     try {
-      await createCreditCard({
+      const cardData = {
         name,
         bank_name: bankName,
         limit: numericLimit,
-        used_amount: 0,
+        used_amount: editingCard?.used_amount || 0,
         closing_day: closingDayNum,
         due_day: dueDayNum,
         is_active: true,
-      });
+      };
 
-      toast.success('Cartão de crédito adicionado com sucesso!');
+      if (editingCard) {
+        await updateCreditCard(editingCard.id, cardData);
+        toast.success('Cartão de crédito atualizado com sucesso!');
+      } else {
+        await createCreditCard(cardData);
+        toast.success('Cartão de crédito adicionado com sucesso!');
+      }
+
       onClose();
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao adicionar cartão');
+      toast.error(error.message || `Erro ao ${editingCard ? 'atualizar' : 'adicionar'} cartão`);
     } finally {
       setLoading(false);
     }
@@ -84,7 +102,9 @@ export const AddCreditCardForm: React.FC<AddCreditCardFormProps> = ({ onClose })
         >
           <ArrowLeft size={20} />
         </Button>
-        <h2 className="text-lg font-semibold">Adicionar Cartão de Crédito</h2>
+        <h2 className="text-lg font-semibold">
+          {editingCard ? 'Editar Cartão de Crédito' : 'Adicionar Cartão de Crédito'}
+        </h2>
       </div>
 
       <Card>
@@ -181,7 +201,10 @@ export const AddCreditCardForm: React.FC<AddCreditCardFormProps> = ({ onClose })
                 className="flex-1" 
                 disabled={loading}
               >
-                {loading ? 'Adicionando...' : 'Adicionar Cartão'}
+                {loading ? 
+                  (editingCard ? 'Atualizando...' : 'Adicionando...') : 
+                  (editingCard ? 'Atualizar Cartão' : 'Adicionar Cartão')
+                }
               </Button>
             </div>
           </form>

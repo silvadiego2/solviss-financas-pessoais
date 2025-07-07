@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 interface AddAccountFormProps {
   onClose: () => void;
+  editingAccount?: any;
 }
 
 const accountTypes = [
@@ -26,14 +27,23 @@ const banks = [
   'Safra', 'Votorantim', 'PicPay', 'Mercado Pago', 'Outros'
 ];
 
-export const AddAccountForm: React.FC<AddAccountFormProps> = ({ onClose }) => {
+export const AddAccountForm: React.FC<AddAccountFormProps> = ({ onClose, editingAccount }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState('');
   const [bankName, setBankName] = useState('');
   const [balance, setBalance] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { createAccount } = useAccounts();
+  const { createAccount, updateAccount } = useAccounts();
+
+  useEffect(() => {
+    if (editingAccount) {
+      setName(editingAccount.name || '');
+      setType(editingAccount.type || '');
+      setBankName(editingAccount.bank_name || '');
+      setBalance(editingAccount.balance?.toString() || '');
+    }
+  }, [editingAccount]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,17 +62,24 @@ export const AddAccountForm: React.FC<AddAccountFormProps> = ({ onClose }) => {
     setLoading(true);
     
     try {
-      await createAccount({
+      const accountData = {
         name,
         type: type as any,
         bank_name: bankName || undefined,
         balance: numericBalance,
-      });
+      };
 
-      toast.success('Conta adicionada com sucesso!');
+      if (editingAccount) {
+        await updateAccount(editingAccount.id, accountData);
+        toast.success('Conta atualizada com sucesso!');
+      } else {
+        await createAccount(accountData);
+        toast.success('Conta adicionada com sucesso!');
+      }
+
       onClose();
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao adicionar conta');
+      toast.error(error.message || `Erro ao ${editingAccount ? 'atualizar' : 'adicionar'} conta`);
     } finally {
       setLoading(false);
     }
@@ -79,7 +96,9 @@ export const AddAccountForm: React.FC<AddAccountFormProps> = ({ onClose }) => {
         >
           <ArrowLeft size={20} />
         </Button>
-        <h2 className="text-lg font-semibold">Adicionar Conta</h2>
+        <h2 className="text-lg font-semibold">
+          {editingAccount ? 'Editar Conta' : 'Adicionar Conta'}
+        </h2>
       </div>
 
       <Card>
@@ -157,7 +176,10 @@ export const AddAccountForm: React.FC<AddAccountFormProps> = ({ onClose }) => {
                 className="flex-1" 
                 disabled={loading}
               >
-                {loading ? 'Adicionando...' : 'Adicionar Conta'}
+                {loading ? 
+                  (editingAccount ? 'Atualizando...' : 'Adicionando...') : 
+                  (editingAccount ? 'Atualizar Conta' : 'Adicionar Conta')
+                }
               </Button>
             </div>
           </form>
