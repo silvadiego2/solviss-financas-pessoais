@@ -76,7 +76,7 @@ export const AddCreditCardForm: React.FC<AddCreditCardFormProps> = ({ onClose, e
       };
 
       if (editingCard) {
-        await updateCreditCard(editingCard.id, cardData);
+        await updateCreditCard({ id: editingCard.id, ...cardData });
         toast.success('Cartão de crédito atualizado com sucesso!');
       } else {
         await createCreditCard(cardData);

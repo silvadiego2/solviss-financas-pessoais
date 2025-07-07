@@ -70,7 +70,7 @@ export const AddAccountForm: React.FC<AddAccountFormProps> = ({ onClose, editing
       };
 
       if (editingAccount) {
-        await updateAccount(editingAccount.id, accountData);
+        await updateAccount({ id: editingAccount.id, ...accountData });
         toast.success('Conta atualizada com sucesso!');
       } else {
         await createAccount(accountData);
