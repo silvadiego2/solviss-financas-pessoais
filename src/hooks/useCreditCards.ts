@@ -26,9 +26,10 @@ export const useCreditCards = () => {
     if (!user) return [];
     
     const { data, error } = await supabase
-      .from('credit_cards')
+      .from('accounts')
       .select('*')
       .eq('user_id', user.id)
+      .eq('type', 'credit_card')
       .eq('is_active', true)
       .order('name', { ascending: true });
 
@@ -37,7 +38,19 @@ export const useCreditCards = () => {
       throw error;
     }
     
-    return data || [];
+    // Transform accounts data to CreditCard format
+    return (data || []).map(account => ({
+      id: account.id,
+      name: account.name,
+      bank_name: account.bank_name || '',
+      limit: account.credit_limit || 0,
+      used_amount: (account.credit_limit || 0) - (account.balance || 0),
+      closing_day: account.closing_day || 1,
+      due_day: account.due_day || 10,
+      is_active: account.is_active || true,
+      created_at: account.created_at || '',
+      updated_at: account.updated_at || ''
+    }));
   };
 
   const { data: creditCards = [], isLoading, error } = useQuery({
@@ -51,8 +64,18 @@ export const useCreditCards = () => {
       if (!user) throw new Error('Usuário não autenticado');
 
       const { data, error } = await supabase
-        .from('credit_cards')
-        .insert([{ ...cardData, user_id: user.id }])
+        .from('accounts')
+        .insert([{ 
+          user_id: user.id,
+          name: cardData.name,
+          bank_name: cardData.bank_name,
+          type: 'credit_card' as const,
+          credit_limit: cardData.limit,
+          balance: cardData.limit - cardData.used_amount,
+          closing_day: cardData.closing_day,
+          due_day: cardData.due_day,
+          is_active: cardData.is_active
+        }])
         .select()
         .single();
 
@@ -61,6 +84,7 @@ export const useCreditCards = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Cartão adicionado com sucesso!');
     },
     onError: (error) => {
@@ -71,9 +95,21 @@ export const useCreditCards = () => {
 
   const updateCreditCardMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CreditCard> & { id: string }) => {
+      const updateData: any = {};
+      
+      if (updates.name) updateData.name = updates.name;
+      if (updates.bank_name) updateData.bank_name = updates.bank_name;
+      if (updates.limit) {
+        updateData.credit_limit = updates.limit;
+        updateData.balance = updates.limit - (updates.used_amount || 0);
+      }
+      if (updates.closing_day) updateData.closing_day = updates.closing_day;
+      if (updates.due_day) updateData.due_day = updates.due_day;
+      if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
+
       const { data, error } = await supabase
-        .from('credit_cards')
-        .update(updates)
+        .from('accounts')
+        .update(updateData)
         .eq('id', id)
         .eq('user_id', user?.id)
         .select()
@@ -84,6 +120,7 @@ export const useCreditCards = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Cartão atualizado com sucesso!');
     },
     onError: (error) => {
@@ -95,7 +132,7 @@ export const useCreditCards = () => {
   const deleteCreditCardMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('credit_cards')
+        .from('accounts')
         .update({ is_active: false })
         .eq('id', id)
         .eq('user_id', user?.id);
@@ -104,6 +141,7 @@ export const useCreditCards = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Cartão excluído com sucesso!');
     },
     onError: (error) => {
