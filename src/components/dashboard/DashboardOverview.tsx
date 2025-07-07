@@ -1,15 +1,25 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard, Plus, Edit, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
+import { AddAccountForm } from '@/components/accounts/AddAccountForm';
+import { AddCreditCardForm } from '@/components/credit-cards/AddCreditCardForm';
 
-export const DashboardOverview: React.FC = () => {
-  const { accounts } = useAccounts();
+interface DashboardOverviewProps {
+  onNavigate?: (tab: string) => void;
+}
+
+export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
+  const { accounts, deleteAccount } = useAccounts();
   const { transactions } = useTransactions();
-  const { creditCards } = useCreditCards();
+  const { creditCards, deleteCreditCard } = useCreditCards();
+  const [showAddAccountForm, setShowAddAccountForm] = useState(false);
+  const [showAddCardForm, setShowAddCardForm] = useState(false);
 
   const totalBalance = accounts.reduce((sum, account) => sum + Number(account.balance), 0);
   
@@ -36,6 +46,22 @@ export const DashboardOverview: React.FC = () => {
       currency: 'BRL'
     }).format(value);
   };
+
+  const handleDeleteAccount = (accountId: string) => {
+    deleteAccount(accountId);
+  };
+
+  const handleDeleteCard = (cardId: string) => {
+    deleteCreditCard(cardId);
+  };
+
+  if (showAddAccountForm) {
+    return <AddAccountForm onClose={() => setShowAddAccountForm(false)} />;
+  }
+
+  if (showAddCardForm) {
+    return <AddCreditCardForm onClose={() => setShowAddCardForm(false)} />;
+  }
 
   return (
     <div className="space-y-4">
@@ -89,7 +115,14 @@ export const DashboardOverview: React.FC = () => {
               <Wallet size={16} className="mr-1" />
               Contas ({accounts.length})
             </div>
-            <Plus size={16} className="text-gray-400" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAddAccountForm(true)}
+              className="p-1 h-auto"
+            >
+              <Plus size={16} className="text-green-600" />
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -98,9 +131,49 @@ export const DashboardOverview: React.FC = () => {
           ) : (
             <div className="space-y-2">
               {accounts.slice(0, 3).map((account) => (
-                <div key={account.id} className="flex justify-between items-center">
-                  <span className="text-sm">{account.name}</span>
-                  <span className="text-sm font-medium">{formatCurrency(Number(account.balance))}</span>
+                <div key={account.id} className="flex justify-between items-center group">
+                  <div className="flex-1">
+                    <span className="text-sm">{account.name}</span>
+                    <span className="text-sm font-medium ml-2">{formatCurrency(Number(account.balance))}</span>
+                  </div>
+                  <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onNavigate?.('accounts')}
+                      className="p-1 h-auto"
+                    >
+                      <Edit size={12} />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="p-1 h-auto text-red-600 hover:text-red-800"
+                        >
+                          <Trash2 size={12} />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja excluir a conta "{account.name}"? Esta ação não pode ser desfeita.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDeleteAccount(account.id)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Excluir
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               ))}
               {accounts.length > 3 && (
@@ -119,7 +192,14 @@ export const DashboardOverview: React.FC = () => {
               <CreditCard size={16} className="mr-1" />
               Cartões ({creditCards.length})
             </div>
-            <Plus size={16} className="text-gray-400" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAddCardForm(true)}
+              className="p-1 h-auto"
+            >
+              <Plus size={16} className="text-green-600" />
+            </Button>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -130,21 +210,63 @@ export const DashboardOverview: React.FC = () => {
               {creditCards.slice(0, 3).map((card) => {
                 const usagePercentage = ((card.used_amount / card.limit) * 100);
                 return (
-                  <div key={card.id} className="flex justify-between items-center">
-                    <div className="flex-1">
-                      <span className="text-sm">{card.name}</span>
-                      <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
-                        <div 
-                          className={`h-1 rounded-full ${
-                            usagePercentage >= 80 ? 'bg-red-500' : usagePercentage >= 60 ? 'bg-yellow-500' : 'bg-green-500'
-                          }`}
-                          style={{ width: `${Math.min(usagePercentage, 100)}%` }}
-                        />
+                  <div key={card.id} className="group">
+                    <div className="flex justify-between items-center">
+                      <div className="flex-1">
+                        <span className="text-sm">{card.name}</span>
+                        <div className="w-full bg-gray-200 rounded-full h-1 mt-1">
+                          <div 
+                            className={`h-1 rounded-full ${
+                              usagePercentage >= 80 ? 'bg-red-500' : usagePercentage >= 60 ? 'bg-yellow-500' : 'bg-green-500'
+                            }`}
+                            style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2 ml-2">
+                        <span className="text-sm font-medium">
+                          {formatCurrency(card.limit - card.used_amount)}
+                        </span>
+                        <div className="flex space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onNavigate?.('cards')}
+                            className="p-1 h-auto"
+                          >
+                            <Edit size={12} />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="p-1 h-auto text-red-600 hover:text-red-800"
+                              >
+                                <Trash2 size={12} />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Tem certeza que deseja excluir o cartão "{card.name}"? Esta ação não pode ser desfeita.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteCard(card.id)}
+                                  className="bg-red-600 hover:bg-red-700"
+                                >
+                                  Excluir
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                     </div>
-                    <span className="text-sm font-medium ml-2">
-                      {formatCurrency(card.limit - card.used_amount)}
-                    </span>
                   </div>
                 );
               })}

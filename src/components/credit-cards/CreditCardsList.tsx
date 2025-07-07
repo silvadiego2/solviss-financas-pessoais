@@ -2,16 +2,18 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard as CreditCardIcon, Settings, Calendar, Receipt, Eye } from 'lucide-react';
+import { Plus, CreditCard as CreditCardIcon, Settings, Calendar, Receipt, Eye, Edit, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useTransactions } from '@/hooks/useTransactions';
 import { AddCreditCardForm } from './AddCreditCardForm';
 import { CreditCardInvoices } from './CreditCardInvoices';
 
 export const CreditCardsList: React.FC = () => {
-  const { creditCards, loading } = useCreditCards();
+  const { creditCards, loading, deleteCreditCard } = useCreditCards();
   const { transactions } = useTransactions();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingCard, setEditingCard] = useState<any>(null);
   const [selectedCardForInvoices, setSelectedCardForInvoices] = useState<any>(null);
 
   const formatCurrency = (value: number) => {
@@ -29,6 +31,20 @@ export const CreditCardsList: React.FC = () => {
     if (percentage >= 80) return 'bg-red-500';
     if (percentage >= 60) return 'bg-yellow-500';
     return 'bg-green-500';
+  };
+
+  const handleDelete = (cardId: string) => {
+    deleteCreditCard(cardId);
+  };
+
+  const handleEdit = (card: any) => {
+    setEditingCard(card);
+    setShowAddForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowAddForm(false);
+    setEditingCard(null);
   };
 
   // Calcular estatísticas gerais dos cartões
@@ -69,7 +85,7 @@ export const CreditCardsList: React.FC = () => {
   }
 
   if (showAddForm) {
-    return <AddCreditCardForm onClose={() => setShowAddForm(false)} />;
+    return <AddCreditCardForm onClose={handleCloseForm} editingCard={editingCard} />;
   }
 
   if (selectedCardForInvoices) {
@@ -196,19 +212,52 @@ export const CreditCardsList: React.FC = () => {
                     </div>
 
                     {/* Botões de Ação */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={() => setSelectedCardForInvoices(card)}
                       >
-                        <Eye size={16} className="mr-2" />
-                        Ver Faturas
+                        <Eye size={16} />
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleEdit(card)}
+                      >
+                        <Edit size={16} />
                       </Button>
                       <Button variant="outline" size="sm">
-                        <Settings size={16} className="mr-2" />
-                        Configurar
+                        <Settings size={16} />
                       </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir o cartão "{card.name}"? Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(card.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 </CardContent>

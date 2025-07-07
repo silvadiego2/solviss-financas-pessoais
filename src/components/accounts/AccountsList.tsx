@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Wallet, Building, PiggyBank, TrendingUp, Plus } from 'lucide-react';
+import { CreditCard, Wallet, Building, PiggyBank, TrendingUp, Plus, Edit, Trash2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAccounts } from '@/hooks/useAccounts';
 import { AddAccountForm } from './AddAccountForm';
 
@@ -41,14 +42,29 @@ const getAccountTypeName = (type: string) => {
 };
 
 export const AccountsList: React.FC = () => {
-  const { accounts, loading } = useAccounts();
+  const { accounts, loading, deleteAccount } = useAccounts();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<any>(null);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
+  };
+
+  const handleDelete = (accountId: string) => {
+    deleteAccount(accountId);
+  };
+
+  const handleEdit = (account: any) => {
+    setEditingAccount(account);
+    setShowAddForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowAddForm(false);
+    setEditingAccount(null);
   };
 
   if (loading) {
@@ -60,7 +76,7 @@ export const AccountsList: React.FC = () => {
   }
 
   if (showAddForm) {
-    return <AddAccountForm onClose={() => setShowAddForm(false)} />;
+    return <AddAccountForm onClose={handleCloseForm} editingAccount={editingAccount} />;
   }
 
   return (
@@ -109,21 +125,61 @@ export const AccountsList: React.FC = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className={`font-semibold ${
-                      account.type === 'credit_card' 
-                        ? 'text-orange-600' 
-                        : Number(account.balance) >= 0 
-                          ? 'text-green-600' 
-                          : 'text-red-600'
-                    }`}>
-                      {formatCurrency(Number(account.balance))}
-                    </p>
-                    {account.credit_limit && (
-                      <p className="text-xs text-gray-500">
-                        Limite: {formatCurrency(Number(account.credit_limit))}
+                  <div className="flex items-center space-x-2">
+                    <div className="text-right">
+                      <p className={`font-semibold ${
+                        account.type === 'credit_card' 
+                          ? 'text-orange-600' 
+                          : Number(account.balance) >= 0 
+                            ? 'text-green-600' 
+                            : 'text-red-600'
+                      }`}>
+                        {formatCurrency(Number(account.balance))}
                       </p>
-                    )}
+                      {account.credit_limit && (
+                        <p className="text-xs text-gray-500">
+                          Limite: {formatCurrency(Number(account.credit_limit))}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col space-y-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEdit(account)}
+                        className="p-1 h-auto"
+                      >
+                        <Edit size={16} />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="p-1 h-auto text-red-600 hover:text-red-800"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir a conta "{account.name}"? Esta ação não pode ser desfeita.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(account.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 </div>
               </CardContent>
