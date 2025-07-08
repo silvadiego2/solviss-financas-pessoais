@@ -59,6 +59,42 @@ export type Database = {
         }
         Relationships: []
       }
+      bank_connections: {
+        Row: {
+          account_external_id: string
+          bank_name: string
+          connection_status: string
+          created_at: string
+          id: string
+          last_sync_at: string | null
+          provider: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_external_id: string
+          bank_name: string
+          connection_status?: string
+          created_at?: string
+          id?: string
+          last_sync_at?: string | null
+          provider: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_external_id?: string
+          bank_name?: string
+          connection_status?: string
+          created_at?: string
+          id?: string
+          last_sync_at?: string | null
+          provider?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       budgets: {
         Row: {
           amount: number
@@ -229,6 +265,82 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      synced_transactions: {
+        Row: {
+          account_id: string | null
+          amount: number
+          bank_connection_id: string
+          category_suggestion: string | null
+          created_at: string
+          date: string
+          description: string
+          external_transaction_id: string
+          id: string
+          is_matched: boolean | null
+          matched_transaction_id: string | null
+          raw_data: Json | null
+          transaction_type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account_id?: string | null
+          amount: number
+          bank_connection_id: string
+          category_suggestion?: string | null
+          created_at?: string
+          date: string
+          description: string
+          external_transaction_id: string
+          id?: string
+          is_matched?: boolean | null
+          matched_transaction_id?: string | null
+          raw_data?: Json | null
+          transaction_type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account_id?: string | null
+          amount?: number
+          bank_connection_id?: string
+          category_suggestion?: string | null
+          created_at?: string
+          date?: string
+          description?: string
+          external_transaction_id?: string
+          id?: string
+          is_matched?: boolean | null
+          matched_transaction_id?: string | null
+          raw_data?: Json | null
+          transaction_type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "synced_transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "synced_transactions_bank_connection_id_fkey"
+            columns: ["bank_connection_id"]
+            isOneToOne: false
+            referencedRelation: "bank_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "synced_transactions_matched_transaction_id_fkey"
+            columns: ["matched_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       transactions: {
         Row: {

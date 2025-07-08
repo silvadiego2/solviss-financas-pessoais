@@ -77,9 +77,35 @@ export const useTransactions = () => {
     return data || [];
   };
 
+  const fetchSyncedTransactions = async () => {
+    if (!user) return [];
+    
+    const { data, error } = await supabase
+      .from('synced_transactions')
+      .select(`
+        *,
+        bank_connection:bank_connections(bank_name, provider)
+      `)
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error('Erro ao buscar transações sincronizadas:', error);
+      return [];
+    }
+    
+    return data || [];
+  };
+
   const { data: transactions = [], isLoading, error } = useQuery({
     queryKey: ['transactions', user?.id],
     queryFn: fetchTransactions,
+    enabled: !!user,
+  });
+
+  const { data: syncedTransactions = [] } = useQuery({
+    queryKey: ['synced_transactions', user?.id],
+    queryFn: fetchSyncedTransactions,
     enabled: !!user,
   });
 
@@ -191,6 +217,7 @@ export const useTransactions = () => {
 
   return {
     transactions,
+    syncedTransactions,
     loading: isLoading,
     createTransaction: createTransactionMutation.mutate,
     updateTransaction: updateTransactionMutation.mutate,

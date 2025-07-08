@@ -1,1 +1,5 @@
+
 project_id = "eiueygnrczqrziiviopc"
+
+[functions.sync-bank-data]
+verify_jwt = true

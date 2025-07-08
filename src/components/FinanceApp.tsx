@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { BottomNavigation } from './layout/BottomNavigation';
 import { TopHeader } from './layout/TopHeader';
@@ -12,6 +11,7 @@ import { MoreOptions } from './more/MoreOptions';
 import { SimpleGoals } from './goals/SimpleGoals';
 import { CategoryManager } from './categories/CategoryManager';
 import { ExportReports } from './reports/ExportReports';
+import { BankConnectionManager } from './banking/BankConnectionManager';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -41,6 +41,8 @@ export const FinanceApp: React.FC = () => {
         return <CategoryManager />;
       case 'export':
         return <ExportReports />;
+      case 'banking':
+        return <BankConnectionManager />;
       case 'profile':
         return (
           <div className="text-center py-8">
