@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Wallet, Building, PiggyBank, TrendingUp, Plus, Edit, Trash2 } from 'lucide-react';
+import { Building, Wallet, PiggyBank, TrendingUp, Plus, Edit, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAccounts } from '@/hooks/useAccounts';
 import { AddAccountForm } from './AddAccountForm';
@@ -13,8 +13,6 @@ const getAccountIcon = (type: string) => {
       return <Building size={20} />;
     case 'savings':
       return <PiggyBank size={20} />;
-    case 'credit_card':
-      return <CreditCard size={20} />;
     case 'wallet':
       return <Wallet size={20} />;
     case 'investment':
@@ -30,8 +28,6 @@ const getAccountTypeName = (type: string) => {
       return 'Conta Corrente';
     case 'savings':
       return 'Poupança';
-    case 'credit_card':
-      return 'Cartão de Crédito';
     case 'wallet':
       return 'Carteira';
     case 'investment':
@@ -42,7 +38,7 @@ const getAccountTypeName = (type: string) => {
 };
 
 export const AccountsList: React.FC = () => {
-  const { accounts, loading, deleteAccount } = useAccounts();
+  const { regularAccounts, loading, deleteAccount } = useAccounts(); // Use regularAccounts
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
 
@@ -92,7 +88,14 @@ export const AccountsList: React.FC = () => {
         </Button>
       </div>
 
-      {accounts.length === 0 ? (
+      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+        <p className="text-sm text-blue-800 dark:text-blue-200">
+          💡 <strong>Contas:</strong> Inclui contas correntes, poupança, carteiras e investimentos. 
+          Os cartões de crédito são gerenciados separadamente na aba "Cartões".
+        </p>
+      </div>
+
+      {regularAccounts.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
             <Wallet size={48} className="text-gray-400 mb-4" />
@@ -109,7 +112,7 @@ export const AccountsList: React.FC = () => {
         </Card>
       ) : (
         <div className="space-y-3">
-          {accounts.map((account) => (
+          {regularAccounts.map((account) => (
             <Card key={account.id}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -128,19 +131,12 @@ export const AccountsList: React.FC = () => {
                   <div className="flex items-center space-x-2">
                     <div className="text-right">
                       <p className={`font-semibold ${
-                        account.type === 'credit_card' 
-                          ? 'text-orange-600' 
-                          : Number(account.balance) >= 0 
-                            ? 'text-green-600' 
-                            : 'text-red-600'
+                        Number(account.balance) >= 0 
+                          ? 'text-green-600' 
+                          : 'text-red-600'
                       }`}>
                         {formatCurrency(Number(account.balance))}
                       </p>
-                      {account.credit_limit && (
-                        <p className="text-xs text-gray-500">
-                          Limite: {formatCurrency(Number(account.credit_limit))}
-                        </p>
-                      )}
                     </div>
                     <div className="flex flex-col space-y-1">
                       <Button

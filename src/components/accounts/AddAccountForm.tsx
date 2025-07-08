@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -126,13 +125,15 @@ export const AddAccountForm: React.FC<AddAccountFormProps> = ({ onClose, editing
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  {accountTypes.map((accountType) => (
-                    <SelectItem key={accountType.value} value={accountType.value}>
-                      {accountType.label}
-                    </SelectItem>
-                  ))}
+                  <SelectItem value="checking">Conta Corrente</SelectItem>
+                  <SelectItem value="savings">Poupança</SelectItem>
+                  <SelectItem value="wallet">Carteira/Dinheiro</SelectItem>
+                  <SelectItem value="investment">Investimento</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-gray-500">
+                Para cartões de crédito, use a aba "Cartões" específica.
+              </p>
             </div>
 
             <div className="space-y-2">

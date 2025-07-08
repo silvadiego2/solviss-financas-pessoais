@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -44,6 +43,10 @@ export const useAccounts = () => {
     queryFn: fetchAccounts,
     enabled: !!user,
   });
+
+  // Filter out credit cards from regular accounts for balance calculations
+  const regularAccounts = accounts.filter(account => account.type !== 'credit_card');
+  const creditCardAccounts = accounts.filter(account => account.type === 'credit_card');
 
   const createAccountMutation = useMutation({
     mutationFn: async (accountData: Omit<Account, 'id' | 'is_active'>) => {
@@ -113,6 +116,8 @@ export const useAccounts = () => {
 
   return {
     accounts,
+    regularAccounts, // Accounts excluding credit cards
+    creditCardAccounts, // Only credit card accounts
     loading: isLoading,
     createAccount: createAccountMutation.mutate,
     updateAccount: updateAccountMutation.mutate,

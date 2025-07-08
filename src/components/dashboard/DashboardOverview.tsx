@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,13 +14,13 @@ interface DashboardOverviewProps {
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
-  const { accounts, deleteAccount } = useAccounts();
+  const { regularAccounts, deleteAccount } = useAccounts();
   const { transactions } = useTransactions();
   const { creditCards, deleteCreditCard } = useCreditCards();
   const [showAddAccountForm, setShowAddAccountForm] = useState(false);
   const [showAddCardForm, setShowAddCardForm] = useState(false);
 
-  const totalBalance = accounts.reduce((sum, account) => sum + Number(account.balance), 0);
+  const totalBalance = regularAccounts.reduce((sum, account) => sum + Number(account.balance), 0);
   
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
@@ -39,6 +38,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const monthlyExpenses = monthlyTransactions
     .filter(t => t.type === 'expense')
     .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  const totalCreditLimit = creditCards.reduce((sum, card) => sum + card.limit, 0);
+  const totalCreditUsed = creditCards.reduce((sum, card) => sum + card.used_amount, 0);
+  const totalCreditAvailable = totalCreditLimit - totalCreditUsed;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -65,18 +68,43 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
 
   return (
     <div className="space-y-4">
-      {/* Saldo Total */}
+      {/* Available Balance (Regular Accounts Only) */}
       <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium opacity-90">Saldo Total</CardTitle>
+          <CardTitle className="text-sm font-medium opacity-90">Saldo Disponível</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center space-x-2">
             <Wallet size={20} />
             <span className="text-2xl font-bold">{formatCurrency(totalBalance)}</span>
           </div>
+          <p className="text-xs opacity-80 mt-1">Contas correntes, poupança e carteiras</p>
         </CardContent>
       </Card>
+
+      {/* Credit Cards Summary */}
+      {creditCards.length > 0 && (
+        <Card className="bg-gradient-to-r from-orange-500 to-red-500 text-white">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium opacity-90">Resumo Cartões de Crédito</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <CreditCard size={20} />
+                  <span className="text-lg font-bold">{formatCurrency(totalCreditAvailable)}</span>
+                </div>
+                <p className="text-xs opacity-80">Limite disponível</p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-medium">{formatCurrency(totalCreditUsed)} usado</p>
+                <p className="text-xs opacity-80">de {formatCurrency(totalCreditLimit)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Receitas e Despesas do Mês */}
       <div className="grid grid-cols-2 gap-4">
@@ -107,13 +135,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </Card>
       </div>
 
-      {/* Contas Widget */}
+      {/* Contas Widget (Regular Accounts Only) */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium flex items-center justify-between">
             <div className="flex items-center">
               <Wallet size={16} className="mr-1" />
-              Contas ({accounts.length})
+              Contas ({regularAccounts.length})
             </div>
             <Button
               variant="ghost"
@@ -126,11 +154,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {accounts.length === 0 ? (
+          {regularAccounts.length === 0 ? (
             <p className="text-sm text-gray-500">Nenhuma conta cadastrada</p>
           ) : (
             <div className="space-y-2">
-              {accounts.slice(0, 3).map((account) => (
+              {regularAccounts.slice(0, 3).map((account) => (
                 <div key={account.id} className="flex justify-between items-center group">
                   <div className="flex-1">
                     <span className="text-sm">{account.name}</span>
@@ -176,8 +204,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                   </div>
                 </div>
               ))}
-              {accounts.length > 3 && (
-                <p className="text-xs text-gray-500">+{accounts.length - 3} contas</p>
+              {regularAccounts.length > 3 && (
+                <p className="text-xs text-gray-500">+{regularAccounts.length - 3} contas</p>
               )}
             </div>
           )}
