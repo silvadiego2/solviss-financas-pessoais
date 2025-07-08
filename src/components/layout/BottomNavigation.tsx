@@ -11,10 +11,10 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
   const navItems = [
     { id: 'dashboard', icon: Home, label: 'Início' },
     { id: 'accounts', icon: Wallet, label: 'Contas' },
-    { id: 'budgets', icon: Target, label: 'Orçamentos' },
-    { id: 'add', icon: PlusCircle, label: 'Adicionar' },
-    { id: 'reports', icon: BarChart3, label: 'Relatórios' },
     { id: 'cards', icon: CreditCard, label: 'Cartões' },
+    { id: 'add', icon: PlusCircle, label: 'Adicionar' },
+    { id: 'budgets', icon: Target, label: 'Orçamentos' },
+    { id: 'reports', icon: BarChart3, label: 'Relatórios' },
     { id: 'more', icon: Settings, label: 'Mais' },
   ];
 
