@@ -10,7 +10,7 @@ export interface BankConnection {
   provider: string;
   bank_name: string;
   account_external_id: string;
-  connection_status: 'active' | 'expired' | 'error';
+  connection_status: string;
   last_sync_at?: string;
   created_at: string;
   updated_at: string;
@@ -26,7 +26,7 @@ export interface SyncedTransaction {
   description: string;
   date: string;
   category_suggestion?: string;
-  transaction_type: 'income' | 'expense';
+  transaction_type: string;
   is_matched: boolean;
   matched_transaction_id?: string;
   raw_data?: any;

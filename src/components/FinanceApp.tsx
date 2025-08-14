@@ -12,9 +12,32 @@ import { SimpleGoals } from './goals/SimpleGoals';
 import { CategoryManager } from './categories/CategoryManager';
 import { ExportReports } from './reports/ExportReports';
 import { BankConnectionManager } from './banking/BankConnectionManager';
+import { useAuth } from './auth/AuthProvider';
+import { AuthScreen } from './auth/AuthScreen';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const { user, loading } = useAuth();
+
+  // Debug logging
+  console.log('FinanceApp - User:', user);
+  console.log('FinanceApp - Loading:', loading);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    console.log('No user found, showing AuthScreen');
+    return <AuthScreen />;
+  }
 
   const handleTabChange = (tab: string) => {
     console.log('Changing tab to:', tab);

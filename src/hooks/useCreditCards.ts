@@ -61,7 +61,13 @@ export const useCreditCards = () => {
 
   const createCreditCardMutation = useMutation({
     mutationFn: async (cardData: Omit<CreditCard, 'id' | 'created_at' | 'updated_at'>) => {
-      if (!user) throw new Error('Usuário não autenticado');
+      if (!user) {
+        console.error('User not authenticated:', user);
+        throw new Error('Usuário não autenticado');
+      }
+      
+      console.log('Creating credit card with data:', cardData);
+      console.log('User authenticated:', user.id);
 
       const { data, error } = await supabase
         .from('accounts')

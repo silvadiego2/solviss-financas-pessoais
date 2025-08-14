@@ -50,7 +50,13 @@ export const useAccounts = () => {
 
   const createAccountMutation = useMutation({
     mutationFn: async (accountData: Omit<Account, 'id' | 'is_active'>) => {
-      if (!user) throw new Error('Usuário não autenticado');
+      if (!user) {
+        console.error('User not authenticated:', user);
+        throw new Error('Usuário não autenticado');
+      }
+      
+      console.log('Creating account with data:', accountData);
+      console.log('User authenticated:', user.id);
 
       const { data, error } = await supabase
         .from('accounts')
