@@ -9,8 +9,13 @@ import { Plus, Edit, Trash2, Tag } from 'lucide-react';
 import { useCategories } from '@/hooks/useCategories';
 import { defaultCategories } from '@/data/defaultCategories';
 import { toast } from 'sonner';
+import { BackHeader } from '@/components/layout/BackHeader';
 
-export const CategoryManager: React.FC = () => {
+interface CategoryManagerProps {
+  onBack?: () => void;
+}
+
+export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
   const { categories, loading } = useCategories();
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCategory, setNewCategory] = useState({
@@ -53,16 +58,32 @@ export const CategoryManager: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Gerenciar Categorias</h2>
-        <Button 
-          onClick={() => setShowAddForm(!showAddForm)}
-          className="flex items-center space-x-2"
-        >
-          <Plus size={16} />
-          <span>Nova Categoria</span>
-        </Button>
-      </div>
+      {onBack && <BackHeader title="Gerenciar Categorias" onBack={onBack} />}
+      
+      {!onBack && (
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Gerenciar Categorias</h2>
+          <Button 
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center space-x-2"
+          >
+            <Plus size={16} />
+            <span>Nova Categoria</span>
+          </Button>
+        </div>
+      )}
+
+      {onBack && (
+        <div className="flex justify-end">
+          <Button 
+            onClick={() => setShowAddForm(!showAddForm)}
+            className="flex items-center space-x-2"
+          >
+            <Plus size={16} />
+            <span>Nova Categoria</span>
+          </Button>
+        </div>
+      )}
 
       {/* Formulário de Nova Categoria */}
       {showAddForm && (

@@ -8,6 +8,7 @@ import { useCreditCards } from '@/hooks/useCreditCards';
 import { useTransactions } from '@/hooks/useTransactions';
 import { AddCreditCardForm } from './AddCreditCardForm';
 import { CreditCardInvoices } from './CreditCardInvoices';
+import { EditCreditCardForm } from './EditCreditCardForm';
 
 export const CreditCardsList: React.FC = () => {
   const { creditCards, loading, deleteCreditCard } = useCreditCards();
@@ -84,8 +85,12 @@ export const CreditCardsList: React.FC = () => {
     );
   }
 
-  if (showAddForm) {
+  if (showAddForm && !editingCard) {
     return <AddCreditCardForm onClose={handleCloseForm} editingCard={editingCard} />;
+  }
+
+  if (editingCard) {
+    return <EditCreditCardForm card={editingCard} onClose={handleCloseForm} />;
   }
 
   if (selectedCardForInvoices) {

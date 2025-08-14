@@ -6,6 +6,7 @@ import { Building, Wallet, PiggyBank, TrendingUp, Plus, Edit, Trash2 } from 'luc
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAccounts } from '@/hooks/useAccounts';
 import { AddAccountForm } from './AddAccountForm';
+import { EditAccountForm } from './EditAccountForm';
 
 const getAccountIcon = (type: string) => {
   switch (type) {
@@ -71,8 +72,12 @@ export const AccountsList: React.FC = () => {
     );
   }
 
-  if (showAddForm) {
+  if (showAddForm && !editingAccount) {
     return <AddAccountForm onClose={handleCloseForm} editingAccount={editingAccount} />;
+  }
+
+  if (editingAccount) {
+    return <EditAccountForm account={editingAccount} onClose={handleCloseForm} />;
   }
 
   return (

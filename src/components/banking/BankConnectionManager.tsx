@@ -7,8 +7,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Plus, RefreshCw, Trash2, Building, Clock } from 'lucide-react';
 import { useBankConnections } from '@/hooks/useBankConnections';
 import { AddBankConnectionForm } from './AddBankConnectionForm';
+import { BackHeader } from '@/components/layout/BackHeader';
 
-export const BankConnectionManager: React.FC = () => {
+interface BankConnectionManagerProps {
+  onBack?: () => void;
+}
+
+export const BankConnectionManager: React.FC<BankConnectionManagerProps> = ({ onBack }) => {
   const { connections, syncedTransactions, loading, syncTransactions, deleteConnection, isSyncing, isDeleting } = useBankConnections();
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -46,13 +51,26 @@ export const BankConnectionManager: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Conexões Bancárias</h2>
-        <Button onClick={() => setShowAddForm(true)} size="sm">
-          <Plus size={16} className="mr-2" />
-          Conectar Banco
-        </Button>
-      </div>
+      {onBack && <BackHeader title="Conexões Bancárias" onBack={onBack} />}
+      
+      {!onBack && (
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Conexões Bancárias</h2>
+          <Button onClick={() => setShowAddForm(true)} size="sm">
+            <Plus size={16} className="mr-2" />
+            Conectar Banco
+          </Button>
+        </div>
+      )}
+
+      {onBack && (
+        <div className="flex justify-end">
+          <Button onClick={() => setShowAddForm(true)} size="sm">
+            <Plus size={16} className="mr-2" />
+            Conectar Banco
+          </Button>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-8">Carregando conexões...</div>

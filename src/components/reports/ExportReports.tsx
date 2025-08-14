@@ -4,8 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, FileText, Table } from 'lucide-react';
 import { toast } from 'sonner';
+import { BackHeader } from '@/components/layout/BackHeader';
 
-export const ExportReports: React.FC = () => {
+interface ExportReportsProps {
+  onBack?: () => void;
+}
+
+export const ExportReports: React.FC<ExportReportsProps> = ({ onBack }) => {
   const handleExportPDF = () => {
     toast.info('Exportação em PDF será implementada em breve');
   };
@@ -20,9 +25,13 @@ export const ExportReports: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Exportar Relatórios</h2>
-      </div>
+      {onBack && <BackHeader title="Exportar Relatórios" onBack={onBack} />}
+      
+      {!onBack && (
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Exportar Relatórios</h2>
+        </div>
+      )}
 
       <Card>
         <CardHeader>

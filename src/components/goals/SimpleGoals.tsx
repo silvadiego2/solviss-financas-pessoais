@@ -6,8 +6,13 @@ import { Progress } from '@/components/ui/progress';
 import { Target, CheckCircle, Plus, Edit, Trash2 } from 'lucide-react';
 import { useGoals, Goal } from '@/hooks/useGoals';
 import { AddGoalForm } from './AddGoalForm';
+import { BackHeader } from '@/components/layout/BackHeader';
 
-export const SimpleGoals: React.FC = () => {
+interface SimpleGoalsProps {
+  onBack?: () => void;
+}
+
+export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
   const { goals, deleteGoal, isDeletingGoal } = useGoals();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
@@ -53,13 +58,26 @@ export const SimpleGoals: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Objetivos Financeiros</h2>
-        <Button onClick={() => setShowAddForm(true)} size="sm">
-          <Plus size={16} className="mr-2" />
-          Adicionar Meta
-        </Button>
-      </div>
+      {onBack && <BackHeader title="Objetivos Financeiros" onBack={onBack} />}
+      
+      {!onBack && (
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Objetivos Financeiros</h2>
+          <Button onClick={() => setShowAddForm(true)} size="sm">
+            <Plus size={16} className="mr-2" />
+            Adicionar Meta
+          </Button>
+        </div>
+      )}
+
+      {onBack && (
+        <div className="flex justify-end">
+          <Button onClick={() => setShowAddForm(true)} size="sm">
+            <Plus size={16} className="mr-2" />
+            Adicionar Meta
+          </Button>
+        </div>
+      )}
 
       {goals.length === 0 ? (
         <Card>

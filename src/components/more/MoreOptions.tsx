@@ -14,9 +14,10 @@ import {
 
 interface MoreOptionsProps {
   onNavigate: (tab: string) => void;
+  onToggleTheme?: () => void;
 }
 
-export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
+export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTheme }) => {
 
   const menuItems = [
     {
@@ -53,7 +54,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       title: 'Tema da Interface',
       description: 'Alternar entre claro e escuro',
       icon: Palette,
-      action: () => console.log('Toggle theme')
+      action: () => onToggleTheme?.()
     },
     {
       title: 'Perfil do Usuário',

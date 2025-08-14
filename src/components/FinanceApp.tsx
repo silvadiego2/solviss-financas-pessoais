@@ -17,6 +17,7 @@ import { AuthScreen } from './auth/AuthScreen';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [previousTab, setPreviousTab] = useState('more');
   const { user, loading } = useAuth();
 
   // Debug logging
@@ -41,7 +42,15 @@ export const FinanceApp: React.FC = () => {
 
   const handleTabChange = (tab: string) => {
     console.log('Changing tab to:', tab);
+    // Store previous tab for navigation back functionality
+    if (activeTab === 'more' && tab !== 'more') {
+      setPreviousTab('more');
+    }
     setActiveTab(tab);
+  };
+
+  const handleBackToMore = () => {
+    setActiveTab(previousTab);
   };
 
   const renderContent = () => {
@@ -59,13 +68,13 @@ export const FinanceApp: React.FC = () => {
       case 'cards':
         return <CreditCardsList />;
       case 'goals':
-        return <SimpleGoals />;
+        return <SimpleGoals onBack={handleBackToMore} />;
       case 'categories':
-        return <CategoryManager />;
+        return <CategoryManager onBack={handleBackToMore} />;
       case 'export':
-        return <ExportReports />;
+        return <ExportReports onBack={handleBackToMore} />;
       case 'banking':
-        return <BankConnectionManager />;
+        return <BankConnectionManager onBack={handleBackToMore} />;
       case 'profile':
         return (
           <div className="text-center py-8">
@@ -74,7 +83,10 @@ export const FinanceApp: React.FC = () => {
           </div>
         );
       case 'more':
-        return <MoreOptions onNavigate={handleTabChange} />;
+        return <MoreOptions onNavigate={handleTabChange} onToggleTheme={() => {
+          // Implement theme toggle logic here
+          console.log('Toggle theme called');
+        }} />;
       default:
         return <DashboardOverview onNavigate={handleTabChange} />;
     }
