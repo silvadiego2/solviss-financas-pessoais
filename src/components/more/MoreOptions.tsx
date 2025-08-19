@@ -9,7 +9,8 @@ import {
   Palette, 
   User,
   Building,
-  ChevronRight 
+  ChevronRight,
+  Shield
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -61,6 +62,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Configurações da conta',
       icon: User,
       action: () => onNavigate('profile')
+    },
+    {
+      title: 'Segurança e Auditoria',
+      description: 'Log de atividades e validações',
+      icon: Shield,
+      action: () => onNavigate('security')
     },
   ];
 

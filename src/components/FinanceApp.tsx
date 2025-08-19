@@ -12,6 +12,7 @@ import { SimpleGoals } from './goals/SimpleGoals';
 import { CategoryManager } from './categories/CategoryManager';
 import { ExportReports } from './reports/ExportReports';
 import { BankConnectionManager } from './banking/BankConnectionManager';
+import { SecurityDashboard } from './security/SecurityDashboard';
 import { useAuth } from './auth/AuthProvider';
 import { AuthScreen } from './auth/AuthScreen';
 
@@ -82,6 +83,8 @@ export const FinanceApp: React.FC = () => {
             <p className="text-gray-600">Funcionalidade em desenvolvimento</p>
           </div>
         );
+      case 'security':
+        return <SecurityDashboard />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={() => {
           // Implement theme toggle logic here
