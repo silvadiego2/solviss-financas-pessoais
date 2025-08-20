@@ -5,6 +5,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { AuthProvider } from '@/components/auth/AuthProvider';
 import { FinanceApp } from '@/components/FinanceApp';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider';
 
 const queryClient = new QueryClient();
 
@@ -13,8 +14,10 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <FinanceApp />
-          <Toaster />
+          <OnboardingProvider>
+            <FinanceApp />
+            <Toaster />
+          </OnboardingProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

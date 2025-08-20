@@ -12,6 +12,8 @@ import { useCategories } from '@/hooks/useCategories';
 import { useTransactions } from '@/hooks/useTransactions';
 import { toast } from 'sonner';
 import { CreditCard, Building, Upload } from 'lucide-react';
+import { enhancedToast } from '@/components/ui/enhanced-toast';
+import { ProgressIndicator } from '@/components/ui/progress-indicator';
 
 export const AddTransactionForm: React.FC = () => {
   const [type, setType] = useState<'income' | 'expense'>('expense');
@@ -22,6 +24,7 @@ export const AddTransactionForm: React.FC = () => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
@@ -60,18 +63,27 @@ export const AddTransactionForm: React.FC = () => {
     e.preventDefault();
     
     if (!amount || !description || !accountId || !categoryId) {
-      toast.error('Por favor, preencha todos os campos obrigatórios');
+      enhancedToast.error('Campos obrigatórios não preenchidos', {
+        description: 'Por favor, preencha todos os campos obrigatórios para continuar.'
+      });
       return;
     }
 
     const numericAmount = parseFloat(amount.replace(',', '.'));
     if (isNaN(numericAmount) || numericAmount <= 0) {
-      toast.error('Valor deve ser um número positivo');
+      enhancedToast.error('Valor inválido', {
+        description: 'O valor deve ser um número positivo.'
+      });
       return;
     }
 
     setLoading(true);
+    setProgress(0);
+
     try {
+      // Simulate progress for better UX
+      setProgress(25);
+      
       await createTransaction({
         type,
         amount: numericAmount,
@@ -83,7 +95,21 @@ export const AddTransactionForm: React.FC = () => {
         receiptFile: receiptFile || undefined,
       });
 
-      toast.success(`${type === 'income' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
+      setProgress(100);
+
+      enhancedToast.success(
+        `${type === 'income' ? 'Receita' : 'Despesa'} adicionada!`,
+        {
+          description: `${formatCurrency(numericAmount)} foi registrado com sucesso.`,
+          action: {
+            label: 'Ver Relatório',
+            onClick: () => {
+              // Navigate to reports
+              console.log('Navigate to reports');
+            }
+          }
+        }
+      );
       
       // Limpar formulário
       setAmount('');
@@ -92,11 +118,23 @@ export const AddTransactionForm: React.FC = () => {
       setCategoryId('');
       setDate(new Date().toISOString().split('T')[0]);
       setReceiptFile(null);
+      setProgress(0);
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao adicionar transação');
+      enhancedToast.error('Erro ao adicionar transação', {
+        description: error.message || 'Tente novamente em alguns instantes.',
+        important: true
+      });
     } finally {
       setLoading(false);
+      setProgress(0);
     }
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value);
   };
 
   return (
@@ -216,8 +254,30 @@ export const AddTransactionForm: React.FC = () => {
               className="w-full" 
               disabled={loading}
             >
-              {loading ? 'Adicionando...' : `Adicionar ${type === 'income' ? 'Receita' : 'Despesa'}`}
+              {loading ? (
+                <div className="flex items-center space-x-2">
+                  <ProgressIndicator 
+                    variant="circular" 
+                    size="sm" 
+                    message="" 
+                  />
+                  <span>Adicionando...</span>
+                </div>
+              ) : (
+                `Adicionar ${type === 'income' ? 'Receita' : 'Despesa'}`
+              )}
             </Button>
+
+            {loading && progress > 0 && (
+              <div className="mt-2">
+                <ProgressIndicator 
+                  progress={progress}
+                  message="Salvando transação..."
+                  showPercentage={false}
+                  size="sm"
+                />
+              </div>
+            )}
           </form>
         </CardContent>
       </Card>

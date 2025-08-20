@@ -8,15 +8,16 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { AddAccountForm } from '@/components/accounts/AddAccountForm';
 import { AddCreditCardForm } from '@/components/credit-cards/AddCreditCardForm';
+import { DashboardSkeleton } from '@/components/ui/skeleton-loaders';
 
 interface DashboardOverviewProps {
   onNavigate?: (tab: string) => void;
 }
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
-  const { regularAccounts, deleteAccount } = useAccounts();
-  const { transactions } = useTransactions();
-  const { creditCards, deleteCreditCard } = useCreditCards();
+  const { regularAccounts, deleteAccount, loading: accountsLoading } = useAccounts();
+  const { transactions, loading: transactionsLoading } = useTransactions();
+  const { creditCards, deleteCreditCard, loading: cardsLoading } = useCreditCards();
   const [showAddAccountForm, setShowAddAccountForm] = useState(false);
   const [showAddCardForm, setShowAddCardForm] = useState(false);
 
@@ -66,10 +67,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
     return <AddCreditCardForm onClose={() => setShowAddCardForm(false)} />;
   }
 
+  // Show skeleton while loading
+  if (accountsLoading || transactionsLoading || cardsLoading) {
+    return <DashboardSkeleton />;
+  }
+
   return (
     <div className="space-y-4">
       {/* Available Balance (Regular Accounts Only) */}
-      <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
+      <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white" data-onboarding="balance-card">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium opacity-90">Saldo Disponível</CardTitle>
         </CardHeader>
@@ -148,6 +154,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               size="sm"
               onClick={() => setShowAddAccountForm(true)}
               className="p-1 h-auto"
+              data-onboarding="add-account"
             >
               <Plus size={16} className="text-green-600" />
             </Button>

@@ -7,6 +7,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useAccounts } from '@/hooks/useAccounts';
 import { AddAccountForm } from './AddAccountForm';
 import { EditAccountForm } from './EditAccountForm';
+import { AccountsListSkeleton } from '@/components/ui/skeleton-loaders';
 
 const getAccountIcon = (type: string) => {
   switch (type) {
@@ -65,11 +66,7 @@ export const AccountsList: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
-      </div>
-    );
+    return <AccountsListSkeleton />;
   }
 
   if (showAddForm && !editingAccount) {
