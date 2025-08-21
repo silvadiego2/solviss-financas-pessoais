@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Search, Shield, Settings, AlertTriangle, Trash2, Merge, KeepAll } from 'lucide-react';
+import { Search, Shield, Settings, AlertTriangle, Trash2, Merge, Archive } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCategories } from '@/hooks/useCategories';
@@ -102,7 +102,7 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
 
       // Executar update se necessário
       if (result.toUpdate) {
-        await updateTransaction(result.toUpdate.id, result.toUpdate.updates);
+        await updateTransaction({ id: result.toUpdate.id, ...result.toUpdate.updates });
       }
 
       // Remover grupo da lista
@@ -131,7 +131,7 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
     switch (action) {
       case 'remove_duplicates': return <Trash2 className="h-4 w-4" />;
       case 'merge': return <Merge className="h-4 w-4" />;
-      default: return <KeepAll className="h-4 w-4" />;
+      default: return <Archive className="h-4 w-4" />;
     }
   };
 

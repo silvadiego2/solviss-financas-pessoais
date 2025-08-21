@@ -136,7 +136,7 @@ export const AutoCategorizationManager: React.FC<AutoCategorizationManagerProps>
 
   const applySuggestion = async (transactionId: string, categoryId: string) => {
     try {
-      await updateTransaction(transactionId, { category_id: categoryId });
+      await updateTransaction({ id: transactionId, category_id: categoryId });
       
       // Remover da lista de sugestões
       setSuggestions(prev => prev.filter(s => s.transaction.id !== transactionId));
@@ -154,7 +154,8 @@ export const AutoCategorizationManager: React.FC<AutoCategorizationManagerProps>
       let applied = 0;
       for (const suggestion of suggestions) {
         if (suggestion.suggestion.confidence > 0.8) {
-          await updateTransaction(suggestion.transaction.id, {
+          await updateTransaction({ 
+            id: suggestion.transaction.id,
             category_id: suggestion.suggestion.categoryId
           });
           applied++;
@@ -377,7 +378,7 @@ export const AutoCategorizationManager: React.FC<AutoCategorizationManagerProps>
             </Button>
             {suggestions.length > 0 && (
               <Button variant="outline" onClick={applyAllSuggestions} disabled={isAnalyzing}>
-                Aplicar Sugestões (Confiança > 80%)
+                Aplicar Sugestões (Confiança &gt; 80%)
               </Button>
             )}
           </div>
