@@ -17,6 +17,7 @@ import { useAuth } from './auth/AuthProvider';
 import { AuthScreen } from './auth/AuthScreen';
 import { AutoCategorizationManager } from './advanced/AutoCategorizationManager';
 import { DuplicateDetectionManager } from './advanced/DuplicateDetectionManager';
+import { AutoBackupManager } from './advanced/AutoBackupManager';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -89,8 +90,8 @@ export const FinanceApp: React.FC = () => {
         return <SecurityDashboard />;
       case 'auto-categorization':
         return <AutoCategorizationManager onBack={handleBackToMore} />;
-      case 'duplicate-detection':
-        return <DuplicateDetectionManager onBack={handleBackToMore} />;
+      case 'auto-backup':
+        return <AutoBackupManager onBack={handleBackToMore} />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={() => {
           // Implement theme toggle logic here

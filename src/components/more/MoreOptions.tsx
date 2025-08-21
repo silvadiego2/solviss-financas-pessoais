@@ -10,7 +10,8 @@ import {
   User,
   Building,
   ChevronRight,
-  Shield
+  Shield,
+  Cloud
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -32,6 +33,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Exportar dados financeiros',
       icon: Download,
       action: () => onNavigate('export')
+    },
+    {
+      title: 'Backup Automático',
+      description: 'Configurar backup automático dos dados',
+      icon: Cloud,
+      action: () => onNavigate('auto-backup')
     },
     {
       title: 'Gerenciar Categorias',
