@@ -11,7 +11,11 @@ import {
   Building,
   ChevronRight,
   Shield,
-  Cloud
+  Cloud,
+  TrendingUp,
+  Scan,
+  Bell,
+  Zap
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -22,6 +26,30 @@ interface MoreOptionsProps {
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTheme }) => {
 
   const menuItems = [
+    {
+      title: 'Central de Analytics',
+      description: 'Analytics avançados e insights inteligentes',
+      icon: TrendingUp,
+      action: () => onNavigate('analytics')
+    },
+    {
+      title: 'Scanner de Recibos',
+      description: 'Capture recibos via câmera com OCR',
+      icon: Scan,
+      action: () => onNavigate('receipt-scanner')
+    },
+    {
+      title: 'Notificações Inteligentes',
+      description: 'Configure alertas e lembretes automáticos',
+      icon: Bell,
+      action: () => onNavigate('notifications')
+    },
+    {
+      title: 'Automação Financeira',
+      description: 'Regras automáticas para suas finanças',
+      icon: Zap,
+      action: () => onNavigate('auto-rules')
+    },
     {
       title: 'Conexões Bancárias',
       description: 'Conectar e sincronizar contas bancárias',

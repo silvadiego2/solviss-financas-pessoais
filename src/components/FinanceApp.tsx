@@ -18,6 +18,7 @@ import { AuthScreen } from './auth/AuthScreen';
 import { AutoCategorizationManager } from './advanced/AutoCategorizationManager';
 import { DuplicateDetectionManager } from './advanced/DuplicateDetectionManager';
 import { AutoBackupManager } from './advanced/AutoBackupManager';
+import { AnalyticsHub } from './analytics/AnalyticsHub';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -92,6 +93,29 @@ export const FinanceApp: React.FC = () => {
         return <AutoCategorizationManager onBack={handleBackToMore} />;
       case 'auto-backup':
         return <AutoBackupManager onBack={handleBackToMore} />;
+      case 'analytics':
+        return <AnalyticsHub onBack={handleBackToMore} />;
+      case 'receipt-scanner':
+        return (
+          <div className="text-center py-8">
+            <h2 className="text-lg font-semibold mb-4">Scanner de Recibos</h2>
+            <p className="text-gray-600">Funcionalidade disponível apenas em dispositivos móveis</p>
+          </div>
+        );
+      case 'notifications':
+        return (
+          <div className="text-center py-8">
+            <h2 className="text-lg font-semibold mb-4">Notificações</h2>
+            <p className="text-gray-600">Funcionalidade disponível apenas em dispositivos móveis</p>
+          </div>
+        );
+      case 'auto-rules':
+        return (
+          <div className="text-center py-8">
+            <h2 className="text-lg font-semibold mb-4">Automação</h2>
+            <p className="text-gray-600">Funcionalidade em desenvolvimento</p>
+          </div>
+        );
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={() => {
           // Implement theme toggle logic here
