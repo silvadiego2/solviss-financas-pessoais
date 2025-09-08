@@ -19,11 +19,17 @@ import { AutoCategorizationManager } from './advanced/AutoCategorizationManager'
 import { DuplicateDetectionManager } from './advanced/DuplicateDetectionManager';
 import { AutoBackupManager } from './advanced/AutoBackupManager';
 import { AnalyticsHub } from './analytics/AnalyticsHub';
+import { NotificationManager } from './mobile/NotificationManager';
+import { ReceiptScanner } from './mobile/ReceiptScanner';
+import { AutoRules } from './automation/AutoRules';
+import { useTheme } from '@/contexts/ThemeContext';
+import { UserProfile } from './profile/UserProfile';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [previousTab, setPreviousTab] = useState('more');
   const { user, loading } = useAuth();
+  const { toggleTheme } = useTheme();
 
   // Debug logging
   console.log('FinanceApp - User:', user);
@@ -81,12 +87,7 @@ export const FinanceApp: React.FC = () => {
       case 'banking':
         return <BankConnectionManager onBack={handleBackToMore} />;
       case 'profile':
-        return (
-          <div className="text-center py-8">
-            <h2 className="text-lg font-semibold mb-4">Perfil do Usuário</h2>
-            <p className="text-gray-600">Funcionalidade em desenvolvimento</p>
-          </div>
-        );
+        return <UserProfile onBack={handleBackToMore} />;
       case 'security':
         return <SecurityDashboard />;
       case 'auto-categorization':
@@ -96,31 +97,13 @@ export const FinanceApp: React.FC = () => {
       case 'analytics':
         return <AnalyticsHub onBack={handleBackToMore} />;
       case 'receipt-scanner':
-        return (
-          <div className="text-center py-8">
-            <h2 className="text-lg font-semibold mb-4">Scanner de Recibos</h2>
-            <p className="text-gray-600">Funcionalidade disponível apenas em dispositivos móveis</p>
-          </div>
-        );
+        return <ReceiptScanner onBack={handleBackToMore} />;
       case 'notifications':
-        return (
-          <div className="text-center py-8">
-            <h2 className="text-lg font-semibold mb-4">Notificações</h2>
-            <p className="text-gray-600">Funcionalidade disponível apenas em dispositivos móveis</p>
-          </div>
-        );
+        return <NotificationManager onBack={handleBackToMore} />;
       case 'auto-rules':
-        return (
-          <div className="text-center py-8">
-            <h2 className="text-lg font-semibold mb-4">Automação</h2>
-            <p className="text-gray-600">Funcionalidade em desenvolvimento</p>
-          </div>
-        );
+        return <AutoRules onBack={handleBackToMore} />;
       case 'more':
-        return <MoreOptions onNavigate={handleTabChange} onToggleTheme={() => {
-          // Implement theme toggle logic here
-          console.log('Toggle theme called');
-        }} />;
+        return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
       default:
         return <DashboardOverview onNavigate={handleTabChange} />;
     }
