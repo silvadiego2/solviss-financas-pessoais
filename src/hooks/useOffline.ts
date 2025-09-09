@@ -93,20 +93,47 @@ export const useOffline = () => {
   };
 
   const processQueueItem = async (item: OfflineQueue) => {
-    // This would be implemented based on your specific API calls
+    // Import the hooks needed for API calls
+    const { supabase } = await import('@/integrations/supabase/client');
+    
     switch (item.action) {
       case 'CREATE_TRANSACTION':
-        // await createTransaction(item.data);
+        const { error: createError } = await supabase
+          .from('transactions')
+          .insert([item.data]);
+        if (createError) throw createError;
         break;
+        
       case 'UPDATE_TRANSACTION':
-        // await updateTransaction(item.data);
+        const { error: updateError } = await supabase
+          .from('transactions')
+          .update(item.data.updates)
+          .eq('id', item.data.id);
+        if (updateError) throw updateError;
         break;
+        
       case 'DELETE_TRANSACTION':
-        // await deleteTransaction(item.data);
+        const { error: deleteError } = await supabase
+          .from('transactions')
+          .delete()
+          .eq('id', item.data.id);
+        if (deleteError) throw deleteError;
         break;
+        
       case 'CREATE_BUDGET':
-        // await createBudget(item.data);
+        const { error: budgetError } = await supabase
+          .from('budgets')
+          .insert([item.data]);
+        if (budgetError) throw budgetError;
         break;
+        
+      case 'CREATE_ACCOUNT':
+        const { error: accountError } = await supabase
+          .from('accounts')
+          .insert([item.data]);
+        if (accountError) throw accountError;
+        break;
+        
       default:
         throw new Error(`Unknown action: ${item.action}`);
     }

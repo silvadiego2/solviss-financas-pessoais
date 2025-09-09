@@ -18,25 +18,76 @@ export const useNotifications = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  // For now, return empty notifications since the table doesn't exist in types
-  // This will be updated once the database types are refreshed
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ['notifications', user?.id],
     queryFn: async (): Promise<Notification[]> => {
-      // Return empty array for now until notifications table is properly set up
-      return [];
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        return [];
+      }
+
+      return (data as Notification[]) || [];
     },
     enabled: !!user,
   });
 
-  const createNotification = async (notification: Omit<Notification, 'id' | 'user_id' | 'created_at'>) => {
-    // Placeholder for now
-    console.log('Creating notification:', notification);
+  const createNotificationMutation = useMutation({
+    mutationFn: async (notification: Omit<Notification, 'id' | 'user_id' | 'created_at'>) => {
+      if (!user) throw new Error('User not authenticated');
+      
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert([{
+          ...notification,
+          user_id: user.id,
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+      toast.success('Notificação criada');
+    },
+    onError: (error) => {
+      console.error('Error creating notification:', error);
+      toast.error('Erro ao criar notificação');
+    },
+  });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    },
+    onError: (error) => {
+      console.error('Error marking notification as read:', error);
+      toast.error('Erro ao marcar notificação como lida');
+    },
+  });
+
+  const createNotification = (notification: Omit<Notification, 'id' | 'user_id' | 'created_at'>) => {
+    createNotificationMutation.mutate(notification);
   };
 
-  const markAsRead = async (id: string) => {
-    // Placeholder for now
-    console.log('Marking notification as read:', id);
+  const markAsRead = (id: string) => {
+    markAsReadMutation.mutate(id);
   };
 
   return {
