@@ -425,6 +425,7 @@ export type Database = {
           id: string
           is_recurring: boolean | null
           notes: string | null
+          receipt_image_url: string | null
           recurrence_end_date: string | null
           recurrence_frequency:
             | Database["public"]["Enums"]["recurrence_frequency"]
@@ -446,6 +447,7 @@ export type Database = {
           id?: string
           is_recurring?: boolean | null
           notes?: string | null
+          receipt_image_url?: string | null
           recurrence_end_date?: string | null
           recurrence_frequency?:
             | Database["public"]["Enums"]["recurrence_frequency"]
@@ -467,6 +469,7 @@ export type Database = {
           id?: string
           is_recurring?: boolean | null
           notes?: string | null
+          receipt_image_url?: string | null
           recurrence_end_date?: string | null
           recurrence_frequency?:
             | Database["public"]["Enums"]["recurrence_frequency"]
