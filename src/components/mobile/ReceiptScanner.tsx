@@ -1,23 +1,27 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useCamera } from '@/hooks/useCamera';
+import { useTransactions } from '@/hooks/useTransactions';
+import { useAccounts } from '@/hooks/useAccounts';
+import { useCategories } from '@/hooks/useCategories';
+import { BackHeader } from '@/components/layout/BackHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { BackHeader } from '@/components/layout/BackHeader';
-import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
+import { Textarea } from '@/components/ui/textarea';
+import { Camera, Upload, Loader2, FileImage, DollarSign, Calendar, User, Trash2 } from 'lucide-react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
-import { Camera as CameraIcon, Upload, Scan, Check, X, Loader2 } from 'lucide-react';
+import Tesseract from 'tesseract.js';
 import { toast } from 'sonner';
-import { createWorker } from 'tesseract.js';
-import { useCategories } from '@/hooks/useCategories';
 
 interface ScannedData {
   amount?: number;
   description?: string;
   date?: string;
   merchant?: string;
+  account_id?: string;
+  category_id?: string;
 }
 
 interface ReceiptScannerProps {
@@ -26,59 +30,45 @@ interface ReceiptScannerProps {
 }
 
 export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({ onBack, onTransactionCreated }) => {
+  const { capturePhoto, selectFromGallery } = useCamera();
+  const { createTransaction, isCreating } = useTransactions();
+  const { accounts } = useAccounts();
+  const { categories } = useCategories();
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedData, setScannedData] = useState<ScannedData | null>(null);
-  const [editedData, setEditedData] = useState<ScannedData>({});
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  
-  const { categories = [] } = useCategories();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editedData, setEditedData] = useState<ScannedData | null>(null);
 
-  const capturePhoto = async () => {
+  const handleCapturePhoto = async () => {
     try {
-      // Haptic feedback
       await Haptics.impact({ style: ImpactStyle.Light });
-
-      const photo = await Camera.getPhoto({
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Camera,
-        quality: 80,
-        width: 1024,
-        height: 1024,
-      });
-
+      const photo = await capturePhoto();
       if (photo.dataUrl) {
         setCapturedImage(photo.dataUrl);
         processImage(photo.dataUrl);
       }
     } catch (error) {
-      console.error('Error capturing photo:', error);
+      console.error('Erro ao capturar foto:', error);
       toast.error('Erro ao capturar foto');
     }
   };
 
-  const selectFromGallery = async () => {
+  const handleSelectFromGallery = async () => {
     try {
-      const photo = await Camera.getPhoto({
-        resultType: CameraResultType.DataUrl,
-        source: CameraSource.Photos,
-        quality: 80,
-      });
-
+      const photo = await selectFromGallery();
       if (photo.dataUrl) {
         setCapturedImage(photo.dataUrl);
         processImage(photo.dataUrl);
       }
     } catch (error) {
-      console.error('Error selecting from gallery:', error);
+      console.error('Erro ao selecionar imagem:', error);
       toast.error('Erro ao selecionar imagem');
     }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
+    if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onload = (e) => {
         const dataUrl = e.target?.result as string;
@@ -93,25 +83,25 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({ onBack, onTransa
     setIsProcessing(true);
     
     try {
-      const worker = await createWorker('por');
-      
       toast.info('Processando imagem...');
       
-      const { data: { text } } = await worker.recognize(imageDataUrl);
-      await worker.terminate();
+      const { data: { text } } = await Tesseract.recognize(
+        imageDataUrl,
+        'por',
+        {
+          logger: m => console.log(m)
+        }
+      );
 
-      // Extract data from OCR text
       const extracted = extractReceiptData(text);
       setScannedData(extracted);
       setEditedData(extracted);
       
       toast.success('Recibo processado com sucesso!');
-      
-      // Haptic feedback for success
       await Haptics.impact({ style: ImpactStyle.Medium });
       
     } catch (error) {
-      console.error('Error processing image:', error);
+      console.error('Erro ao processar imagem:', error);
       toast.error('Erro ao processar imagem');
     } finally {
       setIsProcessing(false);
@@ -127,7 +117,6 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({ onBack, onTransa
     
     let amount: number | undefined;
     if (amounts && amounts.length > 0) {
-      // Take the largest amount found (likely to be the total)
       const numericAmounts = amounts.map(a => {
         const cleaned = a.replace(/R\$\s*/, '').replace(/\./g, '').replace(',', '.');
         return parseFloat(cleaned);
@@ -144,7 +133,6 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({ onBack, onTransa
     let date: string | undefined;
     if (dateMatch) {
       const dateStr = dateMatch[1];
-      // Convert to YYYY-MM-DD format
       const parts = dateStr.split(/[\/\-\.]/);
       if (parts.length === 3) {
         const day = parts[0].padStart(2, '0');
@@ -157,10 +145,9 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({ onBack, onTransa
       }
     }
 
-    // Try to find merchant name (usually first few lines)
+    // Try to find merchant name
     let merchant: string | undefined;
     if (lines.length > 0) {
-      // Look for the first line that looks like a business name
       for (const line of lines.slice(0, 5)) {
         if (line.length > 3 && line.length < 50 && !/^\d+$/.test(line)) {
           merchant = line;
@@ -173,197 +160,285 @@ export const ReceiptScanner: React.FC<ReceiptScannerProps> = ({ onBack, onTransa
       amount,
       date,
       merchant,
-      description: merchant || 'Transação via OCR',
+      description: merchant || 'Transação escaneada',
     };
   };
 
-  const createTransaction = async () => {
-    if (!editedData.amount || !selectedCategory) {
-      toast.error('Preencha o valor e selecione uma categoria');
+  const handleCreateTransaction = async () => {
+    if (!editedData || !editedData.amount) {
+      toast.error('Por favor, preencha pelo menos o valor da transação');
       return;
     }
 
-    const transaction = {
-      amount: editedData.amount,
-      description: editedData.description || 'Transação via OCR',
-      category_id: selectedCategory,
-      date: editedData.date || new Date().toISOString().split('T')[0],
-      type: 'expense',
-    };
+    if (!editedData.account_id) {
+      toast.error('Por favor, selecione uma conta');
+      return;
+    }
 
     try {
-      // Here you would typically call your transaction creation API
+      // Convert image to file if available
+      let receiptFile: File | undefined;
+      if (capturedImage) {
+        const response = await fetch(capturedImage);
+        const blob = await response.blob();
+        receiptFile = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      }
+
+      const transactionData = {
+        type: 'expense' as const,
+        amount: editedData.amount,
+        description: editedData.description || 'Transação escaneada',
+        date: editedData.date || new Date().toISOString().split('T')[0],
+        account_id: editedData.account_id,
+        category_id: editedData.category_id,
+        status: 'completed' as const,
+        receiptFile,
+      };
+
+      createTransaction(transactionData);
+      
+      // Reset scanner
+      resetScanner();
+      
+      if (onBack) {
+        onBack();
+      }
+      
       toast.success('Transação criada com sucesso!');
-      onTransactionCreated?.(transaction);
-      
-      // Reset form
-      setCapturedImage(null);
-      setScannedData(null);
-      setEditedData({});
-      setSelectedCategory('');
-      
-      // Haptic feedback
-      await Haptics.impact({ style: ImpactStyle.Heavy });
-      
     } catch (error) {
-      console.error('Error creating transaction:', error);
+      console.error('Erro ao criar transação:', error);
       toast.error('Erro ao criar transação');
     }
   };
 
   const resetScanner = () => {
     setCapturedImage(null);
+    setIsProcessing(false);
     setScannedData(null);
-    setEditedData({});
-    setSelectedCategory('');
+    setEditedData(null);
   };
 
+  // Set default account when accounts are loaded
+  useEffect(() => {
+    if (accounts.length > 0 && editedData && !editedData.account_id) {
+      setEditedData(prev => prev ? { ...prev, account_id: accounts[0].id } : null);
+    }
+  }, [accounts, editedData]);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {onBack && <BackHeader title="Scanner de Recibos" onBack={onBack} />}
       
       {!onBack && (
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Scanner de Recibos</h1>
-          <p className="text-muted-foreground">Capture recibos e crie transações automaticamente</p>
+        <div className="text-center space-y-2">
+          <h2 className="text-3xl font-bold">Scanner de Recibos</h2>
+          <p className="text-muted-foreground">
+            Capture recibos e crie transações automaticamente
+          </p>
         </div>
       )}
 
+      {/* Capture Options */}
       {!capturedImage && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Scan className="w-5 h-5" />
+              <Camera size={20} />
               Capturar Recibo
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 gap-3">
-              <Button onClick={capturePhoto} className="flex items-center gap-2">
-                <CameraIcon className="w-4 h-4" />
+              <Button onClick={handleCapturePhoto} className="flex items-center gap-2">
+                <Camera size={18} />
                 Tirar Foto
               </Button>
               
-              <Button variant="outline" onClick={selectFromGallery} className="flex items-center gap-2">
-                <Upload className="w-4 h-4" />
-                Galeria
+              <Button variant="outline" onClick={handleSelectFromGallery} className="flex items-center gap-2">
+                <FileImage size={18} />
+                Selecionar da Galeria
               </Button>
               
-              <Button
-                variant="outline"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2"
-              >
-                <Upload className="w-4 h-4" />
-                Upload de Arquivo
-              </Button>
-              
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  className="w-full flex items-center gap-2"
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                >
+                  <Upload size={18} />
+                  Upload de Arquivo
+                </Button>
+                <input
+                  id="file-upload"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
+      {/* Image Preview */}
       {capturedImage && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Imagem Capturada</CardTitle>
               <Button variant="outline" size="sm" onClick={resetScanner}>
-                <X className="w-4 h-4" />
+                <Trash2 size={16} />
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <img
-              src={capturedImage}
-              alt="Recibo capturado"
-              className="w-full max-w-sm mx-auto rounded-lg border"
-            />
+            <div className="flex justify-center">
+              <img
+                src={capturedImage}
+                alt="Recibo capturado"
+                className="max-w-full max-h-96 rounded-lg border shadow-md"
+              />
+            </div>
             
             {isProcessing && (
               <div className="flex items-center justify-center gap-2 mt-4 text-muted-foreground">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Processando OCR...
+                <Loader2 size={18} className="animate-spin" />
+                <span>Processando OCR...</span>
               </div>
             )}
           </CardContent>
         </Card>
       )}
 
-      {scannedData && !isProcessing && (
+      {/* Transaction Form */}
+      {scannedData && !isProcessing && editedData && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Check className="w-5 h-5 text-green-600" />
-              Dados Extraídos
+              <DollarSign size={20} />
+              Dados da Transação
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-4">
-              <div>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="space-y-2">
                 <Label htmlFor="amount">Valor *</Label>
                 <Input
                   id="amount"
                   type="number"
                   step="0.01"
                   value={editedData.amount || ''}
-                  onChange={(e) => setEditedData(prev => ({ ...prev, amount: parseFloat(e.target.value) }))}
-                  placeholder="0.00"
+                  onChange={(e) => setEditedData(prev => prev ? {...prev, amount: parseFloat(e.target.value) || 0} : null)}
+                  placeholder="0,00"
                 />
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="description">Descrição</Label>
                 <Input
                   id="description"
                   value={editedData.description || ''}
-                  onChange={(e) => setEditedData(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={(e) => setEditedData(prev => prev ? {...prev, description: e.target.value} : null)}
                   placeholder="Descrição da transação"
                 />
               </div>
 
-              <div>
+              <div className="space-y-2">
                 <Label htmlFor="date">Data</Label>
                 <Input
                   id="date"
                   type="date"
                   value={editedData.date || ''}
-                  onChange={(e) => setEditedData(prev => ({ ...prev, date: e.target.value }))}
+                  onChange={(e) => setEditedData(prev => prev ? {...prev, date: e.target.value} : null)}
                 />
               </div>
 
-              <div>
-                <Label htmlFor="category">Categoria *</Label>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <div className="space-y-2">
+                <Label htmlFor="account">Conta *</Label>
+                <Select 
+                  value={editedData.account_id || ''} 
+                  onValueChange={(value) => setEditedData(prev => prev ? {...prev, account_id: value} : null)}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma categoria" />
+                    <SelectValue placeholder="Selecione uma conta" />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map(category => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.name}
+                    {accounts.map(account => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="flex gap-2">
-              <Button onClick={createTransaction} className="flex-1">
-                Criar Transação
-              </Button>
-              <Button variant="outline" onClick={resetScanner}>
-                Cancelar
-              </Button>
+              <div className="space-y-2">
+                <Label htmlFor="category">Categoria</Label>
+                <Select 
+                  value={editedData.category_id || ''} 
+                  onValueChange={(value) => setEditedData(prev => prev ? {...prev, category_id: value} : null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.filter(cat => cat.transaction_type === 'expense').map(category => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.icon} {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="merchant">Estabelecimento</Label>
+                <Input
+                  id="merchant"
+                  value={editedData.merchant || ''}
+                  onChange={(e) => setEditedData(prev => prev ? {...prev, merchant: e.target.value} : null)}
+                  placeholder="Nome do estabelecimento"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={resetScanner}
+                  className="flex-1"
+                  disabled={isCreating}
+                >
+                  <Trash2 size={16} className="mr-2" />
+                  Descartar
+                </Button>
+                <Button 
+                  onClick={handleCreateTransaction}
+                  className="flex-1"
+                  disabled={isCreating}
+                >
+                  {isCreating ? (
+                    <Loader2 size={16} className="mr-2 animate-spin" />
+                  ) : (
+                    <DollarSign size={16} className="mr-2" />
+                  )}
+                  {isCreating ? 'Criando...' : 'Criar Transação'}
+                </Button>
+              </div>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Empty State */}
+      {!capturedImage && !isProcessing && (
+        <Card className="text-center py-8">
+          <CardContent>
+            <Camera size={48} className="mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-semibold mb-2">Pronto para escanear!</h3>
+            <p className="text-muted-foreground mb-4">
+              Capture uma foto do seu recibo ou selecione uma imagem da galeria para começar.
+            </p>
           </CardContent>
         </Card>
       )}

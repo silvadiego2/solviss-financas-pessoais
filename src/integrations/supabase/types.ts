@@ -95,6 +95,51 @@ export type Database = {
         }
         Relationships: []
       }
+      automation_rules: {
+        Row: {
+          actions: Json
+          conditions: Json
+          created_at: string
+          enabled: boolean
+          id: string
+          last_triggered_at: string | null
+          name: string
+          priority: number
+          rule_type: string
+          times_triggered: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_triggered_at?: string | null
+          name: string
+          priority?: number
+          rule_type: string
+          times_triggered?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          actions?: Json
+          conditions?: Json
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          last_triggered_at?: string | null
+          name?: string
+          priority?: number
+          rule_type?: string
+          times_triggered?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       bank_connections: {
         Row: {
           account_external_id: string

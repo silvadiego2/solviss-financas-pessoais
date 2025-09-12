@@ -9,8 +9,9 @@ import { Badge } from '@/components/ui/badge';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Zap, Plus, Edit, Trash2, Filter, Target, Calendar, DollarSign } from 'lucide-react';
-import { toast } from 'sonner';
 import { useCategories } from '@/hooks/useCategories';
+import { useAutomationRules, CreateRuleInput } from '@/hooks/useAutomationRules';
+import { toast } from 'sonner';
 
 interface AutoRule {
   id: string;
@@ -40,59 +41,12 @@ interface AutoRulesProps {
 }
 
 export const AutoRules: React.FC<AutoRulesProps> = ({ onBack }) => {
-  const [rules, setRules] = useState<AutoRule[]>([
-    {
-      id: '1',
-      name: 'Categorizar Supermercado',
-      enabled: true,
-      type: 'categorization',
-      conditions: [
-        { field: 'description', operator: 'contains', value: 'SUPERMERCADO' }
-      ],
-      actions: [
-        { type: 'set_category', value: 'alimentacao' }
-      ],
-      priority: 1,
-      timesTriggered: 45,
-      lastTriggered: '2024-01-15',
-    },
-    {
-      id: '2',
-      name: 'Transações Recorrentes',
-      enabled: true,
-      type: 'recurring',
-      conditions: [
-        { field: 'amount', operator: 'equals', value: 150.00 },
-        { field: 'day_of_month', operator: 'equals', value: 10 }
-      ],
-      actions: [
-        { type: 'set_recurring', value: 'monthly' }
-      ],
-      priority: 2,
-      timesTriggered: 12,
-      lastTriggered: '2024-01-10',
-    },
-    {
-      id: '3',
-      name: 'Alerta Gastos Altos',
-      enabled: false,
-      type: 'alert',
-      conditions: [
-        { field: 'amount', operator: 'greater_than', value: 500 }
-      ],
-      actions: [
-        { type: 'send_alert', value: 'Gasto alto detectado!' }
-      ],
-      priority: 3,
-      timesTriggered: 3,
-    },
-  ]);
-
+  const { rules, loading, createRule, toggleRule, deleteRule, isCreating } = useAutomationRules();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [editingRule, setEditingRule] = useState<AutoRule | null>(null);
-  const [newRule, setNewRule] = useState<Partial<AutoRule>>({
+  const [editingRule, setEditingRule] = useState<any | null>(null);
+  const [newRule, setNewRule] = useState<Partial<CreateRuleInput>>({
     name: '',
-    type: 'categorization',
+    rule_type: 'categorization',
     enabled: true,
     conditions: [{ field: 'description', operator: 'contains', value: '' }],
     actions: [{ type: 'set_category', value: '' }],
@@ -101,51 +55,34 @@ export const AutoRules: React.FC<AutoRulesProps> = ({ onBack }) => {
 
   const { categories = [] } = useCategories();
 
-  const toggleRule = (ruleId: string) => {
-    setRules(prev =>
-      prev.map(rule =>
-        rule.id === ruleId ? { ...rule, enabled: !rule.enabled } : rule
-      )
-    );
-    toast.success('Regra atualizada');
-  };
-
-  const deleteRule = (ruleId: string) => {
-    setRules(prev => prev.filter(rule => rule.id !== ruleId));
-    toast.success('Regra excluída');
-  };
-
-  const createRule = () => {
+  const handleCreateRule = () => {
     if (!newRule.name || !newRule.conditions?.[0]?.value) {
       toast.error('Preencha os campos obrigatórios');
       return;
     }
 
-    const rule: AutoRule = {
-      id: Date.now().toString(),
+    const ruleData: CreateRuleInput = {
       name: newRule.name,
-      enabled: newRule.enabled || true,
-      type: newRule.type || 'categorization',
+      rule_type: newRule.rule_type || 'categorization',
       conditions: newRule.conditions || [],
       actions: newRule.actions || [],
       priority: newRule.priority || 1,
-      timesTriggered: 0,
+      enabled: newRule.enabled ?? true,
     };
 
-    setRules(prev => [...prev, rule]);
+    createRule(ruleData);
     setShowCreateDialog(false);
     setNewRule({
       name: '',
-      type: 'categorization',
+      rule_type: 'categorization',
       enabled: true,
       conditions: [{ field: 'description', operator: 'contains', value: '' }],
       actions: [{ type: 'set_category', value: '' }],
       priority: 1,
     });
-    toast.success('Regra criada com sucesso!');
   };
 
-  const updateCondition = (index: number, field: keyof RuleCondition, value: any) => {
+  const updateCondition = (index: number, field: string, value: any) => {
     setNewRule(prev => ({
       ...prev,
       conditions: prev.conditions?.map((condition, i) =>
@@ -154,7 +91,7 @@ export const AutoRules: React.FC<AutoRulesProps> = ({ onBack }) => {
     }));
   };
 
-  const updateAction = (index: number, field: keyof RuleAction, value: any) => {
+  const updateAction = (index: number, field: string, value: any) => {
     setNewRule(prev => ({
       ...prev,
       actions: prev.actions?.map((action, i) =>
@@ -193,6 +130,18 @@ export const AutoRules: React.FC<AutoRulesProps> = ({ onBack }) => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {onBack && <BackHeader title="Regras Automáticas" onBack={onBack} />}
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Carregando regras...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
       {onBack && <BackHeader title="Regras Automáticas" onBack={onBack} />}
@@ -230,8 +179,8 @@ export const AutoRules: React.FC<AutoRulesProps> = ({ onBack }) => {
                 <div>
                   <Label htmlFor="rule-type">Tipo de Regra</Label>
                   <Select 
-                    value={newRule.type} 
-                    onValueChange={(value: any) => setNewRule(prev => ({ ...prev, type: value }))}
+                    value={newRule.rule_type} 
+                    onValueChange={(value: any) => setNewRule(prev => ({ ...prev, rule_type: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -340,8 +289,8 @@ export const AutoRules: React.FC<AutoRulesProps> = ({ onBack }) => {
                   <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
                     Cancelar
                   </Button>
-                  <Button onClick={createRule}>
-                    Criar Regra
+                  <Button onClick={handleCreateRule} disabled={isCreating}>
+                    {isCreating ? 'Criando...' : 'Criar Regra'}
                   </Button>
                 </div>
               </div>
@@ -357,15 +306,15 @@ export const AutoRules: React.FC<AutoRulesProps> = ({ onBack }) => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {getTypeIcon(rule.type)}
+                  {getTypeIcon(rule.rule_type)}
                   <div>
                     <CardTitle className="text-base">{rule.name}</CardTitle>
                     <div className="flex items-center gap-2 mt-1">
                       <Badge variant="outline" className="text-xs">
-                        {getTypeLabel(rule.type)}
+                        {getTypeLabel(rule.rule_type)}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {rule.timesTriggered} execuções
+                        {rule.times_triggered} execuções
                       </span>
                     </div>
                   </div>
@@ -414,9 +363,9 @@ export const AutoRules: React.FC<AutoRulesProps> = ({ onBack }) => {
                     </span>
                   ))}
                 </div>
-                {rule.lastTriggered && (
+                {rule.last_triggered_at && (
                   <div>
-                    <strong>Última execução:</strong> {rule.lastTriggered}
+                    <strong>Última execução:</strong> {new Date(rule.last_triggered_at).toLocaleDateString('pt-BR')}
                   </div>
                 )}
               </div>
