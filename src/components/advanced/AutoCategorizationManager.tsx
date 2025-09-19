@@ -378,7 +378,7 @@ export const AutoCategorizationManager: React.FC<AutoCategorizationManagerProps>
             </Button>
             {suggestions.length > 0 && (
               <Button variant="outline" onClick={applyAllSuggestions} disabled={isAnalyzing}>
-                Aplicar Sugestões (Confiança &gt; 80%)
+                Aplicar Sugestões (Confiança {'>'} 80%)
               </Button>
             )}
           </div>
