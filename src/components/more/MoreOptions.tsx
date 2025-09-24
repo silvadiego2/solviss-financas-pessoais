@@ -15,7 +15,8 @@ import {
   TrendingUp,
   Scan,
   Bell,
-  Zap
+  Zap,
+  Database
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -26,6 +27,12 @@ interface MoreOptionsProps {
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTheme }) => {
 
   const menuItems = [
+    {
+      title: 'Dados de Demonstração',
+      description: 'Criar dados de exemplo para testar o app',
+      icon: Database,
+      action: () => onNavigate('demo-data')
+    },
     {
       title: 'Central de Analytics',
       description: 'Analytics avançados e insights inteligentes',

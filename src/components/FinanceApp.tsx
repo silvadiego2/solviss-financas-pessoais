@@ -24,6 +24,7 @@ import { ReceiptScanner } from './mobile/ReceiptScanner';
 import { AutoRules } from './automation/AutoRules';
 import { useTheme } from '@/contexts/ThemeContext';
 import { UserProfile } from './profile/UserProfile';
+import { DemoDataManager } from './demo/DemoDataManager';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -102,6 +103,8 @@ export const FinanceApp: React.FC = () => {
         return <NotificationManager onBack={handleBackToMore} />;
       case 'auto-rules':
         return <AutoRules onBack={handleBackToMore} />;
+      case 'demo-data':
+        return <DemoDataManager />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
       default:
