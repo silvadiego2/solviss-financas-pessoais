@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
   Download, 
+  Upload,
   Tags, 
   Target, 
   CreditCard, 
@@ -32,6 +33,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Criar dados de exemplo para testar o app',
       icon: Database,
       action: () => onNavigate('demo-data')
+    },
+    {
+      title: 'Importar Transações',
+      description: 'Importar de planilha CSV ou Excel',
+      icon: Upload,
+      action: () => onNavigate('import-transactions')
     },
     {
       title: 'Central de Analytics',

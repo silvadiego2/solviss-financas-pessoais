@@ -11,6 +11,7 @@ import { MoreOptions } from './more/MoreOptions';
 import { SimpleGoals } from './goals/SimpleGoals';
 import { CategoryManager } from './categories/CategoryManager';
 import { ExportReports } from './reports/ExportReports';
+import { ImportTransactions } from './transactions/ImportTransactions';
 import { BankConnectionManager } from './banking/BankConnectionManager';
 import { SecurityDashboard } from './security/SecurityDashboard';
 import { useAuth } from './auth/AuthProvider';
@@ -85,6 +86,8 @@ export const FinanceApp: React.FC = () => {
         return <CategoryManager onBack={handleBackToMore} />;
       case 'export':
         return <ExportReports onBack={handleBackToMore} />;
+      case 'import-transactions':
+        return <ImportTransactions onBack={handleBackToMore} />;
       case 'banking':
         return <BankConnectionManager onBack={handleBackToMore} />;
       case 'profile':
