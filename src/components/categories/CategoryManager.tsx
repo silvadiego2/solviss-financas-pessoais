@@ -16,8 +16,9 @@ interface CategoryManagerProps {
 }
 
 export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
-  const { categories, loading } = useCategories();
+  const { categories, loading, createCategory, updateCategory, deleteCategory } = useCategories();
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<any>(null);
   const [newCategory, setNewCategory] = useState({
     name: '',
     icon: '📋',
@@ -25,18 +26,53 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
     transaction_type: 'expense' as 'income' | 'expense',
   });
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Implementar criação de categoria personalizada
-    toast.success('Categoria adicionada com sucesso!');
+    
+    try {
+      if (editingCategory) {
+        await updateCategory(editingCategory.id, newCategory);
+        setEditingCategory(null);
+      } else {
+        await createCategory(newCategory);
+      }
+      
+      setShowAddForm(false);
+      setNewCategory({
+        name: '',
+        icon: '📋',
+        color: '#6B7280',
+        transaction_type: 'expense',
+      });
+    } catch (error) {
+      // Error já tratado no hook
+    }
+  };
+
+  const handleEditCategory = (category: any) => {
+    setEditingCategory(category);
+    setNewCategory({
+      name: category.name,
+      icon: category.icon || '📋',
+      color: category.color || '#6B7280',
+      transaction_type: category.transaction_type,
+    });
+    setShowAddForm(true);
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
+      try {
+        await deleteCategory(categoryId);
+      } catch (error) {
+        // Error já tratado no hook
+      }
+    }
+  };
+
+  const handleCancelForm = () => {
     setShowAddForm(false);
+    setEditingCategory(null);
     setNewCategory({
       name: '',
       icon: '📋',
@@ -89,7 +125,9 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
       {showAddForm && (
         <Card>
           <CardHeader>
-            <CardTitle>Adicionar Categoria Personalizada</CardTitle>
+            <CardTitle>
+              {editingCategory ? 'Editar Categoria' : 'Adicionar Categoria Personalizada'}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAddCategory} className="space-y-4">
@@ -147,11 +185,11 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
               </div>
 
               <div className="flex space-x-2">
-                <Button type="button" variant="outline" onClick={() => setShowAddForm(false)}>
+                <Button type="button" variant="outline" onClick={handleCancelForm}>
                   Cancelar
                 </Button>
                 <Button type="submit">
-                  Adicionar Categoria
+                  {editingCategory ? 'Atualizar Categoria' : 'Adicionar Categoria'}
                 </Button>
               </div>
             </form>
@@ -182,10 +220,19 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <Button variant="ghost" size="sm">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleEditCategory(category)}
+                  >
                     <Edit size={16} />
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-red-600">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-red-600"
+                    onClick={() => handleDeleteCategory(category.id)}
+                  >
                     <Trash2 size={16} />
                   </Button>
                 </div>
@@ -218,10 +265,19 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <Button variant="ghost" size="sm">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleEditCategory(category)}
+                  >
                     <Edit size={16} />
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-red-600">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="text-red-600"
+                    onClick={() => handleDeleteCategory(category.id)}
+                  >
                     <Trash2 size={16} />
                   </Button>
                 </div>

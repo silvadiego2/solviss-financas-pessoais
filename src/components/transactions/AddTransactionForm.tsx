@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
@@ -25,6 +26,9 @@ export const AddTransactionForm: React.FC = () => {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
 
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
@@ -93,6 +97,9 @@ export const AddTransactionForm: React.FC = () => {
         date,
         status: 'completed',
         receiptFile: receiptFile || undefined,
+        is_recurring: isRecurring,
+        recurrence_frequency: isRecurring ? recurrenceFrequency : undefined,
+        recurrence_end_date: isRecurring && recurrenceEndDate ? recurrenceEndDate : undefined,
       });
 
       setProgress(100);
@@ -119,6 +126,9 @@ export const AddTransactionForm: React.FC = () => {
       setDate(new Date().toISOString().split('T')[0]);
       setReceiptFile(null);
       setProgress(0);
+      setIsRecurring(false);
+      setRecurrenceFrequency('monthly');
+      setRecurrenceEndDate('');
     } catch (error: any) {
       enhancedToast.error('Erro ao adicionar transação', {
         description: error.message || 'Tente novamente em alguns instantes.',
@@ -228,6 +238,52 @@ export const AddTransactionForm: React.FC = () => {
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
+            </div>
+
+            <div className="space-y-3 pt-2 border-t">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="recurring"
+                  checked={isRecurring}
+                  onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
+                />
+                <Label htmlFor="recurring" className="cursor-pointer">
+                  Transação Recorrente
+                </Label>
+              </div>
+
+              {isRecurring && (
+                <div className="grid grid-cols-2 gap-4 pl-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="frequency">Frequência</Label>
+                    <Select
+                      value={recurrenceFrequency}
+                      onValueChange={(value: any) => setRecurrenceFrequency(value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="daily">Diária</SelectItem>
+                        <SelectItem value="weekly">Semanal</SelectItem>
+                        <SelectItem value="monthly">Mensal</SelectItem>
+                        <SelectItem value="yearly">Anual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="endDate">Data Final</Label>
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={recurrenceEndDate}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                      min={date}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">

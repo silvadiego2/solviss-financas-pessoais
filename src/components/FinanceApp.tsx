@@ -4,6 +4,7 @@ import { TopHeader } from './layout/TopHeader';
 import { DashboardOverview } from './dashboard/DashboardOverview';
 import { AccountsList } from './accounts/AccountsList';
 import { AddTransactionForm } from './transactions/AddTransactionForm';
+import { TransactionsList } from './transactions/TransactionsList';
 import { BudgetsList } from './budgets/BudgetsList';
 import { SimpleReports } from './reports/SimpleReports';
 import { CreditCardsList } from './credit-cards/CreditCardsList';
@@ -76,6 +77,8 @@ export const FinanceApp: React.FC = () => {
         return <BudgetsList />;
       case 'add':
         return <AddTransactionForm />;
+      case 'transactions':
+        return <TransactionsList />;
       case 'reports':
         return <SimpleReports />;
       case 'cards':

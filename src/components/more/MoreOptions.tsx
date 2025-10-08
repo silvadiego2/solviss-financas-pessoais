@@ -17,7 +17,8 @@ import {
   Scan,
   Bell,
   Zap,
-  Database
+  Database,
+  Receipt
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -33,6 +34,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Criar dados de exemplo para testar o app',
       icon: Database,
       action: () => onNavigate('demo-data')
+    },
+    {
+      title: 'Gerenciar Transações',
+      description: 'Ver, editar e excluir transações',
+      icon: Receipt,
+      action: () => onNavigate('transactions')
     },
     {
       title: 'Importar Transações',
