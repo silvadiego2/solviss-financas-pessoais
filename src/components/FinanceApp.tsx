@@ -27,6 +27,7 @@ import { AutoRules } from './automation/AutoRules';
 import { useTheme } from '@/contexts/ThemeContext';
 import { UserProfile } from './profile/UserProfile';
 import { DemoDataManager } from './demo/DemoDataManager';
+import { DataResetManager } from './advanced/DataResetManager';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -111,6 +112,8 @@ export const FinanceApp: React.FC = () => {
         return <AutoRules onBack={handleBackToMore} />;
       case 'demo-data':
         return <DemoDataManager />;
+      case 'data-reset':
+        return <DataResetManager />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
       default:

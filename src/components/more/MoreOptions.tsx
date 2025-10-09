@@ -18,7 +18,8 @@ import {
   Bell,
   Zap,
   Database,
-  Receipt
+  Receipt,
+  Trash2
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -34,6 +35,13 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Criar dados de exemplo para testar o app',
       icon: Database,
       action: () => onNavigate('demo-data')
+    },
+    {
+      title: 'Limpar Todos os Dados',
+      description: '⚠️ Remover todos os dados (irreversível)',
+      icon: Trash2,
+      action: () => onNavigate('data-reset'),
+      variant: 'destructive' as const
     },
     {
       title: 'Gerenciar Transações',
@@ -136,7 +144,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
         {menuItems.map((item, index) => (
           <Button
             key={index}
-            variant="ghost"
+            variant={item.variant || "ghost"}
             className="w-full justify-between"
             onClick={item.action}
           >
@@ -144,10 +152,10 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
               <item.icon className="h-4 w-4" />
               <div>
                 <div className="font-medium">{item.title}</div>
-                <div className="text-xs text-gray-500">{item.description}</div>
+                <div className="text-xs text-muted-foreground">{item.description}</div>
               </div>
             </div>
-            <ChevronRight className="h-4 w-4 text-gray-500" />
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </Button>
         ))}
       </CardContent>
