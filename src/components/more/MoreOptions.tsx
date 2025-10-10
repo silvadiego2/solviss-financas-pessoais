@@ -19,7 +19,8 @@ import {
   Zap,
   Database,
   Receipt,
-  Trash2
+  Trash2,
+  Repeat
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -48,6 +49,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Ver, editar e excluir transações',
       icon: Receipt,
       action: () => onNavigate('transactions')
+    },
+    {
+      title: 'Transações Recorrentes',
+      description: 'Gerencie suas recorrências automáticas',
+      icon: Repeat,
+      action: () => onNavigate('recurring-transactions')
     },
     {
       title: 'Importar Transações',

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, Receipt } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Edit, Trash2, Receipt, Repeat } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { EditTransactionForm } from './EditTransactionForm';
 import { format } from 'date-fns';
@@ -95,8 +96,16 @@ export const TransactionsList: React.FC = () => {
                   {transaction.category?.icon && (
                     <span className="text-lg">{transaction.category.icon}</span>
                   )}
-                  <div>
-                    <h4 className="font-medium">{transaction.description}</h4>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-medium">{transaction.description}</h4>
+                      {transaction.is_recurring && (
+                        <Badge variant="outline" className="text-xs gap-1">
+                          <Repeat className="h-3 w-3" />
+                          Recorrente
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-center space-x-2 text-xs text-muted-foreground">
                       <span>{transaction.category?.name || 'Sem categoria'}</span>
                       <span>•</span>

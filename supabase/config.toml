@@ -3,3 +3,7 @@ project_id = "eiueygnrczqrziiviopc"
 
 [functions.sync-bank-data]
 verify_jwt = true
+
+[functions.process-recurring-transactions]
+verify_jwt = false
+

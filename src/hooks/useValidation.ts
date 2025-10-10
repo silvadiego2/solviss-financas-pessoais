@@ -28,9 +28,14 @@ export const useValidation = <T extends z.ZodType>(schema: T) => {
         
         setErrors(validationErrors);
         
-        // Show toast with first error
+        // Show detailed error with suggestions
         if (validationErrors.length > 0) {
-          toast.error(`Erro de validação: ${validationErrors[0].message}`);
+          const firstError = validationErrors[0];
+          const suggestion = getErrorSuggestion(firstError.field, firstError.message);
+          toast.error(firstError.message, {
+            description: suggestion,
+            duration: 5000,
+          });
         }
       } else {
         toast.error('Erro inesperado na validação');
@@ -62,3 +67,20 @@ export const useValidation = <T extends z.ZodType>(schema: T) => {
     clearErrors,
   };
 };
+
+// Helper function to provide suggestions based on validation errors
+function getErrorSuggestion(field: string, message: string): string | undefined {
+  if (field.includes('amount') && message.includes('positivo')) {
+    return 'Digite um valor maior que zero';
+  }
+  if (field.includes('date') && message.includes('futuro')) {
+    return 'Escolha uma data válida';
+  }
+  if (field === 'description' && message.includes('vazio')) {
+    return 'Adicione uma descrição para identificar a transação';
+  }
+  if (field.includes('email')) {
+    return 'Verifique se o email está no formato correto';
+  }
+  return undefined;
+}
