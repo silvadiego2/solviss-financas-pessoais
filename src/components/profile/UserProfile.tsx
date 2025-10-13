@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useOnboarding } from '@/components/onboarding/OnboardingProvider';
 import { 
   User, 
   Mail, 
@@ -15,8 +16,10 @@ import {
   Moon, 
   Sun,
   LogOut,
-  Edit
+  Edit,
+  RefreshCw
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface UserProfileProps {
   onBack?: () => void;
@@ -25,6 +28,7 @@ interface UserProfileProps {
 export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const { startOnboarding, isOnboardingActive } = useOnboarding();
 
   const handleSignOut = async () => {
     try {
@@ -32,6 +36,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     } catch (error) {
       console.error('Error signing out:', error);
     }
+  };
+
+  const handleRestartTutorial = () => {
+    localStorage.removeItem('onboarding_completed');
+    toast.success('Tutorial reiniciado! Você será redirecionado ao dashboard.');
+    
+    // Restart onboarding after a short delay
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 1000);
   };
 
   const getUserInitials = (email: string) => {
@@ -132,6 +146,27 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
               </div>
               <Button variant="outline" size="sm" onClick={toggleTheme}>
                 Alterar
+              </Button>
+            </div>
+            
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Settings className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Tutorial Interativo</p>
+                  <p className="text-sm text-muted-foreground">
+                    Reiniciar o tour guiado
+                  </p>
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleRestartTutorial}
+                disabled={isOnboardingActive}
+              >
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Reiniciar
               </Button>
             </div>
             

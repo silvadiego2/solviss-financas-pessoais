@@ -12,11 +12,15 @@ import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
 import { useTransactions } from '@/hooks/useTransactions';
 import { toast } from 'sonner';
-import { CreditCard, Building, Upload } from 'lucide-react';
+import { CreditCard, Building, Upload, X } from 'lucide-react';
 import { enhancedToast } from '@/components/ui/enhanced-toast';
 import { ProgressIndicator } from '@/components/ui/progress-indicator';
 
-export const AddTransactionForm: React.FC = () => {
+interface AddTransactionFormProps {
+  onClose?: () => void;
+}
+
+export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose }) => {
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
@@ -129,6 +133,11 @@ export const AddTransactionForm: React.FC = () => {
       setIsRecurring(false);
       setRecurrenceFrequency('monthly');
       setRecurrenceEndDate('');
+      
+      // Call onClose if provided
+      if (onClose) {
+        onClose();
+      }
     } catch (error: any) {
       enhancedToast.error('Erro ao adicionar transação', {
         description: error.message || 'Tente novamente em alguns instantes.',
@@ -151,7 +160,14 @@ export const AddTransactionForm: React.FC = () => {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Nova Transação</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Nova Transação</CardTitle>
+            {onClose && (
+              <Button variant="ghost" size="sm" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

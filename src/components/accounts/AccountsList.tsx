@@ -1,10 +1,10 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Building, Wallet, PiggyBank, TrendingUp, Plus, Edit, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAccounts } from '@/hooks/useAccounts';
+import { useDependencyCheck } from '@/hooks/useDependencyCheck';
 import { AddAccountForm } from './AddAccountForm';
 import { EditAccountForm } from './EditAccountForm';
 import { AccountsListSkeleton } from '@/components/ui/skeleton-loaders';
@@ -40,7 +40,8 @@ const getAccountTypeName = (type: string) => {
 };
 
 export const AccountsList: React.FC = () => {
-  const { regularAccounts, loading, deleteAccount } = useAccounts(); // Use regularAccounts
+  const { regularAccounts, loading, deleteAccount } = useAccounts();
+  const { checkAccountDependencies } = useDependencyCheck();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
 
@@ -51,7 +52,17 @@ export const AccountsList: React.FC = () => {
     }).format(value);
   };
 
-  const handleDelete = (accountId: string) => {
+  const handleDelete = async (accountId: string, accountName: string) => {
+    const deps = await checkAccountDependencies(accountId);
+    
+    if (deps.hasTransactions) {
+      const confirmDelete = window.confirm(
+        `A conta "${accountName}" possui ${deps.transactionCount} transação(ões) vinculada(s).\n\n⚠️ ATENÇÃO: Todas as transações vinculadas a esta conta serão excluídas permanentemente.\n\nDeseja continuar?`
+      );
+      
+      if (!confirmDelete) return;
+    }
+    
     deleteAccount(accountId);
   };
 
@@ -168,12 +179,12 @@ export const AccountsList: React.FC = () => {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDelete(account.id)}
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              Excluir
-                            </AlertDialogAction>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(account.id, account.name)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            Excluir
+                          </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Edit, Trash2, Tag } from 'lucide-react';
 import { useCategories } from '@/hooks/useCategories';
+import { useDependencyCheck } from '@/hooks/useDependencyCheck';
 import { defaultCategories } from '@/data/defaultCategories';
 import { toast } from 'sonner';
 import { BackHeader } from '@/components/layout/BackHeader';
@@ -17,6 +17,7 @@ interface CategoryManagerProps {
 
 export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
   const { categories, loading, createCategory, updateCategory, deleteCategory } = useCategories();
+  const { checkCategoryDependencies } = useDependencyCheck();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [newCategory, setNewCategory] = useState({
@@ -60,13 +61,24 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
     setShowAddForm(true);
   };
 
-  const handleDeleteCategory = async (categoryId: string) => {
-    if (window.confirm('Tem certeza que deseja excluir esta categoria?')) {
-      try {
-        await deleteCategory(categoryId);
-      } catch (error) {
-        // Error já tratado no hook
-      }
+  const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
+    const deps = await checkCategoryDependencies(categoryId);
+    
+    if (deps.hasTransactions) {
+      const confirmDelete = window.confirm(
+        `A categoria "${categoryName}" possui ${deps.transactionCount} transação(ões) vinculada(s).\n\n⚠️ ATENÇÃO: Ao excluir esta categoria, todas as transações vinculadas ficarão sem categoria.\n\nDeseja continuar?`
+      );
+      
+      if (!confirmDelete) return;
+    } else {
+      const confirmDelete = window.confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`);
+      if (!confirmDelete) return;
+    }
+    
+    try {
+      await deleteCategory(categoryId);
+    } catch (error) {
+      // Error já tratado no hook
     }
   };
 
@@ -231,7 +243,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                     variant="ghost" 
                     size="sm" 
                     className="text-red-600"
-                    onClick={() => handleDeleteCategory(category.id)}
+                    onClick={() => handleDeleteCategory(category.id, category.name)}
                   >
                     <Trash2 size={16} />
                   </Button>
@@ -276,7 +288,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                     variant="ghost" 
                     size="sm" 
                     className="text-red-600"
-                    onClick={() => handleDeleteCategory(category.id)}
+                    onClick={() => handleDeleteCategory(category.id, category.name)}
                   >
                     <Trash2 size={16} />
                   </Button>

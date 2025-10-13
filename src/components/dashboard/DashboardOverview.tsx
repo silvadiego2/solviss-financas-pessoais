@@ -6,8 +6,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useAccounts } from '@/hooks/useAccounts';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
+import { useDependencyCheck } from '@/hooks/useDependencyCheck';
 import { AddAccountForm } from '@/components/accounts/AddAccountForm';
 import { AddCreditCardForm } from '@/components/credit-cards/AddCreditCardForm';
+import { AddTransactionForm } from '@/components/transactions/AddTransactionForm';
+import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { DashboardSkeleton } from '@/components/ui/skeleton-loaders';
 
 interface DashboardOverviewProps {
@@ -18,8 +21,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const { regularAccounts, deleteAccount, loading: accountsLoading } = useAccounts();
   const { transactions, loading: transactionsLoading } = useTransactions();
   const { creditCards, deleteCreditCard, loading: cardsLoading } = useCreditCards();
+  const { checkAccountDependencies } = useDependencyCheck();
   const [showAddAccountForm, setShowAddAccountForm] = useState(false);
   const [showAddCardForm, setShowAddCardForm] = useState(false);
+  const [showAddTransactionForm, setShowAddTransactionForm] = useState(false);
 
   const totalBalance = regularAccounts.reduce((sum, account) => sum + Number(account.balance), 0);
   
@@ -51,7 +56,17 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
     }).format(value);
   };
 
-  const handleDeleteAccount = (accountId: string) => {
+  const handleDeleteAccount = async (accountId: string, accountName: string) => {
+    const deps = await checkAccountDependencies(accountId);
+    
+    if (deps.hasTransactions) {
+      const confirmDelete = window.confirm(
+        `A conta "${accountName}" possui ${deps.transactionCount} transação(ões) vinculada(s). Todas as transações serão excluídas também. Deseja continuar?`
+      );
+      
+      if (!confirmDelete) return;
+    }
+    
     deleteAccount(accountId);
   };
 
@@ -65,6 +80,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
 
   if (showAddCardForm) {
     return <AddCreditCardForm onClose={() => setShowAddCardForm(false)} />;
+  }
+
+  if (showAddTransactionForm) {
+    return <AddTransactionForm onClose={() => setShowAddTransactionForm(false)} />;
   }
 
   // Show skeleton while loading
@@ -200,7 +219,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
                           <AlertDialogAction
-                            onClick={() => handleDeleteAccount(account.id)}
+                            onClick={() => handleDeleteAccount(account.id, account.name)}
                             className="bg-red-600 hover:bg-red-700"
                           >
                             Excluir
@@ -366,6 +385,13 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           )}
         </CardContent>
       </Card>
+
+      {/* Floating Action Button */}
+      <FloatingActionButton
+        onClick={() => setShowAddTransactionForm(true)}
+        label="Nova Transação"
+        data-onboarding="add-transaction"
+      />
     </div>
   );
 };
