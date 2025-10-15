@@ -59,31 +59,31 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({ onBack }) => {
         <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setCurrentView('dashboard')}>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                  <BarChart3 size={24} />
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-blue-100 text-blue-600 flex-shrink-0">
+                  <BarChart3 size={20} />
                 </div>
                 <div>
-                  <div className="font-semibold">Dashboard Avançado</div>
-                  <div className="text-sm text-muted-foreground">KPIs e métricas detalhadas</div>
+                  <div className="text-base font-semibold">Dashboard Avançado</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">KPIs e métricas detalhadas</div>
                 </div>
               </div>
-              <ArrowRight size={20} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
+              <ArrowRight size={18} className="text-muted-foreground group-hover:translate-x-1 transition-transform flex-shrink-0" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <TrendingUp size={16} className="text-green-600" />
-                <span className="text-sm">Taxa de poupança e burn rate</span>
+                <TrendingUp size={14} className="text-green-600 flex-shrink-0" />
+                <span className="text-xs">Taxa de poupança e burn rate</span>
               </div>
               <div className="flex items-center gap-2">
-                <Activity size={16} className="text-orange-600" />
-                <span className="text-sm">Fluxo de caixa com projeções</span>
+                <Activity size={14} className="text-orange-600 flex-shrink-0" />
+                <span className="text-xs">Fluxo de caixa com projeções</span>
               </div>
               <div className="flex items-center gap-2">
-                <PieChart size={16} className="text-purple-600" />
-                <span className="text-sm">Análise de categorias com tendências</span>
+                <PieChart size={14} className="text-purple-600 flex-shrink-0" />
+                <span className="text-xs">Análise de categorias com tendências</span>
               </div>
               <Badge variant="secondary" className="mt-2">Análise Preditiva</Badge>
             </div>
@@ -93,31 +93,31 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({ onBack }) => {
         <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setCurrentView('interactive')}>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-green-100 text-green-600">
-                  <MousePointer size={24} />
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-green-100 text-green-600 flex-shrink-0">
+                  <MousePointer size={20} />
                 </div>
                 <div>
-                  <div className="font-semibold">Analytics Interativo</div>
-                  <div className="text-sm text-muted-foreground">Explore dados com drill-down</div>
+                  <div className="text-base font-semibold">Analytics Interativo</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Explore dados com drill-down</div>
                 </div>
               </div>
-              <ArrowRight size={20} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
+              <ArrowRight size={18} className="text-muted-foreground group-hover:translate-x-1 transition-transform flex-shrink-0" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Zap size={16} className="text-yellow-600" />
-                <span className="text-sm">Mapas de calor de gastos</span>
+                <Zap size={14} className="text-yellow-600 flex-shrink-0" />
+                <span className="text-xs">Mapas de calor de gastos</span>
               </div>
               <div className="flex items-center gap-2">
-                <LineChart size={16} className="text-blue-600" />
-                <span className="text-sm">Análise de padrões temporais</span>
+                <LineChart size={14} className="text-blue-600 flex-shrink-0" />
+                <span className="text-xs">Análise de padrões temporais</span>
               </div>
               <div className="flex items-center gap-2">
-                <Activity size={16} className="text-red-600" />
-                <span className="text-sm">Correlações entre categorias</span>
+                <Activity size={14} className="text-red-600 flex-shrink-0" />
+                <span className="text-xs">Correlações entre categorias</span>
               </div>
               <Badge variant="secondary" className="mt-2">Visualização Interativa</Badge>
             </div>
@@ -127,31 +127,31 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({ onBack }) => {
         <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setCurrentView('goals')}>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-purple-100 text-purple-600">
-                  <Brain size={24} />
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-purple-100 text-purple-600 flex-shrink-0">
+                  <Brain size={20} />
                 </div>
                 <div>
-                  <div className="font-semibold">Metas Inteligentes</div>
-                  <div className="text-sm text-muted-foreground">IA para análise de objetivos</div>
+                  <div className="text-base font-semibold">Metas Inteligentes</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">IA para análise de objetivos</div>
                 </div>
               </div>
-              <ArrowRight size={20} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
+              <ArrowRight size={18} className="text-muted-foreground group-hover:translate-x-1 transition-transform flex-shrink-0" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <Target size={16} className="text-blue-600" />
-                <span className="text-sm">Análise preditiva de metas</span>
+                <Target size={14} className="text-blue-600 flex-shrink-0" />
+                <span className="text-xs">Análise preditiva de metas</span>
               </div>
               <div className="flex items-center gap-2">
-                <TrendingUp size={16} className="text-green-600" />
-                <span className="text-sm">Insights e recomendações</span>
+                <TrendingUp size={14} className="text-green-600 flex-shrink-0" />
+                <span className="text-xs">Insights e recomendações</span>
               </div>
               <div className="flex items-center gap-2">
-                <Activity size={16} className="text-orange-600" />
-                <span className="text-sm">Monitoramento de progresso</span>
+                <Activity size={14} className="text-orange-600 flex-shrink-0" />
+                <span className="text-xs">Monitoramento de progresso</span>
               </div>
               <Badge variant="secondary" className="mt-2">Inteligência Artificial</Badge>
             </div>
@@ -161,31 +161,31 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({ onBack }) => {
         <Card className="hover:shadow-lg transition-shadow cursor-pointer group" onClick={() => setCurrentView('reports')}>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-orange-100 text-orange-600">
-                  <BarChart3 size={24} />
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-lg bg-orange-100 text-orange-600 flex-shrink-0">
+                  <BarChart3 size={20} />
                 </div>
                 <div>
-                  <div className="font-semibold">Relatórios Customizáveis</div>
-                  <div className="text-sm text-muted-foreground">Exportação e análise avançada</div>
+                  <div className="text-base font-semibold">Relatórios Customizáveis</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">Exportação e análise avançada</div>
                 </div>
               </div>
-              <ArrowRight size={20} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
+              <ArrowRight size={18} className="text-muted-foreground group-hover:translate-x-1 transition-transform flex-shrink-0" />
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <PieChart size={16} className="text-purple-600" />
-                <span className="text-sm">Múltiplos tipos de gráficos</span>
+                <PieChart size={14} className="text-purple-600 flex-shrink-0" />
+                <span className="text-xs">Múltiplos tipos de gráficos</span>
               </div>
               <div className="flex items-center gap-2">
-                <TrendingUp size={16} className="text-green-600" />
-                <span className="text-sm">Comparação orçamento vs gasto</span>
+                <TrendingUp size={14} className="text-green-600 flex-shrink-0" />
+                <span className="text-xs">Comparação orçamento vs gasto</span>
               </div>
               <div className="flex items-center gap-2">
-                <Activity size={16} className="text-blue-600" />
-                <span className="text-sm">Exportação PDF e Excel</span>
+                <Activity size={14} className="text-blue-600 flex-shrink-0" />
+                <span className="text-xs">Exportação PDF e Excel</span>
               </div>
               <Badge variant="secondary" className="mt-2">Relatórios Profissionais</Badge>
             </div>

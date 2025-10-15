@@ -152,17 +152,21 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
           <Button
             key={index}
             variant={item.variant || "ghost"}
-            className="w-full justify-between"
+            className="w-full justify-start h-auto py-3"
             onClick={item.action}
           >
-            <div className="flex items-center space-x-2">
-              <item.icon className="h-4 w-4" />
-              <div>
-                <div className="font-medium">{item.title}</div>
-                <div className="text-xs text-muted-foreground">{item.description}</div>
+            <div className="flex items-center gap-3 flex-1">
+              <div className="flex-shrink-0">
+                <item.icon className="h-5 w-5" />
               </div>
+              <div className="flex-1 text-left">
+                <div className="text-sm font-medium">{item.title}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {item.description}
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
             </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
           </Button>
         ))}
       </CardContent>

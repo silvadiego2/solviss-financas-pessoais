@@ -169,4 +169,26 @@ All colors MUST be HSL.
   .status-indicator.status-info::after {
     @apply bg-blue-500;
   }
+
+  /* Hierarquia de fontes consistente */
+  .card-title-primary {
+    @apply text-base font-semibold leading-tight;
+  }
+
+  .card-title-secondary {
+    @apply text-sm font-medium leading-tight;
+  }
+
+  .card-subtitle {
+    @apply text-xs text-muted-foreground mt-0.5;
+  }
+
+  /* Espaçamento consistente de ícones */
+  .icon-text-group {
+    @apply flex items-center gap-3;
+  }
+
+  .icon-container {
+    @apply flex-shrink-0;
+  }
 }
