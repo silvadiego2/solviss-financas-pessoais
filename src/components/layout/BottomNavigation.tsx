@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, CreditCard, PlusCircle, Wallet, Settings } from 'lucide-react';
+import { Home, Wallet, PlusCircle, CreditCard, Settings } from 'lucide-react';
 
 interface BottomNavigationProps {
   activeTab: string;
@@ -10,15 +10,15 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, o
   const navItems = [
     { id: 'dashboard', icon: Home, label: 'Início' },
     { id: 'accounts', icon: Wallet, label: 'Contas' },
-    { id: 'cards', icon: CreditCard, label: 'Cartões' },
     { id: 'add', icon: PlusCircle, label: 'Adicionar' },
+    { id: 'cards', icon: CreditCard, label: 'Cartões' },
     { id: 'more', icon: Settings, label: 'Mais' },
   ];
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-2 py-2 z-50" data-onboarding="bottom-nav">
       <nav className="flex justify-around max-w-md mx-auto">
-        {navItems.map((item, index) => {
+        {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
           
