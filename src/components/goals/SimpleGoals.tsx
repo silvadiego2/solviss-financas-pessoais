@@ -1,12 +1,12 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Target, CheckCircle, Plus, Edit, Trash2 } from 'lucide-react';
+import { Target, CheckCircle, Plus, Edit, Trash2, Info } from 'lucide-react'; // Importado Info
 import { useGoals, Goal } from '@/hooks/useGoals';
 import { AddGoalForm } from './AddGoalForm';
 import { BackHeader } from '@/components/layout/BackHeader';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; // Importar componentes de alerta
 
 interface SimpleGoalsProps {
   onBack?: () => void;
@@ -58,6 +58,17 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
 
   return (
     <div className="space-y-4">
+
+      {/* Alerta explicativo */}
+      <Alert className="mb-4">
+        <Info size={16} />
+        <AlertTitle>Sobre Objetivos</AlertTitle>
+        <AlertDescription>
+          Objetivos são metas de economia de longo prazo. 
+          Para controlar gastos mensais, use "Orçamentos" no menu Mais.
+        </AlertDescription>
+      </Alert>
+
       {onBack && <BackHeader title="Objetivos Financeiros" onBack={onBack} />}
       
       {!onBack && (
