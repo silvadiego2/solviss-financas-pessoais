@@ -20,7 +20,8 @@ import {
   Database,
   Receipt,
   Trash2,
-  Repeat
+  Repeat,
+  BarChart3 // Importado o ícone BarChart3
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -31,6 +32,18 @@ interface MoreOptionsProps {
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTheme }) => {
 
   const menuItems = [
+    {
+      title: 'Orçamentos Mensais',
+      description: 'Controlar gastos por categoria',
+      icon: Target,
+      action: () => onNavigate('budgets')
+    },
+    {
+      title: 'Relatórios Financeiros',
+      description: 'Visualizar análises e gráficos',
+      icon: BarChart3,
+      action: () => onNavigate('reports')
+    },
     {
       title: 'Dados de Demonstração',
       description: 'Criar dados de exemplo para testar o app',
