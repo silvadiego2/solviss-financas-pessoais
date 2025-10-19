@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard, Plus, Edit, Trash2 } from 'lucide-react';
+import { ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard, Plus, Edit, Trash2, Target } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useDependencyCheck } from '@/hooks/useDependencyCheck';
+import { useGoals } from '@/hooks/useGoals';
+import { useBudgets } from '@/hooks/useBudgets';
 import { AddAccountForm } from '@/components/accounts/AddAccountForm';
 import { AddCreditCardForm } from '@/components/credit-cards/AddCreditCardForm';
 import { AddTransactionForm } from '@/components/transactions/AddTransactionForm';
@@ -22,6 +24,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const { transactions, loading: transactionsLoading } = useTransactions();
   const { creditCards, deleteCreditCard, loading: cardsLoading } = useCreditCards();
   const { checkAccountDependencies } = useDependencyCheck();
+  const { goals, isLoading: goalsLoading } = useGoals();
+  const { budgets, loading: budgetsLoading } = useBudgets();
   const [showAddAccountForm, setShowAddAccountForm] = useState(false);
   const [showAddCardForm, setShowAddCardForm] = useState(false);
   const [showAddTransactionForm, setShowAddTransactionForm] = useState(false);
@@ -48,6 +52,18 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const totalCreditLimit = creditCards.reduce((sum, card) => sum + card.limit, 0);
   const totalCreditUsed = creditCards.reduce((sum, card) => sum + card.used_amount, 0);
   const totalCreditAvailable = totalCreditLimit - totalCreditUsed;
+
+  // Calculate goals progress
+  const activeGoals = goals.filter(g => !g.is_completed);
+  const totalGoalProgress = activeGoals.length > 0 
+    ? activeGoals.reduce((sum, g) => sum + (Number(g.current_amount) / Number(g.target_amount)) * 100, 0) / activeGoals.length
+    : 0;
+
+  // Calculate budget usage
+  const monthBudgets = budgets.filter(b => b.month === currentMonth + 1 && b.year === currentYear);
+  const totalBudgetUsage = monthBudgets.length > 0
+    ? monthBudgets.reduce((sum, b) => sum + (Number(b.spent) / Number(b.amount)) * 100, 0) / monthBudgets.length
+    : 0;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -87,7 +103,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   }
 
   // Show skeleton while loading
-  if (accountsLoading || transactionsLoading || cardsLoading) {
+  if (accountsLoading || transactionsLoading || cardsLoading || goalsLoading || budgetsLoading) {
     return <DashboardSkeleton />;
   }
 
@@ -349,6 +365,78 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           <p className="text-xs text-gray-500">
             {monthlyIncome - monthlyExpenses >= 0 ? 'Superávit' : 'Déficit'}
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Card Orçamentos Mensais */}
+      <Card 
+        className="cursor-pointer hover:shadow-md transition-shadow"
+        onClick={() => onNavigate?.('budgets')}
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center">
+            <Target size={16} className="mr-1 text-blue-600" />
+            Orçamentos Mensais
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-500">
+                {monthBudgets.length} {monthBudgets.length === 1 ? 'categoria' : 'categorias'}
+              </span>
+              <span className="text-xs text-gray-500">
+                {totalBudgetUsage.toFixed(0)}% usado
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div 
+                className={`h-2 rounded-full transition-all ${
+                  totalBudgetUsage >= 90 ? 'bg-red-500' : 
+                  totalBudgetUsage >= 70 ? 'bg-yellow-500' : 
+                  'bg-green-500'
+                }`}
+                style={{ width: `${Math.min(totalBudgetUsage, 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              Toque para gerenciar orçamentos
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Card Objetivos Financeiros */}
+      <Card 
+        className="cursor-pointer hover:shadow-md transition-shadow"
+        onClick={() => onNavigate?.('goals')}
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center">
+            <TrendingUp size={16} className="mr-1 text-purple-600" />
+            Objetivos Financeiros
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-gray-500">
+                {activeGoals.length} {activeGoals.length === 1 ? 'objetivo ativo' : 'objetivos ativos'}
+              </span>
+              <span className="text-xs text-gray-500">
+                {totalGoalProgress.toFixed(0)}% concluído
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+              <div 
+                className="h-2 rounded-full bg-purple-500 transition-all"
+                style={{ width: `${Math.min(totalGoalProgress, 100)}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-500">
+              Toque para acompanhar metas
+            </p>
+          </div>
         </CardContent>
       </Card>
 
