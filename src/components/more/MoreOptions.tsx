@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Download, 
   Upload,
@@ -21,7 +22,8 @@ import {
   Receipt,
   Trash2,
   Repeat,
-  BarChart3 // Importado o ícone BarChart3
+  BarChart3,
+  Settings
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -31,7 +33,19 @@ interface MoreOptionsProps {
 
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTheme }) => {
 
-  const menuItems = [
+  const manageItems = [
+    {
+      title: 'Contas e Conexões Bancárias',
+      description: 'Gerenciar contas e sincronizar bancos',
+      icon: Building,
+      action: () => onNavigate('accounts')
+    },
+    {
+      title: 'Cartões de Crédito',
+      description: 'Gerenciar cartões e faturas',
+      icon: CreditCard,
+      action: () => onNavigate('cards')
+    },
     {
       title: 'Orçamentos Mensais',
       description: 'Controlar gastos por categoria',
@@ -39,23 +53,16 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       action: () => onNavigate('budgets')
     },
     {
-      title: 'Relatórios Financeiros',
-      description: 'Visualizar análises e gráficos',
-      icon: BarChart3,
-      action: () => onNavigate('reports')
+      title: 'Objetivos Financeiros',
+      description: 'Definir e acompanhar metas',
+      icon: Target,
+      action: () => onNavigate('goals')
     },
     {
-      title: 'Dados de Demonstração',
-      description: 'Criar dados de exemplo para testar o app',
-      icon: Database,
-      action: () => onNavigate('demo-data')
-    },
-    {
-      title: 'Limpar Todos os Dados',
-      description: '⚠️ Remover todos os dados (irreversível)',
-      icon: Trash2,
-      action: () => onNavigate('data-reset'),
-      variant: 'destructive' as const
+      title: 'Gerenciar Categorias',
+      description: 'Criar e editar categorias',
+      icon: Tags,
+      action: () => onNavigate('categories')
     },
     {
       title: 'Gerenciar Transações',
@@ -76,22 +83,31 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       action: () => onNavigate('import-transactions')
     },
     {
+      title: 'Exportar Relatórios',
+      description: 'Exportar dados financeiros',
+      icon: Download,
+      action: () => onNavigate('export')
+    },
+    {
+      title: 'Configurações',
+      description: 'Preferências, segurança e mais',
+      icon: Settings,
+      action: () => onNavigate('settings')
+    },
+  ];
+
+  const trackItems = [
+    {
+      title: 'Relatórios Financeiros',
+      description: 'Visualizar análises e gráficos',
+      icon: BarChart3,
+      action: () => onNavigate('reports')
+    },
+    {
       title: 'Central de Analytics',
       description: 'Analytics avançados e insights inteligentes',
       icon: TrendingUp,
       action: () => onNavigate('analytics')
-    },
-    {
-      title: 'Scanner de Recibos',
-      description: 'Capture recibos via câmera com OCR',
-      icon: Scan,
-      action: () => onNavigate('receipt-scanner')
-    },
-    {
-      title: 'Notificações Inteligentes',
-      description: 'Configure alertas e lembretes automáticos',
-      icon: Bell,
-      action: () => onNavigate('notifications')
     },
     {
       title: 'Automação Financeira',
@@ -106,34 +122,19 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       action: () => onNavigate('banking')
     },
     {
-      title: 'Relatórios Exportar',
-      description: 'Exportar dados financeiros',
-      icon: Download,
-      action: () => onNavigate('export')
-    },
-    {
       title: 'Backup Automático',
       description: 'Configurar backup automático dos dados',
       icon: Cloud,
       action: () => onNavigate('auto-backup')
     },
+  ];
+
+  const aboutItems = [
     {
-      title: 'Gerenciar Categorias',
-      description: 'Criar e editar categorias',
-      icon: Tags,
-      action: () => onNavigate('categories')
-    },
-    {
-      title: 'Objetivos Financeiros',
-      description: 'Definir e acompanhar metas',
-      icon: Target,
-      action: () => onNavigate('goals')
-    },
-    {
-      title: 'Cartões de Crédito',
-      description: 'Gerenciar cartões e faturas',
-      icon: CreditCard,
-      action: () => onNavigate('cards')
+      title: 'Perfil do Usuário',
+      description: 'Editar informações pessoais',
+      icon: User,
+      action: () => onNavigate('profile')
     },
     {
       title: 'Tema da Interface',
@@ -142,10 +143,16 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       action: () => onToggleTheme?.()
     },
     {
-      title: 'Perfil do Usuário',
-      description: 'Configurações da conta',
-      icon: User,
-      action: () => onNavigate('profile')
+      title: 'Scanner de Recibos',
+      description: 'Capture recibos via câmera com OCR',
+      icon: Scan,
+      action: () => onNavigate('receipt-scanner')
+    },
+    {
+      title: 'Notificações Inteligentes',
+      description: 'Configure alertas e lembretes automáticos',
+      icon: Bell,
+      action: () => onNavigate('notifications')
     },
     {
       title: 'Segurança e Auditoria',
@@ -153,35 +160,106 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       icon: Shield,
       action: () => onNavigate('security')
     },
+    {
+      title: 'Dados de Demonstração',
+      description: 'Criar dados de exemplo para testar o app',
+      icon: Database,
+      action: () => onNavigate('demo-data')
+    },
+    {
+      title: 'Limpar Todos os Dados',
+      description: '⚠️ Remover todos os dados (irreversível)',
+      icon: Trash2,
+      action: () => onNavigate('data-reset'),
+      variant: 'destructive' as const
+    },
   ];
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Mais Opções</CardTitle>
+        <CardTitle>Menu Principal</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
-        {menuItems.map((item, index) => (
-          <Button
-            key={index}
-            variant={item.variant || "ghost"}
-            className="w-full justify-start h-auto py-3"
-            onClick={item.action}
-          >
-            <div className="flex items-center gap-3 flex-1">
-              <div className="flex-shrink-0">
-                <item.icon className="h-5 w-5" />
-              </div>
-              <div className="flex-1 text-left">
-                <div className="text-sm font-medium">{item.title}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  {item.description}
+      <CardContent>
+        <Tabs defaultValue="manage" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="manage">Gerenciar</TabsTrigger>
+            <TabsTrigger value="track">Acompanhar</TabsTrigger>
+            <TabsTrigger value="about">Sobre</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="manage" className="space-y-3 mt-4">
+            {manageItems.map((item, index) => (
+              <Button
+                key={index}
+                variant="ghost"
+                className="w-full justify-start h-auto py-3"
+                onClick={item.action}
+              >
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="flex-shrink-0">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-medium">{item.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {item.description}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </div>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            </div>
-          </Button>
-        ))}
+              </Button>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="track" className="space-y-3 mt-4">
+            {trackItems.map((item, index) => (
+              <Button
+                key={index}
+                variant="ghost"
+                className="w-full justify-start h-auto py-3"
+                onClick={item.action}
+              >
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="flex-shrink-0">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-medium">{item.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {item.description}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                </div>
+              </Button>
+            ))}
+          </TabsContent>
+
+          <TabsContent value="about" className="space-y-3 mt-4">
+            {aboutItems.map((item, index) => (
+              <Button
+                key={index}
+                variant={item.variant || "ghost"}
+                className="w-full justify-start h-auto py-3"
+                onClick={item.action}
+              >
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="flex-shrink-0">
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="text-sm font-medium">{item.title}</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {item.description}
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                </div>
+              </Button>
+            ))}
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   );
