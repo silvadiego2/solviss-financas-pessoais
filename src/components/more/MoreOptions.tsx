@@ -10,12 +10,12 @@ import {
   CreditCard, 
   Palette, 
   User,
+  UserPlus,
   Building,
   ChevronRight,
   Shield,
   Cloud,
   TrendingUp,
-  Scan,
   Bell,
   Zap,
   Database,
@@ -33,6 +33,7 @@ interface MoreOptionsProps {
 
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTheme }) => {
 
+  // Aba: GERENCIAR
   const manageItems = [
     {
       title: 'Contas e Conexões Bancárias',
@@ -96,6 +97,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
     },
   ];
 
+  // Aba: ACOMPANHAR
   const trackItems = [
     {
       title: 'Relatórios Financeiros',
@@ -129,6 +131,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
     },
   ];
 
+  // Aba: SOBRE
   const aboutItems = [
     {
       title: 'Perfil do Usuário',
@@ -137,22 +140,16 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       action: () => onNavigate('profile')
     },
     {
+      title: 'Completar Cadastro',
+      description: 'Adicione informações adicionais ao seu perfil',
+      icon: UserPlus,
+      action: () => onNavigate('profile')
+    },
+    {
       title: 'Tema da Interface',
       description: 'Alternar entre claro e escuro',
       icon: Palette,
       action: () => onToggleTheme?.()
-    },
-    {
-      title: 'Scanner de Recibos',
-      description: 'Capture recibos via câmera com OCR',
-      icon: Scan,
-      action: () => onNavigate('receipt-scanner')
-    },
-    {
-      title: 'Notificações Inteligentes',
-      description: 'Configure alertas e lembretes automáticos',
-      icon: Bell,
-      action: () => onNavigate('notifications')
     },
     {
       title: 'Segurança e Auditoria',
@@ -188,6 +185,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
             <TabsTrigger value="about">Sobre</TabsTrigger>
           </TabsList>
 
+          {/* Aba: GERENCIAR */}
           <TabsContent value="manage" className="space-y-3 mt-4">
             {manageItems.map((item, index) => (
               <Button
@@ -212,6 +210,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
             ))}
           </TabsContent>
 
+          {/* Aba: ACOMPANHAR */}
           <TabsContent value="track" className="space-y-3 mt-4">
             {trackItems.map((item, index) => (
               <Button
@@ -236,6 +235,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
             ))}
           </TabsContent>
 
+          {/* Aba: SOBRE */}
           <TabsContent value="about" className="space-y-3 mt-4">
             {aboutItems.map((item, index) => (
               <Button
