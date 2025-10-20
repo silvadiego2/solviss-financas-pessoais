@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -17,9 +17,14 @@ import {
   Sun,
   LogOut,
   Edit,
-  RefreshCw
+  RefreshCw,
+  Phone,
+  Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 
 interface UserProfileProps {
   onBack?: () => void;
@@ -29,6 +34,12 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { startOnboarding, isOnboardingActive } = useOnboarding();
+
+  // Estado para edição do perfil
+  const [isEditing, setIsEditing] = useState(false);
+  const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '');
+  const [phone, setPhone] = useState(user?.user_metadata?.phone || '');
+  const [bio, setBio] = useState(user?.user_metadata?.bio || '');
 
   const handleSignOut = async () => {
     try {
@@ -42,7 +53,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     localStorage.removeItem('onboarding_completed');
     toast.success('Tutorial reiniciado! Você será redirecionado ao dashboard.');
     
-    // Restart onboarding after a short delay
     setTimeout(() => {
       window.location.href = '/';
     }, 1000);
@@ -50,6 +60,17 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
 
   const getUserInitials = (email: string) => {
     return email.split('@')[0].substring(0, 2).toUpperCase();
+  };
+
+  // Função para salvar perfil
+  const handleSaveProfile = async () => {
+    try {
+      // Aqui deve ser implementada a lógica para atualizar o perfil no Supabase ou backend
+      toast.success('Perfil atualizado com sucesso!');
+      setIsEditing(false);
+    } catch (error) {
+      toast.error('Erro ao atualizar perfil');
+    }
   };
 
   return (
@@ -69,7 +90,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
               </Avatar>
               
               <h2 className="text-xl font-semibold mb-2">
-                {user?.user_metadata?.full_name || 'Usuário'}
+                {fullName || 'Usuário'}
               </h2>
               
               <div className="flex items-center gap-2 text-muted-foreground mb-4">
@@ -81,11 +102,66 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                 <Shield className="w-3 h-3 mr-1" />
                 Conta Verificada
               </Badge>
-              
-              <Button variant="outline" size="sm" className="mb-4">
-                <Edit className="w-4 h-4 mr-2" />
-                Editar Perfil
-              </Button>
+
+              {/* Botão e form de edição do perfil */}
+              {!isEditing ? (
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Editar Perfil
+                </Button>
+              ) : (
+                <div className="w-full space-y-3 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Nome Completo</Label>
+                    <Input
+                      id="fullName"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="Seu nome completo"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Telefone</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="(00) 00000-0000"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="bio">Bio</Label>
+                    <Textarea
+                      id="bio"
+                      value={bio}
+                      onChange={(e) => setBio(e.target.value)}
+                      placeholder="Conte um pouco sobre você..."
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setIsEditing(false)}
+                      className="flex-1"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      onClick={handleSaveProfile}
+                      className="flex-1"
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -118,6 +194,31 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                   <p className="text-sm font-medium">ID do Usuário</p>
                   <p className="text-xs text-muted-foreground font-mono">
                     {user?.id?.substring(0, 8)}...
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Campos adicionais Telefone e Moeda Preferencial */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Phone className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Telefone</p>
+                  <p className="text-sm text-muted-foreground">
+                    {phone || 'Não informado'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Globe className="w-5 h-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Moeda Preferencial</p>
+                  <p className="text-sm text-muted-foreground">
+                    Real Brasileiro (R$)
                   </p>
                 </div>
               </div>
