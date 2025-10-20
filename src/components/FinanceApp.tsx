@@ -99,6 +99,8 @@ export const FinanceApp: React.FC = () => {
         return <UserProfile onBack={handleBackToMore} />;
       case 'security':
         return <SecurityDashboard />;
+      case 'settings': // ✅ Novo caso adicionado
+        return <SettingsScreen onBack={handleBackToMore} />;
       case 'auto-categorization':
         return <AutoCategorizationManager onBack={handleBackToMore} />;
       case 'auto-backup':
