@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
@@ -353,31 +351,37 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          bio: string | null
           created_at: string | null
           currency: string | null
           email: string | null
           full_name: string | null
           id: string
+          phone: string | null
           timezone: string | null
           updated_at: string | null
         }
         Insert: {
           avatar_url?: string | null
+          bio?: string | null
           created_at?: string | null
           currency?: string | null
           email?: string | null
           full_name?: string | null
           id: string
+          phone?: string | null
           timezone?: string | null
           updated_at?: string | null
         }
         Update: {
           avatar_url?: string | null
+          bio?: string | null
           created_at?: string | null
           currency?: string | null
           email?: string | null
           full_name?: string | null
           id?: string
+          phone?: string | null
           timezone?: string | null
           updated_at?: string | null
         }
@@ -580,9 +584,9 @@ export type Database = {
         | "credit_card"
         | "wallet"
         | "investment"
-      recurrence_frequency: "daily" | "weekly" | "monthly" | "yearly"
-      transaction_status: "pending" | "completed" | "cancelled"
-      transaction_type: "income" | "expense" | "transfer"
+      recurrence_frequency: ["daily", "weekly", "monthly", "yearly"]
+      transaction_status: ["pending", "completed", "cancelled"]
+      transaction_type: ["income", "expense", "transfer"]
     }
     CompositeTypes: {
       [_ in never]: never
@@ -615,8 +619,7 @@ export type Tables<
     : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
         DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
