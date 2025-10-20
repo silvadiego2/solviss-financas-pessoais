@@ -28,12 +28,25 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Validação do token JWT no header Authorization
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+  }
+  const token = authHeader.split(' ')[1];
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('🔄 Iniciando processamento de transações recorrentes...');
+    // Validar o token e obter o usuário
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
+      return new Response('Unauthorized', { status: 401, headers: corsHeaders });
+    }
+
+    console.log('🔄 Iniciando processamento de transações recorrentes para usuário:', user.id);
 
     // Buscar transações recorrentes ativas
     const { data: recurringTransactions, error: fetchError } = await supabase
@@ -136,7 +149,7 @@ Deno.serve(async (req) => {
         status: 200,
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Erro no processamento:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
