@@ -19,12 +19,13 @@ import {
   Edit,
   RefreshCw,
   Phone,
-  Globe
+  Globe,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/lib/supabaseClient';
 
 interface UserProfileProps {
   onBack?: () => void;
@@ -35,7 +36,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   const { theme, toggleTheme } = useTheme();
   const { startOnboarding, isOnboardingActive } = useOnboarding();
 
-  // Estado para edição do perfil
+  // Estados para editar perfil
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '');
   const [phone, setPhone] = useState(user?.user_metadata?.phone || '');
@@ -52,7 +53,6 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   const handleRestartTutorial = () => {
     localStorage.removeItem('onboarding_completed');
     toast.success('Tutorial reiniciado! Você será redirecionado ao dashboard.');
-    
     setTimeout(() => {
       window.location.href = '/';
     }, 1000);
@@ -62,13 +62,26 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
     return email.split('@')[0].substring(0, 2).toUpperCase();
   };
 
-  // Função para salvar perfil
   const handleSaveProfile = async () => {
     try {
-      // Aqui deve ser implementada a lógica para atualizar o perfil no Supabase ou backend
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const updates = {
+        id: user.id,
+        full_name: fullName,
+        phone: phone,
+        bio: bio,
+        updated_at: new Date().toISOString(),
+      };
+
+      let { error } = await supabase.from('profiles').upsert(updates);
+
+      if (error) throw error;
+
       toast.success('Perfil atualizado com sucesso!');
       setIsEditing(false);
     } catch (error) {
+      console.error('Erro ao atualizar perfil:', error);
       toast.error('Erro ao atualizar perfil');
     }
   };
@@ -76,8 +89,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
   return (
     <div className="min-h-screen bg-background">
       {onBack && <BackHeader title="Perfil do Usuário" onBack={onBack} />}
-      
       <div className="container mx-auto px-4 py-6 max-w-md">
+
         {/* User Info Card */}
         <Card className="mb-6">
           <CardContent className="pt-6">
@@ -88,16 +101,16 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                   {user?.email ? getUserInitials(user.email) : 'U'}
                 </AvatarFallback>
               </Avatar>
-              
+
               <h2 className="text-xl font-semibold mb-2">
                 {fullName || 'Usuário'}
               </h2>
-              
+
               <div className="flex items-center gap-2 text-muted-foreground mb-4">
                 <Mail className="w-4 h-4" />
                 <span className="text-sm">{user?.email}</span>
               </div>
-              
+
               <Badge variant="secondary" className="mb-4">
                 <Shield className="w-3 h-3 mr-1" />
                 Conta Verificada
@@ -120,7 +133,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                       placeholder="Seu nome completo"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="phone">Telefone</Label>
                     <Input
@@ -131,7 +144,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                       placeholder="(00) 00000-0000"
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="bio">Bio</Label>
                     <Textarea
@@ -142,18 +155,18 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                       rows={3}
                     />
                   </div>
-                  
+
                   <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => setIsEditing(false)}
                       className="flex-1"
                     >
                       Cancelar
                     </Button>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={handleSaveProfile}
                       className="flex-1"
                     >
@@ -162,6 +175,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                   </div>
                 </div>
               )}
+
             </div>
           </CardContent>
         </Card>
@@ -172,21 +186,22 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
             <CardTitle className="text-lg">Informações da Conta</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Calendar className="w-5 h-5 text-muted-foreground" />
                 <div>
                   <p className="text-sm font-medium">Membro desde</p>
                   <p className="text-sm text-muted-foreground">
-                    {user?.created_at ? 
-                      new Date(user.created_at).toLocaleDateString('pt-BR') : 
+                    {user?.created_at ?
+                      new Date(user.created_at).toLocaleDateString('pt-BR') :
                       'Data não disponível'
                     }
                   </p>
                 </div>
               </div>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <User className="w-5 h-5 text-muted-foreground" />
@@ -223,6 +238,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                 </div>
               </div>
             </div>
+
           </CardContent>
         </Card>
 
@@ -234,8 +250,8 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                {theme === 'dark' ? 
-                  <Moon className="w-5 h-5 text-muted-foreground" /> : 
+                {theme === 'dark' ?
+                  <Moon className="w-5 h-5 text-muted-foreground" /> :
                   <Sun className="w-5 h-5 text-muted-foreground" />
                 }
                 <div>
@@ -249,7 +265,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                 Alterar
               </Button>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Settings className="w-5 h-5 text-muted-foreground" />
@@ -260,9 +276,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                   </p>
                 </div>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleRestartTutorial}
                 disabled={isOnboardingActive}
               >
@@ -270,7 +286,7 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
                 Reiniciar
               </Button>
             </div>
-            
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Settings className="w-5 h-5 text-muted-foreground" />
@@ -291,9 +307,9 @@ export const UserProfile: React.FC<UserProfileProps> = ({ onBack }) => {
         {/* Sign Out */}
         <Card>
           <CardContent className="pt-6">
-            <Button 
-              variant="destructive" 
-              className="w-full" 
+            <Button
+              variant="destructive"
+              className="w-full"
               onClick={handleSignOut}
             >
               <LogOut className="w-4 h-4 mr-2" />
