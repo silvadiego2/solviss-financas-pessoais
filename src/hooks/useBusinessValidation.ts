@@ -94,12 +94,12 @@ export const useBusinessValidation = () => {
         .from('transactions')
         .select('amount, type')
         .eq('account_id', accountId)
-        .eq('status', 'completed');
+        .eq('status', 'completed' as any);
 
       if (error) throw error;
 
       let balance = 0;
-      transactions?.forEach((t) => {
+      transactions?.forEach((t: any) => {
         if (t.type === 'income') {
           balance += Number(t.amount);
         } else if (t.type === 'expense') {

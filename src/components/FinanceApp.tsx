@@ -29,6 +29,7 @@ import { UserProfile } from './profile/UserProfile';
 import { DemoDataManager } from './demo/DemoDataManager';
 import { DataResetManager } from './advanced/DataResetManager';
 import { RecurringTransactionsManager } from './transactions/RecurringTransactionsManager';
+import { SettingsScreen } from './settings/SettingsScreen';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');

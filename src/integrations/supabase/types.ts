@@ -7,6 +7,8 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
   }
@@ -61,7 +63,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           new_data: Json | null
           old_data: Json | null
           operation: string
@@ -72,7 +74,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           new_data?: Json | null
           old_data?: Json | null
           operation: string
@@ -83,7 +85,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           new_data?: Json | null
           old_data?: Json | null
           operation?: string
@@ -584,9 +586,9 @@ export type Database = {
         | "credit_card"
         | "wallet"
         | "investment"
-      recurrence_frequency: ["daily", "weekly", "monthly", "yearly"]
-      transaction_status: ["pending", "completed", "cancelled"]
-      transaction_type: ["income", "expense", "transfer"]
+      recurrence_frequency: "daily" | "weekly" | "monthly" | "yearly"
+      transaction_status: "pending" | "completed" | "cancelled"
+      transaction_type: "income" | "expense" | "transfer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -619,7 +621,8 @@ export type Tables<
     : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
         DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R

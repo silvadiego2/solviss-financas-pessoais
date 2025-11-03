@@ -74,7 +74,7 @@ export const useTransactions = () => {
       throw error;
     }
     
-    return data || [];
+    return (data || []) as any;
   };
 
   const fetchSyncedTransactions = async () => {
@@ -143,7 +143,7 @@ export const useTransactions = () => {
           ...transactionData, 
           user_id: user.id,
           receipt_image_url 
-        }])
+        } as any])
         .select()
         .single();
 
@@ -172,7 +172,7 @@ export const useTransactions = () => {
 
       const { data, error } = await supabase
         .from('transactions')
-        .update({ ...updates, receipt_image_url })
+        .update({ ...updates, receipt_image_url } as any)
         .eq('id', id)
         .eq('user_id', user?.id)
         .select()

@@ -38,7 +38,7 @@ export const useCategories = () => {
         .order('name', { ascending: true });
 
       if (error) throw error;
-      setCategories(data || []);
+      setCategories((data || []) as any);
     } catch (error) {
       console.error('Erro ao buscar categorias:', error);
     } finally {
@@ -55,7 +55,7 @@ export const useCategories = () => {
         .insert([{
           ...categoryData,
           user_id: user.id,
-        }])
+        } as any])
         .select()
         .single();
 
@@ -77,7 +77,7 @@ export const useCategories = () => {
     try {
       const { data, error } = await supabase
         .from('categories')
-        .update(updates)
+        .update(updates as any)
         .eq('id', id)
         .eq('user_id', user.id)
         .select()
