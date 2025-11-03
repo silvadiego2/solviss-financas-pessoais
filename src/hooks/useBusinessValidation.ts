@@ -68,7 +68,7 @@ export const useBusinessValidation = () => {
 
       if (error) throw error;
 
-      if (account.type === 'credit_card' && account.credit_limit) {
+      if ((account.type as any) === 'credit_card' && account.credit_limit) {
         const usedCredit = Math.abs(account.balance || 0);
         const availableCredit = account.credit_limit - usedCredit;
 
@@ -100,9 +100,9 @@ export const useBusinessValidation = () => {
 
       let balance = 0;
       transactions?.forEach((t: any) => {
-        if (t.type === 'income') {
+        if ((t.type as any) === 'income') {
           balance += Number(t.amount);
-        } else if (t.type === 'expense') {
+        } else if ((t.type as any) === 'expense') {
           balance -= Number(t.amount);
         }
       });
