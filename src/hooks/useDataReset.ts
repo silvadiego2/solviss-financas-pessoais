@@ -18,48 +18,14 @@ export const useDataReset = () => {
     setIsResetting(true);
 
     try {
-      // Ordem de deleção respeitando foreign keys
-      const deletions = [
-        // 1. Transações (tem FKs para contas/categorias)
-        { table: 'transactions', name: 'Transações' },
-        
-        // 2. Transações sincronizadas
-        { table: 'synced_transactions', name: 'Transações Sincronizadas' },
-        
-        // 3. Orçamentos (tem FK para categorias)
-        { table: 'budgets', name: 'Orçamentos' },
-        
-        // 4. Metas financeiras
-        { table: 'goals', name: 'Metas Financeiras' },
-        
-        // 5. Regras de automação
-        { table: 'automation_rules', name: 'Regras de Automação' },
-        
-        // 6. Notificações
-        { table: 'notifications', name: 'Notificações' },
-        
-        // 7. Conexões bancárias
-        { table: 'bank_connections', name: 'Conexões Bancárias' },
-        
-        // 8. Contas e cartões
-        { table: 'accounts', name: 'Contas e Cartões' },
-        
-        // 9. Categorias personalizadas (mantém as padrão criadas no signup)
-        { table: 'categories', name: 'Categorias Personalizadas', where: "created_at > (auth.jwt() -> 'user_metadata' ->> 'created_at')::timestamptz + interval '1 minute'" },
-      ];
+      // Usar função atômica do banco de dados
+      // Fase 4: Exclusão Atômica - Todas as deleções em uma transação única
+      const { data, error } = await supabase.rpc('delete_user_data_atomic', {
+        p_user_id: user.id
+      });
 
-      for (const deletion of deletions) {
-        const { error } = await supabase
-          .from(deletion.table as any)
-          .delete()
-          .eq('user_id', user.id);
-
-        if (error) {
-          console.error(`Erro ao deletar ${deletion.name}:`, error);
-          throw new Error(`Falha ao deletar ${deletion.name}`);
-        }
-
-        toast.info(`✓ ${deletion.name} removido(a)`);
+      if (error) {
+        throw new Error(error.message || 'Falha ao deletar dados');
       }
 
       // Invalidar todas as queries para forçar re-fetch
@@ -72,13 +38,19 @@ export const useDataReset = () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       queryClient.invalidateQueries({ queryKey: ['bank-connections'] });
 
-      toast.success('🎉 Todos os dados foram removidos com sucesso!');
+      toast.success(
+        `🎉 Todos os dados foram removidos com sucesso! ${data.total_records_deleted} registros deletados.`,
+        { duration: 5000 }
+      );
       
       return { success: true };
       
     } catch (error: any) {
       console.error('Erro ao resetar dados:', error);
-      toast.error(error.message || 'Erro ao limpar dados');
+      toast.error(
+        error.message || 'Erro ao limpar dados', 
+        { description: 'Nenhum dado foi removido (rollback automático)', duration: 5000 }
+      );
       return { success: false };
       
     } finally {
