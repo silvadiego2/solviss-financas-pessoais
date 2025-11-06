@@ -578,6 +578,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      delete_user_data_atomic: { Args: { p_user_id: string }; Returns: Json }
     }
     Enums: {
       account_type:

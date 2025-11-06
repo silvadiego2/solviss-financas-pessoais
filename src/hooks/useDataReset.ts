@@ -20,6 +20,7 @@ export const useDataReset = () => {
     try {
       // Usar função atômica do banco de dados
       // Fase 4: Exclusão Atômica - Todas as deleções em uma transação única
+      // @ts-ignore - A função RPC será reconhecida após regeneração dos tipos
       const { data, error } = await supabase.rpc('delete_user_data_atomic', {
         p_user_id: user.id
       });
@@ -27,6 +28,13 @@ export const useDataReset = () => {
       if (error) {
         throw new Error(error.message || 'Falha ao deletar dados');
       }
+
+      if (!data) {
+        throw new Error('Nenhum dado retornado da função de deleção');
+      }
+
+      // Parse do resultado (TypeScript não reconhece os tipos até regeneração)
+      const result = data as any;
 
       // Invalidar todas as queries para forçar re-fetch
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
@@ -39,7 +47,7 @@ export const useDataReset = () => {
       queryClient.invalidateQueries({ queryKey: ['bank-connections'] });
 
       toast.success(
-        `🎉 Todos os dados foram removidos com sucesso! ${data.total_records_deleted} registros deletados.`,
+        `🎉 Todos os dados foram removidos com sucesso! ${result.total_records_deleted || 0} registros deletados.`,
         { duration: 5000 }
       );
       
