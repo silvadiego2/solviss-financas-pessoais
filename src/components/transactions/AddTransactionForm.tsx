@@ -7,14 +7,24 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
 import { useTransactions } from '@/hooks/useTransactions';
+import { useCamera } from '@/hooks/useCamera';
 import { toast } from 'sonner';
-import { CreditCard, Building, Upload, X } from 'lucide-react';
+import { CreditCard, Building, Upload, X, Camera, Scan, Loader2, FileImage, Trash2 } from 'lucide-react';
 import { enhancedToast } from '@/components/ui/enhanced-toast';
 import { ProgressIndicator } from '@/components/ui/progress-indicator';
+import Tesseract from 'tesseract.js';
+
+interface ScannedData {
+  amount?: number;
+  description?: string;
+  date?: string;
+  merchant?: string;
+}
 
 interface AddTransactionFormProps {
   onClose?: () => void;
@@ -33,11 +43,18 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
+  
+  // Scanner states
+  const [showScannerDialog, setShowScannerDialog] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [scannedData, setScannedData] = useState<ScannedData | null>(null);
 
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
   const { categories } = useCategories();
   const { createTransaction } = useTransactions();
+  const { capturePhoto, selectFromGallery } = useCamera();
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
 
@@ -154,6 +171,161 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       style: 'currency',
       currency: 'BRL'
     }).format(value);
+  };
+
+  // Scanner functions
+  const handleCapturePhoto = async () => {
+    try {
+      const photo = await capturePhoto();
+      if (photo.dataUrl) {
+        setCapturedImage(photo.dataUrl);
+        processImage(photo.dataUrl);
+      }
+    } catch (error) {
+      console.error('Erro ao capturar foto:', error);
+      toast.error('Erro ao capturar foto');
+    }
+  };
+
+  const handleSelectFromGallery = async () => {
+    try {
+      const photo = await selectFromGallery();
+      if (photo.dataUrl) {
+        setCapturedImage(photo.dataUrl);
+        processImage(photo.dataUrl);
+      }
+    } catch (error) {
+      console.error('Erro ao selecionar imagem:', error);
+      toast.error('Erro ao selecionar imagem');
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const dataUrl = e.target?.result as string;
+        setCapturedImage(dataUrl);
+        processImage(dataUrl);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const processImage = async (imageDataUrl: string) => {
+    setIsProcessing(true);
+    
+    try {
+      toast.info('Processando imagem...');
+      
+      const { data: { text } } = await Tesseract.recognize(
+        imageDataUrl,
+        'por',
+        {
+          logger: m => console.log(m)
+        }
+      );
+
+      const extracted = extractReceiptData(text);
+      setScannedData(extracted);
+      
+      toast.success('Recibo processado com sucesso!');
+      
+    } catch (error) {
+      console.error('Erro ao processar imagem:', error);
+      toast.error('Erro ao processar imagem');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const extractReceiptData = (text: string): ScannedData => {
+    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    
+    // Try to find amount (looking for patterns like R$ 123.45 or 123,45)
+    const amountRegex = /(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/g;
+    const amounts = text.match(amountRegex);
+    
+    let amount: number | undefined;
+    if (amounts && amounts.length > 0) {
+      const numericAmounts = amounts.map(a => {
+        const cleaned = a.replace(/R\$\s*/, '').replace(/\./g, '').replace(',', '.');
+        return parseFloat(cleaned);
+      }).filter(n => !isNaN(n));
+      
+      if (numericAmounts.length > 0) {
+        amount = Math.max(...numericAmounts);
+      }
+    }
+
+    // Try to find date
+    const dateRegex = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/;
+    const dateMatch = text.match(dateRegex);
+    let date: string | undefined;
+    if (dateMatch) {
+      const dateStr = dateMatch[1];
+      const parts = dateStr.split(/[\/\-\.]/);
+      if (parts.length === 3) {
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        let year = parts[2];
+        if (year.length === 2) {
+          year = '20' + year;
+        }
+        date = `${year}-${month}-${day}`;
+      }
+    }
+
+    // Try to find merchant name
+    let merchant: string | undefined;
+    if (lines.length > 0) {
+      for (const line of lines.slice(0, 5)) {
+        if (line.length > 3 && line.length < 50 && !/^\d+$/.test(line)) {
+          merchant = line;
+          break;
+        }
+      }
+    }
+
+    return {
+      amount,
+      date,
+      merchant,
+      description: merchant || 'Transação escaneada',
+    };
+  };
+
+  const handleUseScannedData = async () => {
+    if (scannedData) {
+      setAmount(scannedData.amount?.toString().replace('.', ',') || '');
+      setDescription(scannedData.description || '');
+      setDate(scannedData.date || date);
+      
+      // Convert image to File
+      if (capturedImage) {
+        try {
+          const response = await fetch(capturedImage);
+          const blob = await response.blob();
+          const file = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
+          setReceiptFile(file);
+        } catch (error) {
+          console.error('Erro ao converter imagem:', error);
+        }
+      }
+    }
+    
+    // Reset scanner and close dialog
+    setCapturedImage(null);
+    setIsProcessing(false);
+    setScannedData(null);
+    setShowScannerDialog(false);
+  };
+
+  const resetScanner = () => {
+    setCapturedImage(null);
+    setIsProcessing(false);
+    setScannedData(null);
   };
 
   return (
@@ -304,15 +476,117 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             <div className="space-y-2">
               <Label htmlFor="receipt">Anexar Comprovante/Nota Fiscal</Label>
-              <div className="flex items-center space-x-2">
-                <Input
-                  id="receipt"
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={handleFileChange}
-                  className="flex-1"
-                />
-                <Upload size={20} className="text-gray-400" />
+              <div className="flex gap-2">
+                {/* Botão de Upload Normal */}
+                <div className="flex-1 flex items-center space-x-2">
+                  <Input
+                    id="receipt"
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={handleFileChange}
+                    className="flex-1"
+                  />
+                  <Upload size={20} className="text-gray-400" />
+                </div>
+                
+                {/* Botão Scanner OCR */}
+                <Dialog open={showScannerDialog} onOpenChange={setShowScannerDialog}>
+                  <DialogTrigger asChild>
+                    <Button type="button" variant="outline" size="icon" title="Escanear recibo">
+                      <Scan className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Scanner de Recibo</DialogTitle>
+                    </DialogHeader>
+                    
+                    <div className="space-y-4">
+                      {/* Capture Options */}
+                      {!capturedImage && (
+                        <div className="grid grid-cols-1 gap-3">
+                          <Button type="button" onClick={handleCapturePhoto} className="flex items-center gap-2">
+                            <Camera size={18} />
+                            Tirar Foto
+                          </Button>
+                          
+                          <Button type="button" variant="outline" onClick={handleSelectFromGallery} className="flex items-center gap-2">
+                            <FileImage size={18} />
+                            Selecionar da Galeria
+                          </Button>
+                          
+                          <div className="relative">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full flex items-center gap-2"
+                              onClick={() => document.getElementById('scanner-file-upload')?.click()}
+                            >
+                              <Upload size={18} />
+                              Upload de Arquivo
+                            </Button>
+                            <input
+                              id="scanner-file-upload"
+                              type="file"
+                              accept="image/*"
+                              onChange={handleFileUpload}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Processing State */}
+                      {capturedImage && isProcessing && (
+                        <div className="text-center space-y-4">
+                          <img
+                            src={capturedImage}
+                            alt="Recibo capturado"
+                            className="max-w-full max-h-64 rounded-lg border mx-auto"
+                          />
+                          <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                            <Loader2 size={18} className="animate-spin" />
+                            <span>Processando OCR...</span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Scanned Data Preview */}
+                      {capturedImage && !isProcessing && scannedData && (
+                        <div className="space-y-4">
+                          <img
+                            src={capturedImage}
+                            alt="Recibo capturado"
+                            className="max-w-full max-h-48 rounded-lg border mx-auto"
+                          />
+                          
+                          <div className="space-y-2 p-3 bg-muted rounded-lg">
+                            <p className="text-sm font-medium">Dados Extraídos:</p>
+                            {scannedData.amount && (
+                              <p className="text-sm">Valor: <span className="font-semibold">{formatCurrency(scannedData.amount)}</span></p>
+                            )}
+                            {scannedData.description && (
+                              <p className="text-sm">Descrição: <span className="font-semibold">{scannedData.description}</span></p>
+                            )}
+                            {scannedData.date && (
+                              <p className="text-sm">Data: <span className="font-semibold">{new Date(scannedData.date).toLocaleDateString('pt-BR')}</span></p>
+                            )}
+                          </div>
+                          
+                          <div className="flex gap-2">
+                            <Button type="button" variant="outline" onClick={resetScanner} className="flex-1">
+                              <Trash2 size={16} className="mr-2" />
+                              Descartar
+                            </Button>
+                            <Button type="button" onClick={handleUseScannedData} className="flex-1">
+                              Usar Dados
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
               {receiptFile && (
                 <p className="text-sm text-green-600">
