@@ -39,6 +39,7 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
   const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
   const [importProgress, setImportProgress] = useState(0);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [detectedBank, setDetectedBank] = useState<string | undefined>();
 
   const { createTransaction, transactions } = useTransactions();
   const { accounts } = useAccounts();
@@ -54,17 +55,28 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
       setHeaders(result.headers);
       setRawData(result.data);
       setMapping(result.suggestedMapping);
-      setStep('mapping');
-      toast.success('Arquivo carregado com sucesso!');
+      setDetectedBank(result.detectedBank);
+      
+      // Se banco detectado, pular mapeamento e ir direto para preview
+      if (result.detectedBank) {
+        toast.success(`Banco detectado: ${result.detectedBank}! Mapeamento automático aplicado.`);
+        setStep('mapping');
+      } else {
+        setStep('mapping');
+        toast.success('Arquivo carregado com sucesso!');
+      }
     } catch (error) {
       toast.error((error as Error).message);
     }
   };
 
   const handleMappingComplete = () => {
-    if (!mapping.date || !mapping.description || !mapping.amount || !mapping.type) {
-      toast.error('Por favor, mapeie todos os campos obrigatórios');
-      return;
+    // Se banco detectado, não precisa validar mapeamento manual
+    if (!detectedBank) {
+      if (!mapping.date || !mapping.description || !mapping.amount || !mapping.type) {
+        toast.error('Por favor, mapeie todos os campos obrigatórios');
+        return;
+      }
     }
 
     validateData();
@@ -77,7 +89,7 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
     const categorizationEngine = new AutoCategorizationEngine(categories);
 
     rawData.forEach((row, index) => {
-      const transaction = convertRowToTransaction(row, mapping as ColumnMapping);
+      const transaction = convertRowToTransaction(row, mapping as ColumnMapping, detectedBank);
       
       if (!transaction) {
         results.push({
@@ -225,14 +237,14 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
           Importar Transações
         </CardTitle>
         <CardDescription>
-          Importe suas transações a partir de uma planilha CSV ou Excel
+          Importe suas transações a partir de uma planilha CSV, Excel ou extrato bancário
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Alert>
           <AlertCircle className="w-4 h-4" />
           <AlertDescription>
-            Sua planilha deve conter pelo menos: Data, Descrição, Valor e Tipo (Receita/Despesa)
+            Formatos suportados: CSV, Excel (.xlsx, .xls). Extratos do Banco do Brasil e Santander são detectados automaticamente.
           </AlertDescription>
         </Alert>
 
@@ -244,6 +256,9 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
             accept=".csv,.xlsx,.xls"
             onChange={handleFileSelect}
           />
+          <p className="text-xs text-muted-foreground">
+            Bancos suportados: Banco do Brasil, Santander
+          </p>
         </div>
 
         <Button
@@ -261,12 +276,31 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
   const renderMappingStep = () => (
     <Card>
       <CardHeader>
-        <CardTitle>Mapeamento de Colunas</CardTitle>
+        <CardTitle className="flex items-center gap-2">
+          Mapeamento de Colunas
+          {detectedBank && (
+            <Badge variant="secondary" className="bg-green-100 text-green-800">
+              {detectedBank} detectado
+            </Badge>
+          )}
+        </CardTitle>
         <CardDescription>
-          Relacione as colunas da sua planilha com os campos do sistema
+          {detectedBank 
+            ? `Formato do ${detectedBank} detectado automaticamente. Verifique o mapeamento se necessário.`
+            : 'Relacione as colunas da sua planilha com os campos do sistema'
+          }
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {detectedBank && (
+          <Alert className="border-green-200 bg-green-50">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-800">
+              O formato do extrato do {detectedBank} foi detectado. O mapeamento foi preenchido automaticamente. 
+              Clique em "Continuar" para ver a prévia das transações.
+            </AlertDescription>
+          </Alert>
+        )}
         <div className="grid gap-4">
           <div className="space-y-2">
             <Label>Data *</Label>
