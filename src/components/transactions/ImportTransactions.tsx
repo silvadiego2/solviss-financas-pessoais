@@ -347,14 +347,14 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
           <div className="space-y-2">
             <Label>Categoria (Opcional)</Label>
             <Select
-              value={mapping.category}
-              onValueChange={(value) => setMapping({ ...mapping, category: value })}
+              value={mapping.category || "none"}
+              onValueChange={(value) => setMapping({ ...mapping, category: value === "none" ? undefined : value })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione a coluna" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhuma</SelectItem>
+                <SelectItem value="none">Nenhuma</SelectItem>
                 {headers.map((header) => (
                   <SelectItem key={header} value={header}>
                     {header}
@@ -367,14 +367,14 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
           <div className="space-y-2">
             <Label>Conta (Opcional)</Label>
             <Select
-              value={mapping.account}
-              onValueChange={(value) => setMapping({ ...mapping, account: value })}
+              value={mapping.account || "none"}
+              onValueChange={(value) => setMapping({ ...mapping, account: value === "none" ? undefined : value })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione a coluna" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Nenhuma</SelectItem>
+                <SelectItem value="none">Nenhuma</SelectItem>
                 {headers.map((header) => (
                   <SelectItem key={header} value={header}>
                     {header}
