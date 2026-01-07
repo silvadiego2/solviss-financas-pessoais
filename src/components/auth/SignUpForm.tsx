@@ -31,8 +31,18 @@ export const SignUpForm: React.FC<SignUpFormProps> = ({ onToggleForm }) => {
       return;
     }
 
-    if (password.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres');
+    if (password.length < 12) {
+      toast.error('A senha deve ter pelo menos 12 caracteres');
+      return;
+    }
+
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+
+    if (!hasUppercase || !hasLowercase || !hasNumber || !hasSpecial) {
+      toast.error('A senha deve conter letras maiúsculas, minúsculas, números e caracteres especiais');
       return;
     }
 
