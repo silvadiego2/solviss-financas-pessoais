@@ -9,6 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Upload, Download, CheckCircle, XCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseSpreadsheet, generateExampleFile, convertRowToTransaction, ColumnMapping, ParsedTransaction, SpreadsheetRow } from '@/utils/spreadsheetParser';
@@ -37,6 +38,7 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
   const [step, setStep] = useState<'upload' | 'mapping' | 'preview' | 'importing'>('upload');
   const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
   const [importProgress, setImportProgress] = useState(0);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const { createTransaction, transactions } = useTransactions();
   const { accounts } = useAccounts();
@@ -465,7 +467,7 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
               Voltar
             </Button>
             <Button
-              onClick={handleImport}
+              onClick={() => setShowConfirmDialog(true)}
               disabled={errorCount === validationResults.length}
               className="flex-1"
             >
@@ -494,6 +496,23 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
     </Card>
   );
 
+  const successCount = validationResults.filter(r => r.status === 'success').length;
+  const warningCount = validationResults.filter(r => r.status === 'warning').length;
+  const validTransactions = validationResults.filter(r => r.transaction && r.status !== 'error');
+  
+  const totalAmount = validTransactions.reduce((sum, r) => {
+    if (!r.transaction) return sum;
+    return sum + (r.transaction.type === 'income' ? r.transaction.amount : -r.transaction.amount);
+  }, 0);
+
+  const incomeTotal = validTransactions
+    .filter(r => r.transaction?.type === 'income')
+    .reduce((sum, r) => sum + (r.transaction?.amount || 0), 0);
+    
+  const expenseTotal = validTransactions
+    .filter(r => r.transaction?.type === 'expense')
+    .reduce((sum, r) => sum + (r.transaction?.amount || 0), 0);
+
   return (
     <div className="container max-w-4xl mx-auto p-4 space-y-4">
       <Button variant="ghost" onClick={onBack}>
@@ -505,6 +524,65 @@ export function ImportTransactions({ onBack }: ImportTransactionsProps) {
       {step === 'mapping' && renderMappingStep()}
       {step === 'preview' && renderPreviewStep()}
       {step === 'importing' && renderImportingStep()}
+
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Importação</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>Você está prestes a importar as seguintes transações:</p>
+                
+                <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-primary">{successCount + warningCount}</p>
+                    <p className="text-xs text-muted-foreground">Transações</p>
+                  </div>
+                  <div className="text-center">
+                    <p className={`text-2xl font-bold ${totalAmount >= 0 ? 'text-green-500' : 'text-destructive'}`}>
+                      {totalAmount >= 0 ? '+' : ''}R$ {totalAmount.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Saldo Líquido</p>
+                  </div>
+                </div>
+
+                <div className="flex justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <span>Receitas: R$ {incomeTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <XCircle className="w-4 h-4 text-destructive" />
+                    <span>Despesas: R$ {expenseTotal.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                {warningCount > 0 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      {warningCount} transação(ões) com avisos serão importadas.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <p className="text-sm text-muted-foreground">
+                  Esta ação não pode ser desfeita facilmente. Deseja continuar?
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setShowConfirmDialog(false);
+              handleImport();
+            }}>
+              Confirmar Importação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
