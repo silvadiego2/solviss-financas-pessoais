@@ -53,41 +53,62 @@ interface BankPattern {
   processRow: (row: SpreadsheetRow, headers: string[]) => ParsedTransaction | null;
 }
 
+// Normaliza string removendo acentos e caracteres especiais para comparação
+function normalizeString(str: string): string {
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim();
+}
+
+// Procura valor em objeto por chave normalizada
+function findValueByNormalizedKey(row: SpreadsheetRow, searchKey: string): string | number | undefined {
+  const normalizedSearch = normalizeString(searchKey);
+  for (const key of Object.keys(row)) {
+    if (normalizeString(key).includes(normalizedSearch) || normalizedSearch.includes(normalizeString(key))) {
+      return row[key];
+    }
+  }
+  return undefined;
+}
+
 const BANK_PATTERNS: BankPattern[] = [
   {
     name: 'Banco do Brasil',
-    headerPatterns: ['Data', 'Dependencia Origem', 'Histórico', 'Número do documento', 'Valor'],
+    headerPatterns: ['data', 'dependencia', 'historico', 'documento', 'valor'],
     columnMapping: {
       date: 'Data',
       description: 'Histórico',
       amount: 'Valor',
       type: '_auto_',
     },
-    processRow: (row: SpreadsheetRow, headers: string[]): ParsedTransaction | null => {
+    processRow: (row: SpreadsheetRow): ParsedTransaction | null => {
       try {
-        const dateStr = row['Data'] as string;
-        const description = row['Histórico'] as string || row['Historico'] as string;
-        const valorStr = row['Valor'] as string;
+        const dateStr = (findValueByNormalizedKey(row, 'data') as string)?.toString();
+        const description = (findValueByNormalizedKey(row, 'historico') as string)?.toString();
+        const valorStr = (findValueByNormalizedKey(row, 'valor') as string)?.toString();
         
         if (!dateStr || !description || valorStr === undefined) return null;
+        
+        // Ignorar saldo anterior e saldo final
+        const descLower = description.toLowerCase();
+        if (descLower.includes('saldo anterior') || descLower.includes('s a l d o')) {
+          return null;
+        }
         
         // Parse date DD/MM/YYYY
         const dateParts = dateStr.split('/');
         if (dateParts.length !== 3) return null;
         const date = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
+        if (isNaN(date.getTime())) return null;
         
         // Parse valor - BB usa valores negativos para débitos
-        let amount = typeof valorStr === 'number' 
-          ? valorStr 
-          : parseFloat(valorStr.toString().replace(/[^\d.,-]/g, '').replace(',', '.'));
+        const cleanValue = valorStr.toString().replace(/[^\d.,-]/g, '').replace(',', '.');
+        let amount = parseFloat(cleanValue);
         
         if (isNaN(amount)) return null;
-        
-        // Ignorar saldo anterior e saldo final
-        if (description.toLowerCase().includes('saldo anterior') || 
-            description.toLowerCase().includes('s a l d o')) {
-          return null;
-        }
         
         const type: 'income' | 'expense' = amount >= 0 ? 'income' : 'expense';
         
@@ -105,29 +126,30 @@ const BANK_PATTERNS: BankPattern[] = [
   },
   {
     name: 'Santander',
-    headerPatterns: ['Data', 'Descrição', 'Docto', 'Situação', 'Crédito (R$)', 'Débito (R$)', 'Saldo (R$)'],
+    headerPatterns: ['data', 'descricao', 'docto', 'situacao', 'credito', 'debito', 'saldo'],
     columnMapping: {
       date: 'Data',
       description: 'Descrição',
       amount: '_calculated_',
       type: '_auto_',
     },
-    processRow: (row: SpreadsheetRow, headers: string[]): ParsedTransaction | null => {
+    processRow: (row: SpreadsheetRow): ParsedTransaction | null => {
       try {
-        const dateStr = row['Data'] as string;
-        const description = row['Descrição'] as string || row['Descricao'] as string;
-        const creditoStr = row['Crédito (R$)'] as string || row['Credito (R$)'] as string;
-        const debitoStr = row['Débito (R$)'] as string || row['Debito (R$)'] as string;
+        const dateStr = (findValueByNormalizedKey(row, 'data') as string)?.toString();
+        const description = (findValueByNormalizedKey(row, 'descricao') as string)?.toString();
+        const creditoStr = (findValueByNormalizedKey(row, 'credito') as string)?.toString();
+        const debitoStr = (findValueByNormalizedKey(row, 'debito') as string)?.toString();
         
         if (!dateStr || !description) return null;
         
         // Ignorar linhas de saldo e totais
-        if (description.toLowerCase().includes('saldo anterior') || 
-            description.toLowerCase().includes('total') ||
-            description.toLowerCase().includes('saldo de conta') ||
-            description.toLowerCase().includes('saldo bloqueado') ||
-            description.toLowerCase().includes('provisão') ||
-            description.toLowerCase().includes('limite')) {
+        const descLower = description.toLowerCase();
+        if (descLower.includes('saldo anterior') || 
+            descLower.includes('total') ||
+            descLower.includes('saldo de conta') ||
+            descLower.includes('saldo bloqueado') ||
+            descLower.includes('provisao') ||
+            descLower.includes('limite')) {
           return null;
         }
         
@@ -135,21 +157,24 @@ const BANK_PATTERNS: BankPattern[] = [
         const dateParts = dateStr.split('/');
         if (dateParts.length !== 3) return null;
         const date = new Date(parseInt(dateParts[2]), parseInt(dateParts[1]) - 1, parseInt(dateParts[0]));
+        if (isNaN(date.getTime())) return null;
         
         // Determine tipo e valor
         let amount = 0;
         let type: 'income' | 'expense' = 'expense';
         
-        if (creditoStr && creditoStr.toString().trim() !== '') {
-          const parsed = parseFloat(creditoStr.toString().replace(/[^\d.,-]/g, '').replace(',', '.'));
+        if (creditoStr && creditoStr.trim() !== '') {
+          const cleanValue = creditoStr.replace(/[^\d.,-]/g, '').replace('.', '').replace(',', '.');
+          const parsed = parseFloat(cleanValue);
           if (!isNaN(parsed) && parsed !== 0) {
             amount = parsed;
             type = 'income';
           }
         }
         
-        if (debitoStr && debitoStr.toString().trim() !== '') {
-          const parsed = parseFloat(debitoStr.toString().replace(/[^\d.,-]/g, '').replace(',', '.'));
+        if ((amount === 0) && debitoStr && debitoStr.trim() !== '') {
+          const cleanValue = debitoStr.replace(/[^\d.,-]/g, '').replace('.', '').replace(',', '.');
+          const parsed = parseFloat(cleanValue);
           if (!isNaN(parsed) && parsed !== 0) {
             amount = Math.abs(parsed);
             type = 'expense';
@@ -176,11 +201,10 @@ const BANK_PATTERNS: BankPattern[] = [
  * Detecta o banco baseado nos headers
  */
 function detectBank(headers: string[]): BankPattern | null {
-  const normalizedHeaders = headers.map(h => h?.toString().toLowerCase().trim() || '');
+  const normalizedHeaders = headers.map(h => normalizeString(h?.toString() || ''));
   
   for (const pattern of BANK_PATTERNS) {
-    const patternHeaders = pattern.headerPatterns.map(h => h.toLowerCase().trim());
-    const matchCount = patternHeaders.filter(ph => 
+    const matchCount = pattern.headerPatterns.filter(ph => 
       normalizedHeaders.some(h => h.includes(ph) || ph.includes(h))
     ).length;
     
