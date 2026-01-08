@@ -98,8 +98,6 @@ export const FinanceApp: React.FC = () => {
         return <BankConnectionManager onBack={handleBackToMore} />;
       case 'profile':
         return <UserProfile onBack={handleBackToMore} />;
-      case 'security':
-        return <SecurityDashboard />;
       case 'settings': // ✅ Novo caso adicionado
         return <SettingsScreen onBack={handleBackToMore} />;
       case 'auto-categorization':
@@ -115,11 +113,13 @@ export const FinanceApp: React.FC = () => {
       case 'auto-rules':
         return <AutoRules onBack={handleBackToMore} />;
       case 'demo-data':
-        return <DemoDataManager />;
+        return <DemoDataManager onBack={handleBackToMore} />;
       case 'data-reset':
-        return <DataResetManager />;
+        return <DataResetManager onBack={handleBackToMore} />;
       case 'recurring-transactions':
-        return <RecurringTransactionsManager />;
+        return <RecurringTransactionsManager onBack={handleBackToMore} />;
+      case 'security':
+        return <SecurityDashboard onBack={handleBackToMore} />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
       default:

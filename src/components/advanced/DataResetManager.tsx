@@ -15,8 +15,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useDataReset } from '@/hooks/useDataReset';
 import { Trash2, AlertTriangle, Loader2 } from 'lucide-react';
+import { BackHeader } from '@/components/layout/BackHeader';
 
-export const DataResetManager: React.FC = () => {
+interface DataResetManagerProps {
+  onBack?: () => void;
+}
+
+export const DataResetManager: React.FC<DataResetManagerProps> = ({ onBack }) => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmText, setConfirmText] = useState('');
   const { deleteAllUserData, isResetting } = useDataReset();
@@ -37,7 +42,8 @@ export const DataResetManager: React.FC = () => {
   const isConfirmValid = confirmText === 'CONFIRMAR';
 
   return (
-    <>
+    <div className="space-y-4">
+      {onBack && <BackHeader title="Limpar Dados" onBack={onBack} />}
       <Card className="w-full max-w-2xl mx-auto border-destructive">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-destructive">
@@ -172,7 +178,7 @@ export const DataResetManager: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
+    </div>
   );
 };
 

@@ -6,8 +6,13 @@ import { useAuditLogs } from '@/hooks/useAuditLogs';
 import { Shield, AlertTriangle, CheckCircle, Activity } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { BackHeader } from '@/components/layout/BackHeader';
 
-export const SecurityDashboard = () => {
+interface SecurityDashboardProps {
+  onBack?: () => void;
+}
+
+export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ onBack }) => {
   const { user } = useAuth();
   const { auditLogs, loading } = useAuditLogs();
 
@@ -29,10 +34,14 @@ export const SecurityDashboard = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-6">
-        <Shield className="h-6 w-6" />
-        <h1 className="text-2xl font-bold">Dashboard de Segurança</h1>
-      </div>
+      {onBack ? (
+        <BackHeader title="Dashboard de Segurança" onBack={onBack} />
+      ) : (
+        <div className="flex items-center gap-2 mb-6">
+          <Shield className="h-6 w-6" />
+          <h1 className="text-2xl font-bold">Dashboard de Segurança</h1>
+        </div>
+      )}
 
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
