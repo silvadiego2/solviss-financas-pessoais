@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { BackHeader } from '@/components/layout/BackHeader';
 
 const frequencyLabels: Record<string, string> = {
   daily: '📅 Diária',
@@ -29,7 +30,11 @@ const frequencyLabels: Record<string, string> = {
   annual: '🎯 Anual',
 };
 
-export const RecurringTransactionsManager: React.FC = () => {
+interface RecurringTransactionsManagerProps {
+  onBack?: () => void;
+}
+
+export const RecurringTransactionsManager: React.FC<RecurringTransactionsManagerProps> = ({ onBack }) => {
   const {
     recurringTransactions,
     isLoading,
@@ -58,6 +63,7 @@ export const RecurringTransactionsManager: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {onBack && <BackHeader title="Transações Recorrentes" onBack={onBack} />}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

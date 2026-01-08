@@ -9,8 +9,13 @@ import { useAutomationRules } from '@/hooks/useAutomationRules';
 import { useCategories } from '@/hooks/useCategories';
 import { toast } from 'sonner';
 import { Loader2, Database, CheckCircle } from 'lucide-react';
+import { BackHeader } from '@/components/layout/BackHeader';
 
-export const DemoDataManager: React.FC = () => {
+interface DemoDataManagerProps {
+  onBack?: () => void;
+}
+
+export const DemoDataManager: React.FC<DemoDataManagerProps> = ({ onBack }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
   
@@ -214,7 +219,9 @@ export const DemoDataManager: React.FC = () => {
   };
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <div className="space-y-4">
+      {onBack && <BackHeader title="Dados de Demonstração" onBack={onBack} />}
+      <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Database className="h-5 w-5" />
@@ -297,5 +304,6 @@ export const DemoDataManager: React.FC = () => {
         </Button>
       </CardContent>
     </Card>
+    </div>
   );
 };
