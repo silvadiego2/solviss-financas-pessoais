@@ -381,20 +381,17 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                   <SelectValue placeholder="Selecione uma conta ou cartão" />
                 </SelectTrigger>
                 <SelectContent>
-                  {allAccounts.map((account) => (
-                    <SelectItem key={account.id} value={account.id}>
-                      <div className="flex items-center space-x-2">
-                        {account.icon}
-                        <span>{account.name}</span>
-                        <span className="text-xs text-gray-500">
-                          {account.type === 'credit_card' ? 
-                            `(Cartão - ${account.bankName})` : 
-                            '(Conta)'
-                          }
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
+                  {allAccounts.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      Nenhuma conta cadastrada
+                    </div>
+                  ) : (
+                    allAccounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.type === 'credit_card' ? '💳' : '🏦'} {account.name} {account.type === 'credit_card' ? `(Cartão)` : '(Conta)'}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -406,14 +403,17 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                   <SelectValue placeholder="Selecione uma categoria" />
                 </SelectTrigger>
                 <SelectContent>
-                  {filteredCategories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      <div className="flex items-center space-x-2">
-                        <span>{category.icon}</span>
-                        <span>{category.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
+                  {filteredCategories.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      Nenhuma categoria disponível
+                    </div>
+                  ) : (
+                    filteredCategories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.icon} {category.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
