@@ -14,10 +14,12 @@ import { useCategories } from '@/hooks/useCategories';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCamera } from '@/hooks/useCamera';
 import { toast } from 'sonner';
-import { CreditCard, Building, Upload, X, Camera, Scan, Loader2, FileImage, Trash2 } from 'lucide-react';
+import { CreditCard, Building, Upload, X, Camera, Scan, Loader2, FileImage, Trash2, AlertCircle } from 'lucide-react';
 import { enhancedToast } from '@/components/ui/enhanced-toast';
 import { ProgressIndicator } from '@/components/ui/progress-indicator';
 import Tesseract from 'tesseract.js';
+import { validateTransaction, parseAmount } from '@/utils/transactionSchema';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 interface ScannedData {
   amount?: number;
@@ -49,6 +51,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [scannedData, setScannedData] = useState<ScannedData | null>(null);
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const { accounts } = useAccounts();
   const { creditCards } = useCreditCards();
@@ -86,21 +89,32 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationErrors({});
     
-    if (!amount || !description || !accountId || !categoryId) {
-      enhancedToast.error('Campos obrigatórios não preenchidos', {
-        description: 'Por favor, preencha todos os campos obrigatórios para continuar.'
+    // Validar com Zod
+    const validation = validateTransaction({
+      type,
+      amount,
+      description,
+      accountId,
+      categoryId,
+      date,
+      isRecurring,
+      recurrenceFrequency: isRecurring ? recurrenceFrequency : undefined,
+      recurrenceEndDate: isRecurring && recurrenceEndDate ? recurrenceEndDate : undefined,
+    });
+
+    if (!validation.success) {
+      const errors = 'errors' in validation ? validation.errors : {};
+      setValidationErrors(errors);
+      const firstError = Object.values(errors)[0] as string || 'Erro de validação';
+      enhancedToast.error('Erro de validação', {
+        description: firstError,
       });
       return;
     }
 
-    const numericAmount = parseFloat(amount.replace(',', '.'));
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      enhancedToast.error('Valor inválido', {
-        description: 'O valor deve ser um número positivo.'
-      });
-      return;
-    }
+    const numericAmount = parseAmount(amount);
 
     setLoading(true);
     setProgress(0);
@@ -150,7 +164,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       setIsRecurring(false);
       setRecurrenceFrequency('monthly');
       setRecurrenceEndDate('');
-      
+      setValidationErrors({});
       // Call onClose if provided
       if (onClose) {
         onClose();
