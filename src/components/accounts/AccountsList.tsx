@@ -8,6 +8,11 @@ import { useDependencyCheck } from '@/hooks/useDependencyCheck';
 import { AddAccountForm } from './AddAccountForm';
 import { EditAccountForm } from './EditAccountForm';
 import { AccountsListSkeleton } from '@/components/ui/skeleton-loaders';
+import { BackHeader } from '@/components/layout/BackHeader';
+
+interface AccountsListProps {
+  onBack?: () => void;
+}
 
 const getAccountIcon = (type: string) => {
   switch (type) {
@@ -39,7 +44,7 @@ const getAccountTypeName = (type: string) => {
   }
 };
 
-export const AccountsList: React.FC = () => {
+export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
   const { regularAccounts, loading, deleteAccount } = useAccounts();
   const { checkAccountDependencies } = useDependencyCheck();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -90,8 +95,9 @@ export const AccountsList: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {onBack && <BackHeader title="Minhas Contas" onBack={onBack} />}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Minhas Contas</h2>
+        {!onBack && <h2 className="text-lg font-semibold">Minhas Contas</h2>}
         <Button 
           onClick={() => setShowAddForm(true)}
           className="flex items-center space-x-2"
