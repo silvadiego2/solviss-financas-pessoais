@@ -16,10 +16,8 @@ import {
   Shield,
   Cloud,
   TrendingUp,
-  Bell,
   Zap,
   Database,
-  Receipt,
   Trash2,
   Repeat,
   BarChart3,
@@ -64,12 +62,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Criar e editar categorias',
       icon: Tags,
       action: () => onNavigate('categories')
-    },
-    {
-      title: 'Gerenciar Transações',
-      description: 'Ver, editar e excluir transações',
-      icon: Receipt,
-      action: () => onNavigate('transactions')
     },
     {
       title: 'Transações Recorrentes',
