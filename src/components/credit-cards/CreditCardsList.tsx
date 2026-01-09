@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,8 +8,13 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { AddCreditCardForm } from './AddCreditCardForm';
 import { CreditCardInvoices } from './CreditCardInvoices';
 import { EditCreditCardForm } from './EditCreditCardForm';
+import { BackHeader } from '@/components/layout/BackHeader';
 
-export const CreditCardsList: React.FC = () => {
+interface CreditCardsListProps {
+  onBack?: () => void;
+}
+
+export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
   const { creditCards, loading, deleteCreditCard } = useCreditCards();
   const { transactions } = useTransactions();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -104,8 +108,9 @@ export const CreditCardsList: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {onBack && <BackHeader title="Cartões de Crédito" onBack={onBack} />}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Cartões de Crédito</h2>
+        {!onBack && <h2 className="text-lg font-semibold">Cartões de Crédito</h2>}
         <Button 
           onClick={() => setShowAddForm(true)}
           className="flex items-center space-x-2"

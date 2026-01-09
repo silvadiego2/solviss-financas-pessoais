@@ -1,12 +1,16 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { useTransactions } from '@/hooks/useTransactions';
+import { BackHeader } from '@/components/layout/BackHeader';
 
 const COLORS = ['#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
 
-export const SimpleReports: React.FC = () => {
+interface SimpleReportsProps {
+  onBack?: () => void;
+}
+
+export const SimpleReports: React.FC<SimpleReportsProps> = ({ onBack }) => {
   const { transactions } = useTransactions();
 
   // Dados para gráfico de barras (últimos 6 meses)
@@ -71,8 +75,9 @@ export const SimpleReports: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {onBack && <BackHeader title="Relatórios" onBack={onBack} />}
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Relatórios</h2>
+        {!onBack && <h2 className="text-lg font-semibold">Relatórios</h2>}
       </div>
 
       {/* Receitas vs Despesas */}
