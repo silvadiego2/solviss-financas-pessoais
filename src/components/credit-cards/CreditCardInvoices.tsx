@@ -39,12 +39,34 @@ export const CreditCardInvoices: React.FC<CreditCardInvoicesProps> = ({ card, on
   // Filtrar transações do cartão
   const cardTransactions = transactions.filter(t => t.account_id === card.id);
 
-  // Agrupar transações por mês/ano
-  const groupTransactionsByMonth = (transactions: Transaction[]) => {
+  // Determinar a qual fatura uma transação pertence baseado na data de fechamento
+  const getInvoicePeriod = (transactionDate: Date) => {
+    const closingDay = card.closing_day || 1;
+    const transactionDay = transactionDate.getDate();
+    
+    // Se a transação foi feita após o dia de fechamento, pertence à fatura do próximo mês
+    if (transactionDay > closingDay) {
+      const nextMonth = new Date(transactionDate.getFullYear(), transactionDate.getMonth() + 1, 1);
+      return {
+        year: nextMonth.getFullYear(),
+        month: nextMonth.getMonth()
+      };
+    }
+    
+    // Se foi feita até o dia de fechamento, pertence à fatura do mês atual
+    return {
+      year: transactionDate.getFullYear(),
+      month: transactionDate.getMonth()
+    };
+  };
+
+  // Agrupar transações por período de fatura (não pelo mês da transação)
+  const groupTransactionsByInvoicePeriod = (transactions: Transaction[]) => {
     const grouped: { [key: string]: Transaction[] } = {};
     transactions.forEach(transaction => {
-      const date = new Date(transaction.date);
-      const key = `${date.getFullYear()}-${date.getMonth()}`;
+      const transactionDate = new Date(transaction.date);
+      const { year, month } = getInvoicePeriod(transactionDate);
+      const key = `${year}-${month}`;
       if (!grouped[key]) {
         grouped[key] = [];
       }
@@ -53,7 +75,27 @@ export const CreditCardInvoices: React.FC<CreditCardInvoicesProps> = ({ card, on
     return grouped;
   };
 
-  const groupedTransactions = groupTransactionsByMonth(cardTransactions);
+  const groupedTransactions = groupTransactionsByInvoicePeriod(cardTransactions);
+
+  // Verificar se uma fatura está fechada
+  const isInvoiceClosed = (year: number, month: number) => {
+    const closingDay = card.closing_day || 1;
+    const currentDate = new Date();
+    
+    // A data de fechamento desta fatura
+    const closingDate = new Date(year, month, closingDay, 23, 59, 59);
+    
+    // A fatura está fechada se já passou a data de fechamento
+    return currentDate > closingDate;
+  };
+
+  // Obter data de vencimento (mês seguinte ao fechamento)
+  const getDueDate = (year: number, month: number) => {
+    const dueDay = card.due_day || 10;
+    // O vencimento é no mês seguinte ao mês da fatura
+    const dueDate = new Date(year, month + 1, dueDay);
+    return dueDate;
+  };
 
   // Obter faturas abertas e fechadas
   const getInvoicesByStatus = () => {
@@ -65,9 +107,12 @@ export const CreditCardInvoices: React.FC<CreditCardInvoicesProps> = ({ card, on
       total: number;
       isClosed: boolean;
       monthName: string;
+      closingDate: Date;
+      dueDate: Date;
     }[] = [];
     const currentDate = new Date();
     
+    // Verificar últimos 12 meses e próximos 3 meses
     for (let i = -12; i <= 3; i++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
       const year = date.getFullYear();
@@ -77,8 +122,10 @@ export const CreditCardInvoices: React.FC<CreditCardInvoicesProps> = ({ card, on
       const total = monthTransactions.reduce((sum, t) => sum + t.amount, 0);
       
       if (total > 0) {
-        const closingDate = new Date(year, month, card.closing_day);
-        const isClosed = currentDate > closingDate;
+        const isClosed = isInvoiceClosed(year, month);
+        const closingDay = card.closing_day || 1;
+        const closingDate = new Date(year, month, closingDay);
+        const dueDate = getDueDate(year, month);
         
         invoices.push({
           year,
@@ -87,12 +134,18 @@ export const CreditCardInvoices: React.FC<CreditCardInvoicesProps> = ({ card, on
           transactions: monthTransactions,
           total,
           isClosed,
-          monthName: getMonthName(month)
+          monthName: getMonthName(month),
+          closingDate,
+          dueDate
         });
       }
     }
     
-    return invoices;
+    // Ordenar por data (mais recentes primeiro)
+    return invoices.sort((a, b) => {
+      if (a.year !== b.year) return b.year - a.year;
+      return b.month - a.month;
+    });
   };
 
   const allInvoices = getInvoicesByStatus();
@@ -216,8 +269,14 @@ export const CreditCardInvoices: React.FC<CreditCardInvoicesProps> = ({ card, on
             
             {!isClosed && (
               <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-1">
-                <div>Fechamento: {card.closing_day}/{invoice.month + 1}/{invoice.year}</div>
-                <div>Vencimento: {card.due_day}/{invoice.month + 1}/{invoice.year}</div>
+                <div>Fechamento: {invoice.closingDate.toLocaleDateString('pt-BR')}</div>
+                <div>Vencimento: {invoice.dueDate.toLocaleDateString('pt-BR')}</div>
+              </div>
+            )}
+            {isClosed && (
+              <div className="mt-3 pt-3 border-t text-xs text-muted-foreground space-y-1">
+                <div>Fechada em: {invoice.closingDate.toLocaleDateString('pt-BR')}</div>
+                <div>Vencimento: {invoice.dueDate.toLocaleDateString('pt-BR')}</div>
               </div>
             )}
           </CardContent>
