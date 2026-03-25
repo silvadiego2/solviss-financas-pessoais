@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BottomNavigation } from './layout/BottomNavigation';
+import { DesktopSidebar } from './layout/DesktopSidebar';
 import { TopHeader } from './layout/TopHeader';
 import { DashboardOverview } from './dashboard/DashboardOverview';
 import { AccountsList } from './accounts/AccountsList';
@@ -30,20 +31,19 @@ import { DemoDataManager } from './demo/DemoDataManager';
 import { DataResetManager } from './advanced/DataResetManager';
 import { RecurringTransactionsManager } from './transactions/RecurringTransactionsManager';
 import { SettingsScreen } from './settings/SettingsScreen';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [previousTab, setPreviousTab] = useState('more');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, loading } = useAuth();
   const { toggleTheme } = useTheme();
-
-  // Debug logging
-  console.log('FinanceApp - User:', user);
-  console.log('FinanceApp - Loading:', loading);
+  const isMobile = useIsMobile();
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
           <p className="text-muted-foreground">Carregando...</p>
@@ -53,13 +53,10 @@ export const FinanceApp: React.FC = () => {
   }
 
   if (!user) {
-    console.log('No user found, showing AuthScreen');
     return <AuthScreen />;
   }
 
   const handleTabChange = (tab: string) => {
-    console.log('Changing tab to:', tab);
-    // Store previous tab for navigation back functionality
     if (activeTab === 'more' && tab !== 'more') {
       setPreviousTab('more');
     }
@@ -98,7 +95,7 @@ export const FinanceApp: React.FC = () => {
         return <BankConnectionManager onBack={handleBackToMore} />;
       case 'profile':
         return <UserProfile onBack={handleBackToMore} />;
-      case 'settings': // ✅ Novo caso adicionado
+      case 'settings':
         return <SettingsScreen onBack={handleBackToMore} />;
       case 'auto-categorization':
         return <AutoCategorizationManager onBack={handleBackToMore} />;
@@ -128,12 +125,29 @@ export const FinanceApp: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
-      <TopHeader />
-      <main className="container mx-auto px-4 py-4 max-w-md">
-        {renderContent()}
-      </main>
-      <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
+    <div className="min-h-screen bg-background flex">
+      {/* Desktop Sidebar */}
+      <DesktopSidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+      />
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-h-screen">
+        {/* Mobile header only */}
+        {isMobile && <TopHeader />}
+
+        <main className="flex-1 container mx-auto px-4 py-4 max-w-2xl pb-20 md:pb-4">
+          {renderContent()}
+        </main>
+
+        {/* Mobile bottom nav */}
+        {isMobile && (
+          <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
+        )}
+      </div>
     </div>
   );
 };
