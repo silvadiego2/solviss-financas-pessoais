@@ -1,5 +1,6 @@
 import React from 'react';
-import { Home, Wallet, PlusCircle, CreditCard, Settings } from 'lucide-react';
+import { Home, Wallet, PlusCircle, CreditCard, Settings, Receipt } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface BottomNavigationProps {
   activeTab: string;
@@ -9,32 +10,48 @@ interface BottomNavigationProps {
 export const BottomNavigation: React.FC<BottomNavigationProps> = ({ activeTab, onTabChange }) => {
   const navItems = [
     { id: 'dashboard', icon: Home, label: 'Início' },
-    { id: 'accounts', icon: Wallet, label: 'Contas' },
-    { id: 'add', icon: PlusCircle, label: 'Adicionar' },
+    { id: 'transactions', icon: Receipt, label: 'Transações' },
+    { id: 'add', icon: PlusCircle, label: 'Adicionar', isAction: true },
     { id: 'cards', icon: CreditCard, label: 'Cartões' },
     { id: 'more', icon: Settings, label: 'Mais' },
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 px-2 py-2 z-50" data-onboarding="bottom-nav">
+    <div className="fixed bottom-0 left-0 right-0 bg-card border-t border-border px-2 py-1.5 z-50 md:hidden" data-onboarding="bottom-nav">
       <nav className="flex justify-around max-w-md mx-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
-          
+
+          if (item.isAction) {
+            return (
+              <button
+                key={item.id}
+                onClick={() => onTabChange(item.id)}
+                className="flex flex-col items-center py-1 px-2"
+                data-onboarding="add-transaction"
+              >
+                <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center -mt-4 shadow-lg">
+                  <Icon size={20} className="text-primary-foreground" />
+                </div>
+                <span className="text-[10px] mt-0.5 font-medium text-muted-foreground">{item.label}</span>
+              </button>
+            );
+          }
+
           return (
             <button
               key={item.id}
               onClick={() => onTabChange(item.id)}
-              className={`flex flex-col items-center py-1 px-2 rounded-lg transition-colors ${
+              className={cn(
+                'flex flex-col items-center py-1 px-2 rounded-lg transition-colors',
                 isActive
-                  ? 'text-green-600 bg-green-50 dark:bg-green-900/20'
-                  : 'text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-400'
-              }`}
-              {...(item.id === 'add' && { 'data-onboarding': 'add-transaction' })}
+                  ? 'text-primary'
+                  : 'text-muted-foreground'
+              )}
             >
               <Icon size={18} />
-              <span className="text-xs mt-1 font-medium">{item.label}</span>
+              <span className="text-[10px] mt-0.5 font-medium">{item.label}</span>
             </button>
           );
         })}
