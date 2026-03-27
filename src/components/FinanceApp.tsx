@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import { BottomNavigation } from './layout/BottomNavigation';
-import { DesktopSidebar } from './layout/DesktopSidebar';
-import { TopHeader } from './layout/TopHeader';
+import { AppSidebar } from './layout/AppSidebar';
 import { DashboardOverview } from './dashboard/DashboardOverview';
 import { AccountsList } from './accounts/AccountsList';
 import { AddTransactionForm } from './transactions/AddTransactionForm';
@@ -31,15 +29,18 @@ import { DemoDataManager } from './demo/DemoDataManager';
 import { DataResetManager } from './advanced/DataResetManager';
 import { RecurringTransactionsManager } from './transactions/RecurringTransactionsManager';
 import { SettingsScreen } from './settings/SettingsScreen';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { Planejamento } from '@/pages/Planejamento';
+import { FluxoDeCaixa } from '@/pages/FluxoDeCaixa';
+import { Inteligencia } from '@/pages/Inteligencia';
+import { Relatorios } from '@/pages/Relatorios';
+import { Planos } from '@/pages/Planos';
+import { Integracoes } from '@/pages/Integracoes';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [previousTab, setPreviousTab] = useState('more');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, loading } = useAuth();
   const { toggleTheme } = useTheme();
-  const isMobile = useIsMobile();
 
   if (loading) {
     return (
@@ -117,6 +118,16 @@ export const FinanceApp: React.FC = () => {
         return <RecurringTransactionsManager onBack={handleBackToMore} />;
       case 'security':
         return <SecurityDashboard onBack={handleBackToMore} />;
+      case 'cash-flow':
+        return <FluxoDeCaixa />;
+      case 'intelligence':
+        return <Inteligencia />;
+      case 'relatorios':
+        return <Relatorios />;
+      case 'plans':
+        return <Planos />;
+      case 'integrations':
+        return <Integracoes />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
       default:
@@ -125,29 +136,13 @@ export const FinanceApp: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex">
-      {/* Desktop Sidebar */}
-      <DesktopSidebar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
-      />
-
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col min-h-screen">
-        {/* Mobile header only */}
-        {isMobile && <TopHeader />}
-
-        <main className="flex-1 container mx-auto px-4 py-4 max-w-2xl pb-20 md:pb-4">
+    <div className="min-h-screen bg-background flex w-full">
+      <AppSidebar activeTab={activeTab} onTabChange={handleTabChange} />
+      <main className="flex-1 min-h-screen overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 pt-16 lg:pt-8">
           {renderContent()}
-        </main>
-
-        {/* Mobile bottom nav */}
-        {isMobile && (
-          <BottomNavigation activeTab={activeTab} onTabChange={handleTabChange} />
-        )}
-      </div>
+        </div>
+      </main>
     </div>
   );
 };

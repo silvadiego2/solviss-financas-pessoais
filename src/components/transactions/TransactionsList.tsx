@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Receipt, Repeat, Search, Filter, X } from 'lucide-react';
+import { Edit, Trash2, Receipt, Repeat, Search, Filter, X, ArrowUpRight, ArrowDownRight, Plus } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCategories } from '@/hooks/useCategories';
@@ -12,133 +12,31 @@ import { EditTransactionForm } from './EditTransactionForm';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
-interface TransactionFilters {
-  search: string;
-  type: string;
-  categoryId: string;
-  accountId: string;
-  period: string;
-}
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
 export const TransactionsList: React.FC = () => {
   const { transactions, deleteTransaction, loading } = useTransactions();
   const { accounts } = useAccounts();
   const { categories } = useCategories();
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState<TransactionFilters>(() => {
-    const saved = localStorage.getItem('transactionFilters');
-    return saved ? JSON.parse(saved) : {
-      search: '',
-      type: 'all',
-      categoryId: 'all',
-      accountId: 'all',
-      period: 'all',
-    };
-  });
-
-  useEffect(() => {
-    localStorage.setItem('transactionFilters', JSON.stringify(filters));
-  }, [filters]);
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'income':
-        return 'text-green-600';
-      case 'expense':
-        return 'text-red-600';
-      default:
-        return 'text-blue-600';
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'income':
-        return 'Receita';
-      case 'expense':
-        return 'Despesa';
-      default:
-        return 'Transferência';
-    }
-  };
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState('all');
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter(transaction => {
-      // Search filter
-      if (filters.search && !transaction.description.toLowerCase().includes(filters.search.toLowerCase())) {
-        return false;
-      }
-
-      // Type filter
-      if (filters.type !== 'all' && transaction.type !== filters.type) {
-        return false;
-      }
-
-      // Category filter
-      if (filters.categoryId !== 'all' && transaction.category_id !== filters.categoryId) {
-        return false;
-      }
-
-      // Account filter
-      if (filters.accountId !== 'all' && transaction.account_id !== filters.accountId) {
-        return false;
-      }
-
-      // Period filter
-      if (filters.period !== 'all') {
-        const transactionDate = new Date(transaction.date);
-        const now = new Date();
-        
-        switch (filters.period) {
-          case 'today':
-            return transactionDate.toDateString() === now.toDateString();
-          case 'week':
-            const weekAgo = new Date(now);
-            weekAgo.setDate(now.getDate() - 7);
-            return transactionDate >= weekAgo;
-          case 'month':
-            return transactionDate.getMonth() === now.getMonth() && 
-                   transactionDate.getFullYear() === now.getFullYear();
-          case 'year':
-            return transactionDate.getFullYear() === now.getFullYear();
-        }
-      }
-
-      return true;
+    return transactions.filter(t => {
+      const matchSearch = !search || t.description.toLowerCase().includes(search.toLowerCase());
+      const matchType = filterType === 'all' || t.type === filterType;
+      return matchSearch && matchType;
     });
-  }, [transactions, filters]);
+  }, [transactions, search, filterType]);
 
-  const clearFilters = () => {
-    setFilters({
-      search: '',
-      type: 'all',
-      categoryId: 'all',
-      accountId: 'all',
-      period: 'all',
-    });
-  };
-
-  const hasActiveFilters = filters.search || filters.type !== 'all' || 
-    filters.categoryId !== 'all' || filters.accountId !== 'all' || filters.period !== 'all';
+  const totalIncome = filteredTransactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+  const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
 
   if (loading) {
     return (
@@ -149,220 +47,127 @@ export const TransactionsList: React.FC = () => {
   }
 
   if (editingTransaction) {
-    return (
-      <EditTransactionForm
-        transaction={editingTransaction}
-        onClose={() => setEditingTransaction(null)}
-      />
-    );
+    return <EditTransactionForm transaction={editingTransaction} onClose={() => setEditingTransaction(null)} />;
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Todas as Transações</h2>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowFilters(!showFilters)}
-          className="flex items-center gap-2"
-        >
-          <Filter size={16} />
-          Filtros
-        </Button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <p className="text-sm font-medium text-muted-foreground">Transações</p>
+        <h1 className="text-2xl font-bold mt-1">Suas Transações</h1>
       </div>
 
-      {/* Filters Section */}
-      {showFilters && (
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            {/* Search Bar */}
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por descrição..."
-                value={filters.search}
-                onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                className="pl-10"
-              />
-            </div>
-
-            {/* Filter Dropdowns */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Select value={filters.period} onValueChange={(value) => setFilters(prev => ({ ...prev, period: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Período" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os períodos</SelectItem>
-                  <SelectItem value="today">Hoje</SelectItem>
-                  <SelectItem value="week">Última semana</SelectItem>
-                  <SelectItem value="month">Este mês</SelectItem>
-                  <SelectItem value="year">Este ano</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filters.type} onValueChange={(value) => setFilters(prev => ({ ...prev, type: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os tipos</SelectItem>
-                  <SelectItem value="income">Receitas</SelectItem>
-                  <SelectItem value="expense">Despesas</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={filters.categoryId} onValueChange={(value) => setFilters(prev => ({ ...prev, categoryId: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas categorias</SelectItem>
-                  {categories.map(cat => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.icon} {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={filters.accountId} onValueChange={(value) => setFilters(prev => ({ ...prev, accountId: value }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Conta" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas as contas</SelectItem>
-                  {accounts.map(acc => (
-                    <SelectItem key={acc.id} value={acc.id}>
-                      {acc.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Clear Filters Button */}
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearFilters}
-                className="w-full flex items-center gap-2"
-              >
-                <X size={16} />
-                Limpar Filtros
-              </Button>
-            )}
-
-            {/* Results Counter */}
-            <p className="text-sm text-muted-foreground text-center">
-              {filteredTransactions.length} transação(ões) encontrada(s)
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {filteredTransactions.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            <Receipt size={48} className="text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Nenhuma transação encontrada
-            </h3>
-            <p className="text-gray-500 text-center">
-              {hasActiveFilters ? 'Tente ajustar os filtros' : 'Adicione sua primeira transação para começar'}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {filteredTransactions.map((transaction) => (
-            <Card key={transaction.id}>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-2">
-                      {transaction.category?.icon && (
-                        <span className="text-lg">{transaction.category.icon}</span>
-                      )}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium">{transaction.description}</h4>
-                          {transaction.is_recurring && (
-                            <Badge variant="outline" className="text-xs gap-1">
-                              <Repeat className="h-3 w-3" />
-                              Recorrente
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                          <span>{transaction.category?.name || 'Sem categoria'}</span>
-                          <span>•</span>
-                          <span>{transaction.account?.name}</span>
-                          <span>•</span>
-                          <span>
-                            {format(new Date(transaction.date), 'dd/MM/yyyy', { locale: ptBR })}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-3">
-                    <div className="text-right">
-                      <p className={`font-semibold ${getTypeColor(transaction.type)}`}>
-                        {transaction.type === 'expense' && '-'}
-                        {formatCurrency(transaction.amount)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{getTypeLabel(transaction.type)}</p>
-                    </div>
-
-                    <div className="flex space-x-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditingTransaction(transaction)}
-                      >
-                        <Edit size={16} />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="sm" className="text-red-600">
-                            <Trash2 size={16} />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Tem certeza que deseja excluir esta transação? Esta ação não pode ser
-                              desfeita.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => deleteTransaction(transaction.id)}
-                              className="bg-red-600 hover:bg-red-700"
-                            >
-                              Excluir
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                </div>
-
-                {transaction.notes && (
-                  <p className="text-sm text-muted-foreground mt-2 pl-8">{transaction.notes}</p>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+      {/* Summary Cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-card rounded-xl border border-border p-4">
+          <p className="text-xs text-muted-foreground">Receitas</p>
+          <p className="text-lg font-bold text-chart-income mt-1">{formatCurrency(totalIncome)}</p>
         </div>
-      )}
+        <div className="bg-card rounded-xl border border-border p-4">
+          <p className="text-xs text-muted-foreground">Despesas</p>
+          <p className="text-lg font-bold text-chart-expense mt-1">{formatCurrency(totalExpense)}</p>
+        </div>
+        <div className="bg-card rounded-xl border border-border p-4">
+          <p className="text-xs text-muted-foreground">Balanço</p>
+          <p className="text-lg font-bold mt-1">{formatCurrency(totalIncome - totalExpense)}</p>
+        </div>
+      </div>
+
+      {/* Search + Filter */}
+      <div className="flex gap-3">
+        <div className="relative flex-1">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Buscar transações..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={filterType} onValueChange={setFilterType}>
+          <SelectTrigger className="w-40">
+            <Filter className="w-4 h-4 mr-2" />
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="income">Receitas</SelectItem>
+            <SelectItem value="expense">Despesas</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Transaction List */}
+      <div className="bg-card rounded-2xl border border-border divide-y divide-border">
+        {filteredTransactions.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground text-sm">
+            Nenhuma transação encontrada.
+          </div>
+        ) : (
+          filteredTransactions.map((t) => (
+            <div key={t.id} className="flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors group">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                t.type === 'income'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-chart-income'
+                  : 'bg-red-50 dark:bg-red-950/40 text-chart-expense'
+              }`}>
+                {t.type === 'income' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium truncate">{t.description}</p>
+                  {t.is_recurring && (
+                    <Badge variant="outline" className="text-[10px] gap-0.5 py-0">
+                      <Repeat className="h-2.5 w-2.5" /> Rec.
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {(t as any).category?.name && `${(t as any).category.name} · `}
+                  {format(new Date(t.date), 'dd/MM/yyyy', { locale: ptBR })}
+                  {(t as any).account?.name && ` · ${(t as any).account.name}`}
+                </p>
+              </div>
+              <p className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
+                t.type === 'income' ? 'text-chart-income' : 'text-foreground'
+              }`}>
+                {t.type === 'income' ? '+' : '-'}{formatCurrency(Number(t.amount))}
+              </p>
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button
+                  onClick={() => setEditingTransaction(t)}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-accent transition-all"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                </button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <button className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-destructive/10 text-destructive transition-all">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+                      <AlertDialogDescription>Tem certeza que deseja excluir esta transação?</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => deleteTransaction(t.id)} className="bg-destructive hover:bg-destructive/90">Excluir</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Results count */}
+      <p className="text-xs text-muted-foreground text-center">
+        {filteredTransactions.length} transação(ões) encontrada(s)
+      </p>
     </div>
   );
 };
