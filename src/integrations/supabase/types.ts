@@ -148,6 +148,7 @@ export type Database = {
           created_at: string
           id: string
           last_sync_at: string | null
+          pluggy_transaction_id: string | null
           provider: string
           updated_at: string
           user_id: string
@@ -159,6 +160,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_sync_at?: string | null
+          pluggy_transaction_id?: string | null
           provider: string
           updated_at?: string
           user_id: string
@@ -170,6 +172,7 @@ export type Database = {
           created_at?: string
           id?: string
           last_sync_at?: string | null
+          pluggy_transaction_id?: string | null
           provider?: string
           updated_at?: string
           user_id?: string
@@ -481,6 +484,7 @@ export type Database = {
           last_processed_at: string | null
           minimum_payment: number | null
           notes: string | null
+          pluggy_transaction_id: string | null
           receipt_image_url: string | null
           recurrence_end_date: string | null
           recurrence_frequency:
@@ -508,6 +512,7 @@ export type Database = {
           last_processed_at?: string | null
           minimum_payment?: number | null
           notes?: string | null
+          pluggy_transaction_id?: string | null
           receipt_image_url?: string | null
           recurrence_end_date?: string | null
           recurrence_frequency?:
@@ -535,6 +540,7 @@ export type Database = {
           last_processed_at?: string | null
           minimum_payment?: number | null
           notes?: string | null
+          pluggy_transaction_id?: string | null
           receipt_image_url?: string | null
           recurrence_end_date?: string | null
           recurrence_frequency?:
