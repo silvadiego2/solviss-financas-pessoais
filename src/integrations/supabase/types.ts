@@ -474,9 +474,12 @@ export type Database = {
           date: string
           description: string
           id: string
+          interest_rate: number | null
           is_active: boolean | null
+          is_debt: boolean | null
           is_recurring: boolean | null
           last_processed_at: string | null
+          minimum_payment: number | null
           notes: string | null
           receipt_image_url: string | null
           recurrence_end_date: string | null
@@ -498,9 +501,12 @@ export type Database = {
           date: string
           description: string
           id?: string
+          interest_rate?: number | null
           is_active?: boolean | null
+          is_debt?: boolean | null
           is_recurring?: boolean | null
           last_processed_at?: string | null
+          minimum_payment?: number | null
           notes?: string | null
           receipt_image_url?: string | null
           recurrence_end_date?: string | null
@@ -522,9 +528,12 @@ export type Database = {
           date?: string
           description?: string
           id?: string
+          interest_rate?: number | null
           is_active?: boolean | null
+          is_debt?: boolean | null
           is_recurring?: boolean | null
           last_processed_at?: string | null
+          minimum_payment?: number | null
           notes?: string | null
           receipt_image_url?: string | null
           recurrence_end_date?: string | null
