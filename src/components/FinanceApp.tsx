@@ -35,6 +35,7 @@ import { Inteligencia } from '@/pages/Inteligencia';
 import { Relatorios } from '@/pages/Relatorios';
 import { Planos } from '@/pages/Planos';
 import { Integracoes } from '@/pages/Integracoes';
+import { IntegracoesConfig } from '@/pages/IntegracoesConfig';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -127,7 +128,9 @@ export const FinanceApp: React.FC = () => {
       case 'plans':
         return <Planos />;
       case 'integrations':
-        return <Integracoes />;
+        return <Integracoes onNavigate={handleTabChange} />;
+      case 'integrations-config':
+        return <IntegracoesConfig onBack={() => handleTabChange('integrations')} />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
       default:

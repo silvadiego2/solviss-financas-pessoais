@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const PLUGGY_CLIENT_ID = Deno.env.get('PLUGGY_CLIENT_ID')!;
-const PLUGGY_CLIENT_SECRET = Deno.env.get('PLUGGY_CLIENT_SECRET')!;
+const FALLBACK_CLIENT_ID = Deno.env.get('PLUGGY_CLIENT_ID') ?? '';
+const FALLBACK_CLIENT_SECRET = Deno.env.get('PLUGGY_CLIENT_SECRET') ?? '';
 const PLUGGY_API = 'https://api.pluggy.ai';
 
 const corsHeaders = {
@@ -10,15 +10,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Busca credenciais do usuário (ou usa fallback global)
+async function getUserPluggyCredentials(userId: string): Promise<{ clientId: string; clientSecret: string }> {
+  const adminClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  );
+  const { data } = await adminClient
+    .from('user_integrations')
+    .select('client_id, client_secret, status')
+    .eq('user_id', userId)
+    .eq('provider', 'pluggy')
+    .maybeSingle();
+
+  if (data?.client_id && data?.client_secret && data.status === 'valid') {
+    return { clientId: data.client_id, clientSecret: data.client_secret };
+  }
+  if (FALLBACK_CLIENT_ID && FALLBACK_CLIENT_SECRET) {
+    return { clientId: FALLBACK_CLIENT_ID, clientSecret: FALLBACK_CLIENT_SECRET };
+  }
+  throw new Error('Credenciais Pluggy não configuradas. Configure em Integrações > Configurações.');
+}
+
 // Gera API Key temporária do Pluggy
-async function getPluggyApiKey(): Promise<string> {
+async function getPluggyApiKey(userId: string): Promise<string> {
+  const { clientId, clientSecret } = await getUserPluggyCredentials(userId);
   const res = await fetch(`${PLUGGY_API}/auth`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      clientId: PLUGGY_CLIENT_ID,
-      clientSecret: PLUGGY_CLIENT_SECRET,
-    }),
+    body: JSON.stringify({ clientId, clientSecret }),
   });
   const data = await res.json();
   if (!data.apiKey) throw new Error('Falha ao autenticar com Pluggy');
@@ -60,7 +80,7 @@ serve(async (req) => {
     if (action === 'get_connect_token') {
       console.log('Gerando connect token para usuário:', user.id);
 
-      const apiKey = await getPluggyApiKey();
+      const apiKey = await getPluggyApiKey(user.id);
       const res = await fetch(`${PLUGGY_API}/connect_token`, {
         method: 'POST',
         headers: {
@@ -85,7 +105,7 @@ serve(async (req) => {
     if (action === 'sync' && itemId) {
       console.log('Sincronizando item Pluggy:', itemId);
 
-      const apiKey = await getPluggyApiKey();
+      const apiKey = await getPluggyApiKey(user.id);
 
       // Buscar contas do item
       const accountsRes = await fetch(`${PLUGGY_API}/accounts?itemId=${itemId}`, {
@@ -175,8 +195,8 @@ serve(async (req) => {
       }
 
       // Se tiver account_external_id (Pluggy), sincronizar via API real
-      if (connection.account_external_id && PLUGGY_CLIENT_ID) {
-        const apiKey = await getPluggyApiKey();
+      if (connection.account_external_id) {
+        const apiKey = await getPluggyApiKey(user.id);
 
         const accountsRes = await fetch(
           `${PLUGGY_API}/accounts?itemId=${connection.account_external_id}`,

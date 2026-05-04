@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plug, Building2, RefreshCw, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import { Plug, Building2, RefreshCw, CheckCircle2, AlertCircle, Trash2, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { toast } from 'sonner';
@@ -13,7 +13,7 @@ interface BankConnection {
   provider: string;
 }
 
-export const Integracoes: React.FC<{ onBack?: () => void }> = () => {
+export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: string) => void }> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [connections, setConnections] = useState<BankConnection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,13 +140,22 @@ export const Integracoes: React.FC<{ onBack?: () => void }> = () => {
           <p className="text-sm font-medium text-muted-foreground">Integrações</p>
           <h1 className="text-2xl font-bold mt-1">Conectar Bancos</h1>
         </div>
-        <button
-          onClick={openPluggyConnect}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          <Plug className="w-4 h-4" />
-          Conectar Banco
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onNavigate?.('integrations-config')}
+            className="flex items-center gap-2 border border-border px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            Configurar credenciais
+          </button>
+          <button
+            onClick={openPluggyConnect}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plug className="w-4 h-4" />
+            Conectar Banco
+          </button>
+        </div>
       </div>
 
       {/* Info Open Finance */}
