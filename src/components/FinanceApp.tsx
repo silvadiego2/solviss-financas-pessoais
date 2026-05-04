@@ -128,7 +128,9 @@ export const FinanceApp: React.FC = () => {
       case 'plans':
         return <Planos />;
       case 'integrations':
-        return <Integracoes />;
+        return <Integracoes onNavigate={handleTabChange} />;
+      case 'integrations-config':
+        return <IntegracoesConfig onBack={() => handleTabChange('integrations')} />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
       default:
