@@ -13,22 +13,29 @@ interface BankConnection {
   provider: string;
 }
 
+declare global {
+  interface Window {
+    PluggyConnect?: any;
+  }
+}
+
 export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: string) => void }> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [connections, setConnections] = useState<BankConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
 
-  // Carregar conexões existentes
   const loadConnections = async () => {
+    if (!user?.id) return;
     setLoading(true);
     const { data, error } = await supabase
       .from('bank_connections')
       .select('*')
-      .eq('user_id', user?.id)
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
+      console.error('loadConnections error:', error);
       toast.error('Erro ao carregar conexões bancárias');
     } else {
       setConnections(data || []);
@@ -37,30 +44,49 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
   };
 
   useEffect(() => {
-    if (user) loadConnections();
-  }, [user]);
+    if (user?.id) loadConnections();
+  }, [user?.id]);
 
-  // Abrir widget Pluggy Connect
+  useEffect(() => {
+    if (document.getElementById('pluggy-connect-script')) return;
+
+    const script = document.createElement('script');
+    script.id = 'pluggy-connect-script';
+    script.src = 'https://cdn.pluggy.ai/pluggy-connect/v2/pluggy-connect.js';
+    script.async = true;
+    script.onload = () => console.log('Pluggy Connect carregado');
+    script.onerror = () => console.error('Falha ao carregar script Pluggy');
+    document.body.appendChild(script);
+  }, []);
+
   const openPluggyConnect = async () => {
     try {
-      // Gerar connect token via Edge Function
+      if (!user?.id) {
+        toast.error('Usuário não autenticado');
+        return;
+      }
+
+      if (typeof window.PluggyConnect === 'undefined') {
+        toast.error('Widget do Pluggy ainda não carregou');
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('sync-bank-data', {
         body: { action: 'get_connect_token' },
       });
 
-      if (error || !data?.connectToken) {
-        toast.error('Erro ao iniciar conexão com banco');
-        return;
-      }
+      console.log('Resposta get_connect_token:', { data, error });
 
-      const pluggyConnect = new (window as any).PluggyConnect({
+      if (error) throw error;
+      if (!data?.connectToken) throw new Error('Token de conexão não retornado');
+
+      const pluggyConnect = new window.PluggyConnect({
         connectToken: data.connectToken,
         onSuccess: async ({ item }: any) => {
-          // Salvar conexão no banco
           const { error: insertError } = await supabase
             .from('bank_connections')
             .insert({
-              user_id: user?.id,
+              user_id: user.id,
               account_external_id: item.id,
               bank_name: item.connector?.name || 'Banco desconhecido',
               connection_status: 'active',
@@ -68,15 +94,14 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
             });
 
           if (insertError) {
+            console.error('insert bank_connections error:', insertError);
             toast.error('Erro ao salvar conexão');
             return;
           }
 
-          toast.success(`${item.connector?.name} conectado com sucesso!`);
-
-          // Sincronizar transações imediatamente
+          toast.success(`${item.connector?.name || 'Banco'} conectado com sucesso!`);
           await syncBank(item.id);
-          loadConnections();
+          await loadConnections();
         },
         onError: (error: any) => {
           console.error('Pluggy error:', error);
@@ -85,12 +110,12 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
       });
 
       pluggyConnect.init();
-    } catch (err) {
-      toast.error('Erro ao iniciar integração');
+    } catch (err: any) {
+      console.error('openPluggyConnect error:', err);
+      toast.error(err?.message || 'Erro ao iniciar integração');
     }
   };
 
-  // Sincronizar transações de uma conexão
   const syncBank = async (itemId: string) => {
     setSyncing(itemId);
     try {
@@ -98,48 +123,55 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
         body: { action: 'sync', itemId },
       });
 
+      console.log('Resposta sync:', { data, error });
+
       if (error) throw error;
 
       toast.success(`${data?.accounts || 0} conta(s) sincronizada(s) com sucesso!`);
-      loadConnections();
-    } catch (err) {
-      toast.error('Erro ao sincronizar transações');
+      await loadConnections();
+    } catch (err: any) {
+      console.error('syncBank error:', err);
+      toast.error(err?.message || 'Erro ao sincronizar transações');
     } finally {
       setSyncing(null);
     }
   };
 
-  // Remover conexão
   const removeConnection = async (id: string, bankName: string) => {
     const { error } = await supabase
       .from('bank_connections')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', user?.id);
 
     if (error) {
+      console.error('removeConnection error:', error);
       toast.error('Erro ao remover conexão');
     } else {
       toast.success(`${bankName} desconectado`);
-      loadConnections();
+      await loadConnections();
     }
   };
 
   const formatDate = (date: string | null) => {
     if (!date) return 'Nunca sincronizado';
     return new Intl.DateTimeFormat('pt-BR', {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     }).format(new Date(date));
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <p className="text-sm font-medium text-muted-foreground">Integrações</p>
           <h1 className="text-2xl font-bold mt-1">Conectar Bancos</h1>
         </div>
+
         <div className="flex items-center gap-2">
           <button
             onClick={() => onNavigate?.('integrations-config')}
@@ -148,6 +180,7 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
             <Settings className="w-4 h-4" />
             Configurar credenciais
           </button>
+
           <button
             onClick={openPluggyConnect}
             className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
@@ -158,17 +191,15 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
         </div>
       </div>
 
-      {/* Info Open Finance */}
       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
         <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
-          🔒 Conexão segura via Open Finance Brasil
+          Conexão segura via Open Finance Brasil
         </p>
         <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
           Suas credenciais bancárias nunca são armazenadas. A conexão é feita com consentimento direto pelo seu banco.
         </p>
       </div>
 
-      {/* Lista de conexões */}
       {loading ? (
         <div className="flex justify-center py-12">
           <div className="w-6 h-6 border-2 border-muted border-t-primary rounded-full animate-spin" />
@@ -197,13 +228,14 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
               <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
                 <Building2 className="w-5 h-5 text-primary" />
               </div>
+
               <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">{conn.bank_name}</p>
                 <p className="text-xs text-muted-foreground">
                   Último sync: {formatDate(conn.last_sync_at)}
                 </p>
               </div>
-              {/* Status */}
+
               {conn.connection_status === 'active' ? (
                 <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400 font-medium">
                   <CheckCircle2 className="w-3.5 h-3.5" /> Ativo
@@ -213,7 +245,7 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
                   <AlertCircle className="w-3.5 h-3.5" /> Erro
                 </span>
               )}
-              {/* Ações */}
+
               <button
                 onClick={() => syncBank(conn.account_external_id)}
                 disabled={syncing === conn.account_external_id}
@@ -222,6 +254,7 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
               >
                 <RefreshCw className={`w-4 h-4 ${syncing === conn.account_external_id ? 'animate-spin' : ''}`} />
               </button>
+
               <button
                 onClick={() => removeConnection(conn.id, conn.bank_name)}
                 className="p-2 rounded-lg hover:bg-destructive/10 transition-colors text-destructive"
