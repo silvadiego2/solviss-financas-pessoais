@@ -195,7 +195,7 @@ serve(async (req) => {
       }
 
       // Se tiver account_external_id (Pluggy), sincronizar via API real
-      if (connection.account_external_id && PLUGGY_CLIENT_ID) {
+      if (connection.account_external_id) {
         const apiKey = await getPluggyApiKey(user.id);
 
         const accountsRes = await fetch(
