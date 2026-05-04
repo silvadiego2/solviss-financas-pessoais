@@ -24,9 +24,11 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
   const [connections, setConnections] = useState<BankConnection[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [pluggyReady, setPluggyReady] = useState(false);
 
   const loadConnections = async () => {
     if (!user?.id) return;
+
     setLoading(true);
     const { data, error } = await supabase
       .from('bank_connections')
@@ -40,23 +42,51 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
     } else {
       setConnections(data || []);
     }
+
     setLoading(false);
   };
 
   useEffect(() => {
-    if (user?.id) loadConnections();
+    if (user?.id) {
+      loadConnections();
+    }
   }, [user?.id]);
 
   useEffect(() => {
-    if (document.getElementById('pluggy-connect-script')) return;
+    if (window.PluggyConnect) {
+      setPluggyReady(true);
+      return;
+    }
+
+    const existingScript = document.getElementById('pluggy-connect-script') as HTMLScriptElement | null;
+
+    if (existingScript) {
+      existingScript.addEventListener('load', () => setPluggyReady(true));
+      return;
+    }
 
     const script = document.createElement('script');
     script.id = 'pluggy-connect-script';
-    script.src = 'https://cdn.pluggy.ai/pluggy-connect/v2/pluggy-connect.js';
+    script.src = 'https://cdn.pluggy.ai/pluggy-connect/v2.8.2/pluggy-connect.js';
     script.async = true;
-    script.onload = () => console.log('Pluggy Connect carregado');
-    script.onerror = () => console.error('Falha ao carregar script Pluggy');
+
+    script.onload = () => {
+      console.log('Pluggy Connect carregado com sucesso');
+      setPluggyReady(true);
+    };
+
+    script.onerror = () => {
+      console.error('Falha ao carregar script do Pluggy');
+      setPluggyReady(false);
+      toast.error('Não foi possível carregar o widget do banco');
+    };
+
     document.body.appendChild(script);
+
+    return () => {
+      script.onload = null;
+      script.onerror = null;
+    };
   }, []);
 
   const openPluggyConnect = async () => {
@@ -66,7 +96,20 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
         return;
       }
 
-      if (typeof window.PluggyConnect === 'undefined') {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error('session error:', sessionError);
+        toast.error('Erro ao verificar autenticação');
+        return;
+      }
+
+      if (!sessionData.session?.access_token) {
+        toast.error('Sua sessão expirou. Faça login novamente.');
+        return;
+      }
+
+      if (!pluggyReady || typeof window.PluggyConnect === 'undefined') {
         toast.error('Widget do Pluggy ainda não carregou');
         return;
       }
@@ -75,26 +118,34 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
         body: { action: 'get_connect_token' },
       });
 
-      console.log('Resposta get_connect_token:', { data, error });
+      console.log('get_connect_token response:', { data, error });
 
-      if (error) throw error;
-      if (!data?.connectToken) throw new Error('Token de conexão não retornado');
+      if (error) {
+        console.error('invoke error:', error);
+        toast.error(error.message || 'Erro ao iniciar conexão com banco');
+        return;
+      }
+
+      if (!data?.connectToken) {
+        console.error('connect token ausente:', data);
+        toast.error('Token de conexão não retornado');
+        return;
+      }
 
       const pluggyConnect = new window.PluggyConnect({
         connectToken: data.connectToken,
+        includeSandbox: false,
         onSuccess: async ({ item }: any) => {
-          const { error: insertError } = await supabase
-            .from('bank_connections')
-            .insert({
-              user_id: user.id,
-              account_external_id: item.id,
-              bank_name: item.connector?.name || 'Banco desconhecido',
-              connection_status: 'active',
-              provider: 'pluggy',
-            });
+          const { error: insertError } = await supabase.from('bank_connections').insert({
+            user_id: user.id,
+            account_external_id: item.id,
+            bank_name: item.connector?.name || 'Banco desconhecido',
+            connection_status: 'active',
+            provider: 'pluggy',
+          });
 
           if (insertError) {
-            console.error('insert bank_connections error:', insertError);
+            console.error('insertError:', insertError);
             toast.error('Erro ao salvar conexão');
             return;
           }
@@ -103,8 +154,8 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
           await syncBank(item.id);
           await loadConnections();
         },
-        onError: (error: any) => {
-          console.error('Pluggy error:', error);
+        onError: (err: any) => {
+          console.error('Pluggy widget error:', err);
           toast.error('Erro ao conectar banco');
         },
       });
@@ -118,12 +169,13 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
 
   const syncBank = async (itemId: string) => {
     setSyncing(itemId);
+
     try {
       const { data, error } = await supabase.functions.invoke('sync-bank-data', {
         body: { action: 'sync', itemId },
       });
 
-      console.log('Resposta sync:', { data, error });
+      console.log('sync response:', { data, error });
 
       if (error) throw error;
 
@@ -155,6 +207,7 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
 
   const formatDate = (date: string | null) => {
     if (!date) return 'Nunca sincronizado';
+
     return new Intl.DateTimeFormat('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -183,10 +236,11 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
 
           <button
             onClick={openPluggyConnect}
-            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+            disabled={!pluggyReady}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plug className="w-4 h-4" />
-            Conectar Banco
+            {pluggyReady ? 'Conectar Banco' : 'Carregando widget...'}
           </button>
         </div>
       </div>
@@ -213,9 +267,10 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
           </p>
           <button
             onClick={openPluggyConnect}
-            className="mt-4 bg-primary text-primary-foreground px-6 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+            disabled={!pluggyReady}
+            className="mt-4 bg-primary text-primary-foreground px-6 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            + Conectar meu primeiro banco
+            {pluggyReady ? '+ Conectar meu primeiro banco' : 'Carregando widget...'}
           </button>
         </div>
       ) : (
