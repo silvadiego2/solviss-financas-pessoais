@@ -7,3 +7,9 @@ verify_jwt = true
 [functions.process-recurring-transactions]
 verify_jwt = true
 
+[functions.test-pluggy-credentials]
+verify_jwt = true
+
+[functions.ai-financial-analysis]
+verify_jwt = true
+
