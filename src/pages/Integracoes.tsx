@@ -140,14 +140,22 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
           <p className="text-sm font-medium text-muted-foreground">Integrações</p>
           <h1 className="text-2xl font-bold mt-1">Conectar Bancos</h1>
         </div>
-        <button
-          onClick={openPluggyConnect}
-          className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
-        >
-          <Plug className="w-4 h-4" />
-          Conectar Banco
-        </button>
-      </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onNavigate?.('integrations-config')}
+            className="flex items-center gap-2 border border-border px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            Configurar credenciais
+          </button>
+          <button
+            onClick={openPluggyConnect}
+            className="flex items-center gap-2 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-medium hover:bg-primary/90 transition-colors"
+          >
+            <Plug className="w-4 h-4" />
+            Conectar Banco
+          </button>
+        </div>
 
       {/* Info Open Finance */}
       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
