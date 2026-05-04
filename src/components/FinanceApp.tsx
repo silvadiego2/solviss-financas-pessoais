@@ -35,6 +35,7 @@ import { Inteligencia } from '@/pages/Inteligencia';
 import { Relatorios } from '@/pages/Relatorios';
 import { Planos } from '@/pages/Planos';
 import { Integracoes } from '@/pages/Integracoes';
+import { IntegracoesConfig } from '@/pages/IntegracoesConfig';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
