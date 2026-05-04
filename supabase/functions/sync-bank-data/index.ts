@@ -80,7 +80,7 @@ serve(async (req) => {
     if (action === 'get_connect_token') {
       console.log('Gerando connect token para usuário:', user.id);
 
-      const apiKey = await getPluggyApiKey();
+      const apiKey = await getPluggyApiKey(user.id);
       const res = await fetch(`${PLUGGY_API}/connect_token`, {
         method: 'POST',
         headers: {
@@ -105,7 +105,7 @@ serve(async (req) => {
     if (action === 'sync' && itemId) {
       console.log('Sincronizando item Pluggy:', itemId);
 
-      const apiKey = await getPluggyApiKey();
+      const apiKey = await getPluggyApiKey(user.id);
 
       // Buscar contas do item
       const accountsRes = await fetch(`${PLUGGY_API}/accounts?itemId=${itemId}`, {
@@ -196,7 +196,7 @@ serve(async (req) => {
 
       // Se tiver account_external_id (Pluggy), sincronizar via API real
       if (connection.account_external_id && PLUGGY_CLIENT_ID) {
-        const apiKey = await getPluggyApiKey();
+        const apiKey = await getPluggyApiKey(user.id);
 
         const accountsRes = await fetch(
           `${PLUGGY_API}/accounts?itemId=${connection.account_external_id}`,
