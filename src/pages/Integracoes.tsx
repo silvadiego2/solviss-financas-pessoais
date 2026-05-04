@@ -156,6 +156,7 @@ export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: str
             Conectar Banco
           </button>
         </div>
+      </div>
 
       {/* Info Open Finance */}
       <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
