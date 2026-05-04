@@ -13,7 +13,7 @@ interface BankConnection {
   provider: string;
 }
 
-export const Integracoes: React.FC<{ onBack?: () => void }> = () => {
+export const Integracoes: React.FC<{ onBack?: () => void; onNavigate?: (tab: string) => void }> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [connections, setConnections] = useState<BankConnection[]>([]);
   const [loading, setLoading] = useState(true);
