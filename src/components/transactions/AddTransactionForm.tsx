@@ -1,5 +1,5 @@
-
 import React, { useState } from 'react';
+import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,13 +32,21 @@ interface AddTransactionFormProps {
   onClose?: () => void;
 }
 
+const formatDateBR = (dateStr: string) => {
+  if (!dateStr) return '';
+  const raw = String(dateStr).slice(0, 10);
+  const [year, month, day] = raw.split('-');
+  if (!year || !month || !day) return raw;
+  return `${day}/${month}/${year}`;
+};
+
 export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose }) => {
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -46,7 +54,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
   
-  // Scanner states
   const [showScannerDialog, setShowScannerDialog] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -61,7 +68,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
 
-  // Combinar contas e cartões de crédito
   const allAccounts = [
     ...accounts.map(account => ({
       id: account.id,
@@ -91,7 +97,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     e.preventDefault();
     setValidationErrors({});
     
-    // Validar com Zod
     const validation = validateTransaction({
       type,
       amount,
@@ -120,7 +125,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     setProgress(0);
 
     try {
-      // Simulate progress for better UX
       setProgress(25);
       
       await createTransaction({
@@ -146,26 +150,24 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
           action: {
             label: 'Ver Relatório',
             onClick: () => {
-              // Navigate to reports
               console.log('Navigate to reports');
             }
           }
         }
       );
       
-      // Limpar formulário
       setAmount('');
       setDescription('');
       setAccountId('');
       setCategoryId('');
-      setDate(new Date().toISOString().split('T')[0]);
+      setDate(format(new Date(), 'yyyy-MM-dd'));
       setReceiptFile(null);
       setProgress(0);
       setIsRecurring(false);
       setRecurrenceFrequency('monthly');
       setRecurrenceEndDate('');
       setValidationErrors({});
-      // Call onClose if provided
+      
       if (onClose) {
         onClose();
       }
@@ -187,7 +189,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     }).format(value);
   };
 
-  // Scanner functions
   const handleCapturePhoto = async () => {
     try {
       const photo = await capturePhoto();
@@ -257,7 +258,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const extractReceiptData = (text: string): ScannedData => {
     const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
     
-    // Try to find amount (looking for patterns like R$ 123.45 or 123,45)
     const amountRegex = /(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/g;
     const amounts = text.match(amountRegex);
     
@@ -273,7 +273,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       }
     }
 
-    // Try to find date
     const dateRegex = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/;
     const dateMatch = text.match(dateRegex);
     let date: string | undefined;
@@ -291,7 +290,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       }
     }
 
-    // Try to find merchant name
     let merchant: string | undefined;
     if (lines.length > 0) {
       for (const line of lines.slice(0, 5)) {
@@ -316,7 +314,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       setDescription(scannedData.description || '');
       setDate(scannedData.date || date);
       
-      // Convert image to File
       if (capturedImage) {
         try {
           const response = await fetch(capturedImage);
@@ -329,7 +326,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       }
     }
     
-    // Reset scanner and close dialog
     setCapturedImage(null);
     setIsProcessing(false);
     setScannedData(null);
@@ -491,7 +487,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
             <div className="space-y-2">
               <Label htmlFor="receipt">Anexar Comprovante/Nota Fiscal</Label>
               <div className="flex gap-2">
-                {/* Botão de Upload Normal */}
                 <div className="flex-1 flex items-center space-x-2">
                   <Input
                     id="receipt"
@@ -503,7 +498,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                   <Upload size={20} className="text-gray-400" />
                 </div>
                 
-                {/* Botão Scanner OCR */}
                 <Dialog open={showScannerDialog} onOpenChange={setShowScannerDialog}>
                   <DialogTrigger asChild>
                     <Button type="button" variant="outline" size="icon" title="Escanear recibo">
@@ -516,7 +510,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                     </DialogHeader>
                     
                     <div className="space-y-4">
-                      {/* Capture Options */}
                       {!capturedImage && (
                         <div className="grid grid-cols-1 gap-3">
                           <Button type="button" onClick={handleCapturePhoto} className="flex items-center gap-2">
@@ -550,7 +543,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                         </div>
                       )}
                       
-                      {/* Processing State */}
                       {capturedImage && isProcessing && (
                         <div className="text-center space-y-4">
                           <img
@@ -565,7 +557,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                         </div>
                       )}
                       
-                      {/* Scanned Data Preview */}
                       {capturedImage && !isProcessing && scannedData && (
                         <div className="space-y-4">
                           <img
@@ -583,7 +574,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                               <p className="text-sm">Descrição: <span className="font-semibold">{scannedData.description}</span></p>
                             )}
                             {scannedData.date && (
-                              <p className="text-sm">Data: <span className="font-semibold">{new Date(scannedData.date).toLocaleDateString('pt-BR')}</span></p>
+                              <p className="text-sm">Data: <span className="font-semibold">{formatDateBR(scannedData.date)}</span></p>
                             )}
                           </div>
                           
