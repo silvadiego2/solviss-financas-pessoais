@@ -110,6 +110,7 @@ export const AutoCategorizationManager: React.FC<AutoCategorizationManagerProps>
         const suggestion = engine.categorizeTransaction(
           transaction.description,
           transaction.amount,
+          transaction.type as 'income' | 'expense',
           transaction.category_id
         );
 

@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { format } from 'date-fns';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { CategoryCombobox } from '@/components/ui/category-combobox';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
@@ -20,6 +20,8 @@ import { ProgressIndicator } from '@/components/ui/progress-indicator';
 import Tesseract from 'tesseract.js';
 import { validateTransaction, parseAmount } from '@/utils/transactionSchema';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { todayISO, formatDateBR } from '@/utils/dateHelpers';
+import { suggestCategoryId } from '@/utils/autoCategorize';
 
 interface ScannedData {
   amount?: number;
@@ -32,13 +34,11 @@ interface AddTransactionFormProps {
   onClose?: () => void;
 }
 
-const formatDateBR = (dateStr: string) => {
-  if (!dateStr) return '';
-  const raw = String(dateStr).slice(0, 10);
-  const [year, month, day] = raw.split('-');
-  if (!year || !month || !day) return raw;
-  return `${day}/${month}/${year}`;
-};
+// formatDateBR is imported from '@/utils/dateHelpers'
+
+interface AddTransactionFormProps {
+  onClose?: () => void;
+}
 
 export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose }) => {
   const [type, setType] = useState<'income' | 'expense'>('expense');
@@ -46,7 +46,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const [description, setDescription] = useState('');
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [date, setDate] = useState(todayISO());
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -67,6 +67,14 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const { capturePhoto, selectFromGallery } = useCamera();
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
+
+  // Auto-categorize based on description keywords (only when no category selected yet).
+  useEffect(() => {
+    if (categoryId || !description) return;
+    const suggested = suggestCategoryId(description, filteredCategories as any, type);
+    if (suggested) setCategoryId(suggested);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, type, categories]);
 
   const allAccounts = [
     ...accounts.map(account => ({
@@ -160,7 +168,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       setDescription('');
       setAccountId('');
       setCategoryId('');
-      setDate(format(new Date(), 'yyyy-MM-dd'));
+      setDate(todayISO());
       setReceiptFile(null);
       setProgress(0);
       setIsRecurring(false);
@@ -408,24 +416,12 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             <div className="space-y-2">
               <Label htmlFor="category">Categoria *</Label>
-              <Select value={categoryId} onValueChange={setCategoryId} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredCategories.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground text-center">
-                      Nenhuma categoria disponível
-                    </div>
-                  ) : (
-                    filteredCategories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.icon} {category.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <CategoryCombobox
+                categories={filteredCategories as any}
+                value={categoryId}
+                onChange={setCategoryId}
+                placeholder="Selecione uma categoria"
+              />
             </div>
 
             <div className="space-y-2">

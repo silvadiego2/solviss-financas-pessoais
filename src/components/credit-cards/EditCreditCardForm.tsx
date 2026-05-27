@@ -35,6 +35,8 @@ export const EditCreditCardForm: React.FC<EditCreditCardFormProps> = ({ card, on
         name: formData.name,
         bank_name: formData.bank_name || null,
         limit: parseFloat(formData.limit) || 0,
+        // Preserve the current used amount when only the limit/metadata changes.
+        used_amount: card.used_amount,
         due_day: parseInt(formData.due_day) || 1,
         closing_day: parseInt(formData.closing_day) || 1
       };
