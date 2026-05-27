@@ -102,16 +102,38 @@ export const useCreditCards = () => {
   const updateCreditCardMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CreditCard> & { id: string }) => {
       const updateData: any = {};
-      
+
       if (updates.name) updateData.name = updates.name;
-      if (updates.bank_name) updateData.bank_name = updates.bank_name;
-      if (updates.limit) {
-        updateData.credit_limit = updates.limit;
-        updateData.balance = updates.limit - (updates.used_amount || 0);
-      }
+      if (updates.bank_name !== undefined) updateData.bank_name = updates.bank_name;
       if (updates.closing_day) updateData.closing_day = updates.closing_day;
       if (updates.due_day) updateData.due_day = updates.due_day;
       if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
+
+      // When limit (or used_amount) changes, we must preserve the current "used"
+      // value if the caller didn't pass it — otherwise the spent amount would
+      // be wiped to 0 on every limit edit.
+      if (updates.limit !== undefined || updates.used_amount !== undefined) {
+        let used = updates.used_amount;
+        let limit = updates.limit;
+
+        if (used === undefined || limit === undefined) {
+          const { data: current, error: fetchErr } = await supabase
+            .from('accounts')
+            .select('credit_limit, balance')
+            .eq('id', id)
+            .eq('user_id', user?.id)
+            .single();
+          if (fetchErr) throw fetchErr;
+          const currentLimit = Number(current?.credit_limit || 0);
+          const currentBalance = Number(current?.balance || 0);
+          const currentUsed = currentLimit - currentBalance;
+          if (used === undefined) used = currentUsed;
+          if (limit === undefined) limit = currentLimit;
+        }
+
+        updateData.credit_limit = limit;
+        updateData.balance = limit - used;
+      }
 
       const { data, error } = await supabase
         .from('accounts')
