@@ -244,7 +244,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{t.description}</p>
                     <p className="text-xs text-muted-foreground">
-                      {new Date(t.date).toLocaleDateString('pt-BR')}
+                      {formatDateBR(t.date)}
                     </p>
                   </div>
                 </div>
