@@ -46,7 +46,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const [description, setDescription] = useState('');
   const [accountId, setAccountId] = useState('');
   const [categoryId, setCategoryId] = useState('');
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [date, setDate] = useState(todayISO());
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -160,7 +160,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       setDescription('');
       setAccountId('');
       setCategoryId('');
-      setDate(format(new Date(), 'yyyy-MM-dd'));
+      setDate(todayISO());
       setReceiptFile(null);
       setProgress(0);
       setIsRecurring(false);
