@@ -11,7 +11,6 @@ import { useAccounts } from '@/hooks/useAccounts';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
 
 interface EditTransactionFormProps {
   transaction: Transaction;
@@ -27,7 +26,7 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
   const [formData, setFormData] = useState({
     description: transaction.description,
     amount: transaction.amount,
-    date: format(new Date(transaction.date), 'yyyy-MM-dd'),
+    date: transaction.date ? String(transaction.date).slice(0, 10) : '',
     account_id: transaction.account_id,
     category_id: transaction.category_id || '',
     notes: transaction.notes || '',
