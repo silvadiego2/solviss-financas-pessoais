@@ -149,6 +149,7 @@ export const useCreditCards = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
       toast.success('Cartão atualizado com sucesso!');
     },
     onError: (error) => {
