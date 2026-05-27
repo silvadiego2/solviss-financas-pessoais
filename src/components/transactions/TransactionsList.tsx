@@ -1,16 +1,12 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import React, { useState, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Edit, Trash2, Receipt, Repeat, Search, Filter, X, ArrowUpRight, ArrowDownRight, Plus } from 'lucide-react';
+import { Edit, Trash2, Repeat, Search, Filter, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCategories } from '@/hooks/useCategories';
 import { EditTransactionForm } from './EditTransactionForm';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -18,6 +14,14 @@ import {
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+const formatDateBR = (dateStr: string) => {
+  if (!dateStr) return '';
+  const raw = String(dateStr).slice(0, 10);
+  const [year, month, day] = raw.split('-');
+  if (!year || !month || !day) return raw;
+  return `${day}/${month}/${year}`;
+};
 
 export const TransactionsList: React.FC = () => {
   const { transactions, deleteTransaction, loading } = useTransactions();
@@ -35,8 +39,13 @@ export const TransactionsList: React.FC = () => {
     });
   }, [transactions, search, filterType]);
 
-  const totalIncome = filteredTransactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-  const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+  const totalIncome = filteredTransactions
+    .filter(t => t.type === 'income')
+    .reduce((s, t) => s + Number(t.amount), 0);
+
+  const totalExpense = filteredTransactions
+    .filter(t => t.type === 'expense')
+    .reduce((s, t) => s + Number(t.amount), 0);
 
   if (loading) {
     return (
@@ -52,13 +61,11 @@ export const TransactionsList: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <p className="text-sm font-medium text-muted-foreground">Transações</p>
         <h1 className="text-2xl font-bold mt-1">Suas Transações</h1>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-card rounded-xl border border-border p-4">
           <p className="text-xs text-muted-foreground">Receitas</p>
@@ -74,7 +81,6 @@ export const TransactionsList: React.FC = () => {
         </div>
       </div>
 
-      {/* Search + Filter */}
       <div className="flex gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -98,7 +104,6 @@ export const TransactionsList: React.FC = () => {
         </Select>
       </div>
 
-      {/* Transaction List */}
       <div className="bg-card rounded-2xl border border-border divide-y divide-border">
         {filteredTransactions.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground text-sm">
@@ -107,13 +112,16 @@ export const TransactionsList: React.FC = () => {
         ) : (
           filteredTransactions.map((t) => (
             <div key={t.id} className="flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors group">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                t.type === 'income'
-                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-chart-income'
-                  : 'bg-red-50 dark:bg-red-950/40 text-chart-expense'
-              }`}>
+              <div
+                className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  t.type === 'income'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-chart-income'
+                    : 'bg-red-50 dark:bg-red-950/40 text-chart-expense'
+                }`}
+              >
                 {t.type === 'income' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
               </div>
+
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-medium truncate">{t.description}</p>
@@ -125,15 +133,20 @@ export const TransactionsList: React.FC = () => {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   {(t as any).category?.name && `${(t as any).category.name} · `}
-                  {format(new Date(t.date), 'dd/MM/yyyy', { locale: ptBR })}
+                  {formatDateBR(t.date)}
                   {(t as any).account?.name && ` · ${(t as any).account.name}`}
                 </p>
               </div>
-              <p className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
-                t.type === 'income' ? 'text-chart-income' : 'text-foreground'
-              }`}>
-                {t.type === 'income' ? '+' : '-'}{formatCurrency(Number(t.amount))}
+
+              <p
+                className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
+                  t.type === 'income' ? 'text-chart-income' : 'text-foreground'
+                }`}
+              >
+                {t.type === 'income' ? '+' : '-'}
+                {formatCurrency(Number(t.amount))}
               </p>
+
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => setEditingTransaction(t)}
@@ -141,6 +154,7 @@ export const TransactionsList: React.FC = () => {
                 >
                   <Edit className="w-3.5 h-3.5" />
                 </button>
+
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <button className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-destructive/10 text-destructive transition-all">
@@ -150,11 +164,18 @@ export const TransactionsList: React.FC = () => {
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
-                      <AlertDialogDescription>Tem certeza que deseja excluir esta transação?</AlertDialogDescription>
+                      <AlertDialogDescription>
+                        Tem certeza que deseja excluir esta transação?
+                      </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => deleteTransaction(t.id)} className="bg-destructive hover:bg-destructive/90">Excluir</AlertDialogAction>
+                      <AlertDialogAction
+                        onClick={() => deleteTransaction(t.id)}
+                        className="bg-destructive hover:bg-destructive/90"
+                      >
+                        Excluir
+                      </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -164,7 +185,6 @@ export const TransactionsList: React.FC = () => {
         )}
       </div>
 
-      {/* Results count */}
       <p className="text-xs text-muted-foreground text-center">
         {filteredTransactions.length} transação(ões) encontrada(s)
       </p>
