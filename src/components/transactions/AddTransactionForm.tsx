@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { format } from 'date-fns';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { CategoryCombobox } from '@/components/ui/category-combobox';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
@@ -20,6 +20,8 @@ import { ProgressIndicator } from '@/components/ui/progress-indicator';
 import Tesseract from 'tesseract.js';
 import { validateTransaction, parseAmount } from '@/utils/transactionSchema';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { todayISO, formatDateBR } from '@/utils/dateHelpers';
+import { suggestCategoryId } from '@/utils/autoCategorize';
 
 interface ScannedData {
   amount?: number;
