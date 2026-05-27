@@ -408,24 +408,12 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             <div className="space-y-2">
               <Label htmlFor="category">Categoria *</Label>
-              <Select value={categoryId} onValueChange={setCategoryId} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredCategories.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground text-center">
-                      Nenhuma categoria disponível
-                    </div>
-                  ) : (
-                    filteredCategories.map((category) => (
-                      <SelectItem key={category.id} value={category.id}>
-                        {category.icon} {category.name}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <CategoryCombobox
+                categories={filteredCategories as any}
+                value={categoryId}
+                onChange={setCategoryId}
+                placeholder="Selecione uma categoria"
+              />
             </div>
 
             <div className="space-y-2">
