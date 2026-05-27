@@ -34,13 +34,11 @@ interface AddTransactionFormProps {
   onClose?: () => void;
 }
 
-const formatDateBR = (dateStr: string) => {
-  if (!dateStr) return '';
-  const raw = String(dateStr).slice(0, 10);
-  const [year, month, day] = raw.split('-');
-  if (!year || !month || !day) return raw;
-  return `${day}/${month}/${year}`;
-};
+// formatDateBR is imported from '@/utils/dateHelpers'
+
+interface AddTransactionFormProps {
+  onClose?: () => void;
+}
 
 export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose }) => {
   const [type, setType] = useState<'income' | 'expense'>('expense');
