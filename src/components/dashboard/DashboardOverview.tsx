@@ -13,6 +13,7 @@ import { AddTransactionForm } from '@/components/transactions/AddTransactionForm
 import { EditTransactionForm } from '@/components/transactions/EditTransactionForm';
 import { DashboardSkeleton } from '@/components/ui/skeleton-loaders';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import { parseDateOnly, formatDateBR } from '@/utils/dateHelpers';
 
 interface DashboardOverviewProps {
   onNavigate?: (tab: string) => void;
@@ -45,8 +46,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const currentYear = new Date().getFullYear();
 
   const monthlyTransactions = transactions.filter(t => {
-    const d = new Date(t.date);
-    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+    const d = parseDateOnly(t.date);
+    return !!d && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
   });
 
   const monthlyIncome = monthlyTransactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
