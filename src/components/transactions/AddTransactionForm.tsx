@@ -68,6 +68,14 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
 
+  // Auto-categorize based on description keywords (only when no category selected yet).
+  useEffect(() => {
+    if (categoryId || !description) return;
+    const suggested = suggestCategoryId(description, filteredCategories as any, type);
+    if (suggested) setCategoryId(suggested);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, type, categories]);
+
   const allAccounts = [
     ...accounts.map(account => ({
       id: account.id,
