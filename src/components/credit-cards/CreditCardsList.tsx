@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard as CreditCardIcon, Settings, Calendar, Receipt, Eye, Edit, Trash2 } from 'lucide-react';
+import { Plus, CreditCard as CreditCardIcon, Calendar, Receipt, Edit, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useTransactions } from '@/hooks/useTransactions';
@@ -22,89 +22,63 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
   const [selectedCardForInvoices, setSelectedCardForInvoices] = useState<any>(null);
 
   const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
-  const getUsagePercentage = (used: number, limit: number) => {
-    return limit > 0 ? (used / limit) * 100 : 0;
+  const getUsagePercentage = (used: number, limit: number) =>
+    limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+
+  // Cores inline para evitar dependência de classes dinâmicas do Tailwind
+  const getBarColor = (pct: number): string => {
+    if (pct >= 80) return 'var(--color-destructive, #ef4444)';
+    if (pct >= 60) return 'var(--color-warning, #f59e0b)';
+    return 'var(--color-success, #22c55e)';
   };
 
-  const getUsageColor = (percentage: number) => {
-    if (percentage >= 80) return 'bg-destructive';
-    if (percentage >= 60) return 'bg-warning';
-    return 'bg-success';
+  const getPercentageTextClass = (pct: number): string => {
+    if (pct >= 80) return 'text-destructive';
+    if (pct >= 60) return 'text-yellow-500';
+    return 'text-green-500';
   };
 
-  const handleDelete = (cardId: string) => {
-    deleteCreditCard(cardId);
-  };
+  const handleDelete = (cardId: string) => deleteCreditCard(cardId);
+  const handleEdit = (card: any) => { setEditingCard(card); setShowAddForm(true); };
+  const handleCloseForm = () => { setShowAddForm(false); setEditingCard(null); };
 
-  const handleEdit = (card: any) => {
-    setEditingCard(card);
-    setShowAddForm(true);
-  };
-
-  const handleCloseForm = () => {
-    setShowAddForm(false);
-    setEditingCard(null);
-  };
-
-  // Calcular estatísticas gerais dos cartões
+  // Estatísticas gerais — baseadas nas transações do mês atual
   const getCardStatistics = () => {
-    const currentDate = new Date();
-    const currentMonth = currentDate.getMonth();
-    const currentYear = currentDate.getFullYear();
-
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
     let totalOpenInvoices = 0;
-    let totalExpenses = 0;
+    let totalLimit = 0;
 
     creditCards.forEach(card => {
-      const cardTransactions = transactions.filter(t => t.account_id === card.id);
-      
-      // Transações do mês atual para faturas abertas
-      const currentMonthTransactions = cardTransactions.filter(t => {
-        const transactionDate = new Date(t.date);
-        return transactionDate.getMonth() === currentMonth && 
-               transactionDate.getFullYear() === currentYear;
+      totalLimit += card.limit;
+      const cardTx = transactions.filter(t => {
+        if (t.account_id !== card.id || t.status === 'cancelled') return false;
+        const d = new Date(t.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear && t.type === 'expense';
       });
-      
-      const monthlyTotal = currentMonthTransactions.reduce((sum, t) => sum + t.amount, 0);
-      totalOpenInvoices += monthlyTotal;
-      totalExpenses += cardTransactions.reduce((sum, t) => sum + t.amount, 0);
+      totalOpenInvoices += cardTx.reduce((s, t) => s + Number(t.amount), 0);
     });
 
-    return { totalOpenInvoices, totalExpenses };
+    return { totalOpenInvoices, totalLimit };
   };
 
-  const { totalOpenInvoices, totalExpenses } = getCardStatistics();
+  const { totalOpenInvoices, totalLimit } = getCardStatistics();
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
 
-  if (showAddForm && !editingCard) {
-    return <AddCreditCardForm onClose={handleCloseForm} editingCard={editingCard} />;
-  }
-
-  if (editingCard) {
-    return <EditCreditCardForm card={editingCard} onClose={handleCloseForm} />;
-  }
-
-  if (selectedCardForInvoices) {
-    return (
-      <CreditCardInvoices 
-        card={selectedCardForInvoices} 
-        onClose={() => setSelectedCardForInvoices(null)} 
-      />
-    );
-  }
+  if (showAddForm && !editingCard) return <AddCreditCardForm onClose={handleCloseForm} editingCard={editingCard} />;
+  if (editingCard) return <EditCreditCardForm card={editingCard} onClose={handleCloseForm} />;
+  if (selectedCardForInvoices) return <CreditCardInvoices card={selectedCardForInvoices} onClose={() => setSelectedCardForInvoices(null)} />;
 
   return (
     <div className="space-y-7">
@@ -117,8 +91,7 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
             <h1 className="text-3xl font-semibold mt-1 tracking-tight">Cartões de Crédito</h1>
           </div>
           <Button onClick={() => setShowAddForm(true)} className="gap-2 shadow-premium-sm">
-            <Plus size={16} />
-            <span>Novo Cartão</span>
+            <Plus size={16} /><span>Novo Cartão</span>
           </Button>
         </div>
       )}
@@ -126,8 +99,7 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
       {onBack && (
         <div className="flex justify-end">
           <Button onClick={() => setShowAddForm(true)} className="gap-2 shadow-premium-sm">
-            <Plus size={16} />
-            <span>Novo Cartão</span>
+            <Plus size={16} /><span>Novo Cartão</span>
           </Button>
         </div>
       )}
@@ -136,12 +108,12 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
       {creditCards.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="card-elevated p-5">
-            <p className="label-eyebrow">Faturas Abertas</p>
+            <p className="label-eyebrow">Fatura do Mês</p>
             <p className="figure-hero text-2xl mt-2 text-destructive">{formatCurrency(totalOpenInvoices)}</p>
           </div>
           <div className="card-elevated p-5">
-            <p className="label-eyebrow">Total Gasto</p>
-            <p className="figure-hero text-2xl mt-2">{formatCurrency(totalExpenses)}</p>
+            <p className="label-eyebrow">Limite Total</p>
+            <p className="figure-hero text-2xl mt-2">{formatCurrency(totalLimit)}</p>
           </div>
           <div className="card-elevated p-5">
             <p className="label-eyebrow">Cartões Ativos</p>
@@ -166,14 +138,19 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {creditCards.map((card) => {
-            const usagePercentage = getUsagePercentage(card.used_amount, card.limit);
-            const availableLimit = card.limit - card.used_amount;
+            const pct = getUsagePercentage(card.used_amount, card.limit);
+            const available = card.limit - card.used_amount;
+            const barColor = getBarColor(pct);
+            const pctClass = getPercentageTextClass(pct);
 
             return (
               <div key={card.id} className="card-elevated overflow-hidden flex flex-col">
-                {/* Card visual — flat deep navy */}
+                {/* Card visual */}
                 <div className="relative bg-primary text-primary-foreground p-6">
-                  <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '20px 20px' }} />
+                  <div
+                    className="absolute inset-0 opacity-[0.05] pointer-events-none"
+                    style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '20px 20px' }}
+                  />
                   <div className="relative flex items-start justify-between">
                     <div className="min-w-0">
                       <p className="text-[10px] uppercase tracking-[0.14em] opacity-60 font-semibold">{card.bank_name}</p>
@@ -183,28 +160,40 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
                   </div>
                   <div className="relative mt-7">
                     <p className="text-[10px] uppercase tracking-[0.14em] opacity-60 font-semibold">Limite Disponível</p>
-                    <p className={`figure-hero text-2xl mt-1 ${availableLimit < 0 ? 'text-destructive-foreground/90' : ''}`}>
-                      {formatCurrency(availableLimit)}
+                    <p className={`figure-hero text-2xl mt-1 ${available < 0 ? 'text-destructive-foreground/90' : ''}`}>
+                      {formatCurrency(available)}
                     </p>
                   </div>
                 </div>
 
                 {/* Body */}
                 <div className="p-5 space-y-5 flex-1">
+                  {/* Barra de uso */}
                   <div>
                     <div className="flex justify-between items-baseline mb-2">
                       <span className="text-xs text-muted-foreground font-medium">Limite Utilizado</span>
                       <span className="figure text-sm">
-                        {formatCurrency(card.used_amount)} <span className="text-muted-foreground font-normal">/ {formatCurrency(card.limit)}</span>
+                        {formatCurrency(card.used_amount)}{' '}
+                        <span className="text-muted-foreground font-normal">/ {formatCurrency(card.limit)}</span>
                       </span>
                     </div>
-                    <div className="w-full bg-muted rounded-full h-1.5">
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${getUsageColor(usagePercentage)}`}
-                        style={{ width: `${Math.min(usagePercentage, 100)}%` }}
+                        className="h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${pct}%`, backgroundColor: barColor }}
                       />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1.5">{usagePercentage.toFixed(1)}% utilizado</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className={`text-xs font-semibold ${pctClass}`}>
+                        {card.limit > 0 ? `${pct.toFixed(1)}% utilizado` : 'Limite não definido'}
+                      </p>
+                      {pct >= 80 && (
+                        <p className="text-xs text-destructive font-medium">⚠️ Limite crítico</p>
+                      )}
+                      {pct >= 60 && pct < 80 && (
+                        <p className="text-xs text-yellow-500 font-medium">Atenção</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 pt-1">
