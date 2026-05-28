@@ -3,8 +3,8 @@ import {
   Home, Receipt, CalendarRange, TrendingUp,
   CreditCard, Target, BarChart3, Crown,
   Settings, Moon, Sun, User, LogOut,
-  Menu, X, PlusCircle, MoreHorizontal,
-  Brain, Repeat,
+  X, PlusCircle, MoreHorizontal,
+  Brain, Repeat, Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -15,35 +15,33 @@ import { useIsMobile } from '@/hooks/use-mobile';
 interface AppSidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onOpenAddSheet: () => void;          // ← novo: FAB e botão sidebar usam isso
 }
 
-// ── Navegação primária (desktop sidebar + mobile bottom bar) ──────────────
 const PRIMARY_NAV = [
-  { id: 'dashboard',    icon: Home,         label: 'Início' },
-  { id: 'transactions', icon: Receipt,      label: 'Transações' },
-  { id: 'budgets',      icon: CalendarRange, label: 'Planejamento' },
-  { id: 'reports',      icon: BarChart3,    label: 'Relatórios' },
+  { id: 'dashboard',    icon: Home,           label: 'Início' },
+  { id: 'transactions', icon: Receipt,        label: 'Transações' },
+  { id: 'budgets',      icon: CalendarRange,  label: 'Planejamento' },
+  { id: 'reports',      icon: BarChart3,      label: 'Relatórios' },
   { id: 'more',         icon: MoreHorizontal, label: 'Mais' },
 ];
 
-// ── Navegação secundária (só desktop sidebar) ─────────────────────────────
 const SECONDARY_NAV = [
-  { id: 'cash-flow',             icon: TrendingUp,  label: 'Fluxo de Caixa' },
-  { id: 'recurring-transactions',icon: Repeat,      label: 'Recorrentes' },
-  { id: 'cards',                 icon: CreditCard,  label: 'Cartões' },
-  { id: 'goals',                 icon: Target,      label: 'Metas' },
-  { id: 'intelligence',          icon: Brain,       label: 'Inteligência' },
-  { id: 'plans',                 icon: Crown,       label: 'Planos' },
+  { id: 'cash-flow',              icon: TrendingUp, label: 'Fluxo de Caixa' },
+  { id: 'recurring-transactions', icon: Repeat,     label: 'Recorrentes' },
+  { id: 'cards',                  icon: CreditCard, label: 'Cartões' },
+  { id: 'goals',                  icon: Target,     label: 'Metas' },
+  { id: 'intelligence',           icon: Brain,      label: 'Inteligência' },
+  { id: 'plans',                  icon: Crown,      label: 'Planos' },
 ];
 
-// Todos os ids reconhecidos como "primários" para fins de highlight na bottom bar
 const PRIMARY_IDS = new Set(PRIMARY_NAV.map(n => n.id));
 
-export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }) => {
+export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, onOpenAddSheet }) => {
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const isMobile = useIsMobile();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileOpen,    setMobileOpen]    = useState(false);
   const [secondaryOpen, setSecondaryOpen] = useState(false);
 
   const handleNav = (id: string) => {
@@ -51,7 +49,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
     if (isMobile) setMobileOpen(false);
   };
 
-  // ── Sidebar desktop ────────────────────────────────────────────────────
+  // ── conteúdo da sidebar (desktop + drawer mobile) ─────────────────────
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Brand */}
@@ -69,9 +67,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
         )}
       </div>
 
-      {/* Nova Transação */}
+      {/* Botão Nova Transação — abre Sheet */}
       <div className="px-4 py-4">
-        <Button onClick={() => handleNav('add')} className="w-full gap-2 shadow-premium-sm" size="default">
+        <Button
+          onClick={onOpenAddSheet}       // ← corrigido
+          className="w-full gap-2 shadow-premium-sm"
+          size="default"
+        >
           <PlusCircle size={16} />
           <span className="font-medium">Nova Transação</span>
         </Button>
@@ -102,7 +104,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
         })}
       </nav>
 
-      {/* Nav secundária (colapsável) */}
+      {/* Nav secundária */}
       <nav className="px-3 mt-3 space-y-0.5">
         <button
           onClick={() => setSecondaryOpen(!secondaryOpen)}
@@ -131,7 +133,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
         })}
       </nav>
 
-      {/* Bottom */}
+      {/* Rodapé */}
       <div className="mt-auto border-t border-border p-2 space-y-0.5">
         <button
           onClick={() => handleNav('more')}
@@ -172,19 +174,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
     </div>
   );
 
-  // ── Bottom nav mobile ──────────────────────────────────────────────────
+  // ── Mobile ────────────────────────────────────────────────────────────────
   if (isMobile) {
     return (
       <>
-        {/* Overlay quando sidebar móvel aberta (via "Mais") */}
         {mobileOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/50"
-            onClick={() => setMobileOpen(false)}
-          />
+          <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setMobileOpen(false)} />
         )}
-
-        {/* Drawer lateral (só quando mobileOpen) */}
         {mobileOpen && (
           <aside className="fixed inset-y-0 left-0 w-72 bg-card border-r border-border z-50 overflow-y-auto">
             {sidebarContent}
@@ -192,74 +188,80 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
         )}
 
         {/* Bottom Tab Bar */}
-        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card border-t border-border safe-area-bottom">
-          <div className="flex items-stretch h-16">
-            {PRIMARY_NAV.map((item) => {
-              const isActive =
-                activeTab === item.id ||
-                (item.id === 'more' && !PRIMARY_IDS.has(activeTab) && activeTab !== 'add');
+        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border">
+          <div className="flex items-end h-16 max-w-md mx-auto">
+            {/* Início */}
+            <MobileTab id="dashboard" activeTab={activeTab} label="Início"      onClick={() => handleNav('dashboard')}>
+              <Home    size={22} strokeWidth={activeTab === 'dashboard'    ? 2.25 : 1.75} />
+            </MobileTab>
+            {/* Transações */}
+            <MobileTab id="transactions" activeTab={activeTab} label="Transações" onClick={() => handleNav('transactions')}>
+              <Receipt size={22} strokeWidth={activeTab === 'transactions' ? 2.25 : 1.75} />
+            </MobileTab>
 
-              // Botão central FAB (+)
-              if (item.id === 'budgets') {
-                return (
-                  <React.Fragment key="fab-group">
-                    {/* item normal antes do FAB */}
-                    <button
-                      key={item.id}
-                      onClick={() => onTabChange(item.id)}
-                      className={cn(
-                        'flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors pt-1',
-                        isActive ? 'text-primary' : 'text-muted-foreground'
-                      )}
-                    >
-                      <item.icon size={22} strokeWidth={isActive ? 2.25 : 1.75} />
-                      <span>{item.label}</span>
-                    </button>
+            {/* FAB central — abre Sheet */}
+            <div className="flex-1 flex flex-col items-center pb-1">
+              <button
+                onClick={onOpenAddSheet}   // ← corrigido
+                aria-label="Nova transação"
+                className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/30 -mt-4 active:scale-95 transition-transform"
+              >
+                <Plus size={22} strokeWidth={2.5} />
+              </button>
+              <span className="text-[10px] font-medium text-muted-foreground mt-0.5">Adicionar</span>
+            </div>
 
-                    {/* FAB central */}
-                    <div className="flex-1 flex items-center justify-center pb-1">
-                      <button
-                        onClick={() => onTabChange('add')}
-                        className={cn(
-                          'w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg -mt-4 transition-transform active:scale-95',
-                          activeTab === 'add' && 'ring-2 ring-primary ring-offset-2 ring-offset-card'
-                        )}
-                        aria-label="Nova transação"
-                      >
-                        <PlusCircle size={22} />
-                      </button>
-                    </div>
-                  </React.Fragment>
-                );
-              }
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => item.id === 'more' ? setMobileOpen(true) : onTabChange(item.id)}
-                  className={cn(
-                    'flex-1 flex flex-col items-center justify-center gap-1 text-[10px] font-medium transition-colors pt-1',
-                    isActive ? 'text-primary' : 'text-muted-foreground'
-                  )}
-                >
-                  <item.icon size={22} strokeWidth={isActive ? 2.25 : 1.75} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
+            {/* Relatórios */}
+            <MobileTab id="reports" activeTab={activeTab} label="Relatórios" onClick={() => handleNav('reports')}>
+              <BarChart3 size={22} strokeWidth={activeTab === 'reports' ? 2.25 : 1.75} />
+            </MobileTab>
+            {/* Mais — abre drawer */}
+            <MobileTab
+              id="more"
+              activeTab={activeTab}
+              label="Mais"
+              onClick={() => setMobileOpen(true)}
+              forceActive={!PRIMARY_IDS.has(activeTab) && activeTab !== 'add'}
+            >
+              <MoreHorizontal size={22} strokeWidth={1.75} />
+            </MobileTab>
           </div>
         </nav>
 
-        {/* Espaçador para não sobrepor conteúdo com a bottom bar */}
+        {/* Espaçador */}
         <div className="h-16 flex-shrink-0" />
       </>
     );
   }
 
-  // ── Desktop sidebar ────────────────────────────────────────────────────
+  // ── Desktop sidebar ────────────────────────────────────────────────────────
   return (
     <aside className="sticky top-0 h-screen w-60 bg-card border-r border-border flex-shrink-0">
       {sidebarContent}
     </aside>
+  );
+};
+
+// ─ sub-componente interno para tab mobile ────────────────────────────────
+const MobileTab: React.FC<{
+  id: string;
+  activeTab: string;
+  label: string;
+  onClick: () => void;
+  forceActive?: boolean;
+  children: React.ReactNode;
+}> = ({ id, activeTab, label, onClick, forceActive, children }) => {
+  const isActive = forceActive ?? activeTab === id;
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex-1 flex flex-col items-center justify-center gap-0.5 pt-1 pb-1 text-[10px] font-medium transition-colors',
+        isActive ? 'text-primary' : 'text-muted-foreground'
+      )}
+    >
+      {children}
+      <span className={cn('font-medium', isActive && 'font-semibold')}>{label}</span>
+    </button>
   );
 };
