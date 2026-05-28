@@ -2,10 +2,10 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  Download, 
+import {
+  Download,
   Upload,
-  Tags, 
+  Tags,
   User,
   Building,
   ChevronRight,
@@ -20,7 +20,8 @@ import {
   Copy,
   Sparkles,
   CalendarClock,
-  Bell
+  Bell,
+  CalendarRange,
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -28,13 +29,6 @@ interface MoreOptionsProps {
 }
 
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
-
-  // "Gerenciar" — itens que NÃO estão na barra lateral
-  // Removidos (já existem como botões na sidebar):
-  //   Cartões de Crédito → 'cards'
-  //   Orçamentos Mensais → 'budgets'
-  //   Objetivos Financeiros → 'goals'
-  //   Transações Recorrentes → 'recurring-transactions'
   const manageItems = [
     {
       title: 'Agenda Financeira',
@@ -42,6 +36,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       icon: CalendarClock,
       action: () => onNavigate('agenda'),
       highlight: true,
+    },
+    {
+      title: 'Orçamentos Mensais',
+      description: 'Limites de gasto por categoria',
+      icon: CalendarRange,
+      action: () => onNavigate('budgets-list'),
     },
     {
       title: 'Contas Bancárias',
@@ -75,7 +75,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     },
   ];
 
-  // "Acompanhar" — análises e automação
   const trackItems = [
     {
       title: 'Relatórios Financeiros',
@@ -115,7 +114,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     },
   ];
 
-  // "Conta" — perfil, configurações, dados
   const accountItems = [
     {
       title: 'Perfil do Usuário',
@@ -162,7 +160,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       >
         <div className="flex items-center gap-3 flex-1">
           <div className="flex-shrink-0">
-            <item.icon className={`h-5 w-5 ${ (item as any).highlight ? 'text-primary' : ''}`} />
+            <item.icon className={`h-5 w-5 ${(item as any).highlight ? 'text-primary' : ''}`} />
           </div>
           <div className="flex-1 text-left">
             <div className="text-sm font-medium">{item.title}</div>
