@@ -4,99 +4,121 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%;
-    --foreground: 224 71% 4%;
+    /* Premium banking palette - off-white surface, deep teal/navy primary */
+    --background: 210 25% 97%;
+    --foreground: 215 35% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 224 71% 4%;
+    --card-foreground: 215 35% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71% 4%;
+    --popover-foreground: 215 35% 12%;
 
-    --primary: 152 60% 42%;
+    /* Deep corporate teal-navy */
+    --primary: 196 80% 18%;
     --primary-foreground: 0 0% 100%;
+    --primary-soft: 196 45% 94%;
 
-    --secondary: 210 20% 96%;
-    --secondary-foreground: 224 71% 4%;
+    --secondary: 215 20% 96%;
+    --secondary-foreground: 215 35% 18%;
 
-    --muted: 210 20% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 215 20% 96%;
+    --muted-foreground: 215 15% 45%;
 
-    --accent: 210 20% 96%;
-    --accent-foreground: 224 71% 4%;
+    --accent: 196 45% 94%;
+    --accent-foreground: 196 80% 18%;
 
-    --destructive: 0 72% 51%;
+    --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 152 60% 42%;
+    --success: 152 55% 35%;
+    --success-foreground: 0 0% 100%;
 
-    --radius: 0.75rem;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
 
-    --chart-income: 152 60% 42%;
-    --chart-expense: 0 72% 51%;
-    --chart-1: 221 83% 53%;
-    --chart-2: 262 83% 58%;
-    --chart-3: 30 95% 52%;
-    --chart-4: 174 62% 47%;
-    --chart-5: 340 75% 55%;
+    --border: 215 20% 90%;
+    --input: 215 20% 90%;
+    --ring: 196 80% 18%;
+
+    --radius: 0.625rem;
+
+    --chart-income: 152 55% 35%;
+    --chart-expense: 0 70% 45%;
+    --chart-1: 196 80% 28%;
+    --chart-2: 174 55% 38%;
+    --chart-3: 215 50% 45%;
+    --chart-4: 38 80% 50%;
+    --chart-5: 262 40% 50%;
 
     --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 224 71% 4%;
-    --sidebar-primary: 152 60% 42%;
+    --sidebar-foreground: 215 30% 20%;
+    --sidebar-primary: 196 80% 18%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 152 60% 96%;
-    --sidebar-accent-foreground: 152 60% 30%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 152 60% 42%;
+    --sidebar-accent: 196 45% 95%;
+    --sidebar-accent-foreground: 196 80% 18%;
+    --sidebar-border: 215 20% 92%;
+    --sidebar-ring: 196 80% 18%;
+
+    /* Premium shadows */
+    --shadow-xs: 0 1px 2px 0 hsl(215 35% 12% / 0.04);
+    --shadow-sm: 0 1px 3px 0 hsl(215 35% 12% / 0.05), 0 1px 2px -1px hsl(215 35% 12% / 0.04);
+    --shadow-md: 0 4px 12px -2px hsl(215 35% 12% / 0.06), 0 2px 4px -2px hsl(215 35% 12% / 0.04);
+    --shadow-lg: 0 12px 32px -8px hsl(215 35% 12% / 0.10), 0 4px 8px -4px hsl(215 35% 12% / 0.05);
   }
 
   .dark {
-    --background: 224 71% 4%;
-    --foreground: 210 20% 98%;
+    --background: 215 35% 7%;
+    --foreground: 210 20% 96%;
 
-    --card: 224 50% 8%;
-    --card-foreground: 210 20% 98%;
+    --card: 215 32% 10%;
+    --card-foreground: 210 20% 96%;
 
-    --popover: 224 50% 8%;
-    --popover-foreground: 210 20% 98%;
+    --popover: 215 32% 10%;
+    --popover-foreground: 210 20% 96%;
 
-    --primary: 152 55% 48%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 174 60% 50%;
+    --primary-foreground: 215 35% 8%;
+    --primary-soft: 196 40% 16%;
 
-    --secondary: 215 28% 17%;
-    --secondary-foreground: 210 20% 98%;
+    --secondary: 215 28% 14%;
+    --secondary-foreground: 210 20% 96%;
 
-    --muted: 215 28% 17%;
-    --muted-foreground: 218 11% 65%;
+    --muted: 215 28% 14%;
+    --muted-foreground: 215 15% 65%;
 
-    --accent: 215 28% 17%;
-    --accent-foreground: 210 20% 98%;
+    --accent: 196 40% 16%;
+    --accent-foreground: 174 60% 70%;
 
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive: 0 65% 50%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 215 28% 17%;
-    --input: 215 28% 17%;
-    --ring: 152 55% 48%;
+    --success: 152 55% 48%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 90% 55%;
+    --warning-foreground: 215 35% 8%;
+
+    --border: 215 25% 18%;
+    --input: 215 25% 18%;
+    --ring: 174 60% 50%;
 
     --chart-income: 152 55% 48%;
-    --chart-expense: 0 62% 50%;
-    --chart-1: 221 83% 53%;
-    --chart-2: 262 83% 58%;
-    --chart-3: 30 95% 52%;
-    --chart-4: 174 62% 47%;
-    --chart-5: 340 75% 55%;
+    --chart-expense: 0 65% 55%;
+    --chart-1: 174 60% 50%;
+    --chart-2: 196 65% 55%;
+    --chart-3: 215 50% 60%;
+    --chart-4: 38 85% 60%;
+    --chart-5: 262 50% 65%;
 
-    --sidebar-background: 224 50% 6%;
-    --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 152 55% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-background: 215 35% 8%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-primary: 174 60% 50%;
+    --sidebar-primary-foreground: 215 35% 8%;
     --sidebar-accent: 215 28% 14%;
-    --sidebar-accent-foreground: 152 55% 60%;
-    --sidebar-border: 215 28% 17%;
-    --sidebar-ring: 152 55% 48%;
+    --sidebar-accent-foreground: 174 60% 70%;
+    --sidebar-border: 215 25% 16%;
+    --sidebar-ring: 174 60% 50%;
   }
 }
 
@@ -105,27 +127,74 @@
     @apply border-border;
   }
 
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'ss01';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+
+  /* Tabular numerals for all financial figures */
+  .tabular-nums, .font-mono, [data-numeric] {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1, 'cv11' 1;
   }
 }
 
 @layer components {
+  /* Premium card refinement */
+  .card-premium {
+    @apply bg-card border border-border/70 rounded-xl;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .card-elevated {
+    @apply bg-card border border-border/70 rounded-xl;
+    box-shadow: var(--shadow-sm);
+  }
+
+  /* Financial figure - emphasized typography */
+  .figure-hero {
+    font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    letter-spacing: -0.03em;
+    font-weight: 700;
+  }
+
+  .figure {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum' 1;
+    letter-spacing: -0.01em;
+    font-weight: 600;
+  }
+
+  /* Section label - corporate small caps */
+  .label-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground;
+  }
+
   .onboarding-highlight {
     @apply ring-2 ring-primary ring-offset-2 ring-offset-background;
     animation: pulse-ring 2s infinite;
   }
 
   @keyframes pulse-ring {
-    0% {
-      box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4);
-    }
-    70% {
-      box-shadow: 0 0 0 10px hsl(var(--primary) / 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
-    }
+    0% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.4); }
+    70% { box-shadow: 0 0 0 10px hsl(var(--primary) / 0); }
+    100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
   }
 
   .loading-shimmer {
@@ -140,56 +209,20 @@
   }
 
   @keyframes shimmer {
-    0% {
-      background-position: -200% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
   }
 
-  .status-indicator {
-    @apply relative;
-  }
+  .status-indicator { @apply relative; }
+  .status-indicator::after { @apply absolute -top-1 -right-1 w-3 h-3 rounded-full; content: ''; }
+  .status-indicator.status-success::after { @apply bg-green-500; }
+  .status-indicator.status-warning::after { @apply bg-yellow-500; }
+  .status-indicator.status-error::after { @apply bg-red-500; }
+  .status-indicator.status-info::after { @apply bg-blue-500; }
 
-  .status-indicator::after {
-    @apply absolute -top-1 -right-1 w-3 h-3 rounded-full;
-    content: '';
-  }
-
-  .status-indicator.status-success::after {
-    @apply bg-green-500;
-  }
-
-  .status-indicator.status-warning::after {
-    @apply bg-yellow-500;
-  }
-
-  .status-indicator.status-error::after {
-    @apply bg-red-500;
-  }
-
-  .status-indicator.status-info::after {
-    @apply bg-blue-500;
-  }
-
-  .card-title-primary {
-    @apply text-base font-semibold leading-tight;
-  }
-
-  .card-title-secondary {
-    @apply text-sm font-medium leading-tight;
-  }
-
-  .card-subtitle {
-    @apply text-xs text-muted-foreground mt-0.5;
-  }
-
-  .icon-text-group {
-    @apply flex items-center gap-3;
-  }
-
-  .icon-container {
-    @apply flex-shrink-0;
-  }
+  .card-title-primary { @apply text-base font-semibold leading-tight; }
+  .card-title-secondary { @apply text-sm font-medium leading-tight; }
+  .card-subtitle { @apply text-xs text-muted-foreground mt-0.5; }
+  .icon-text-group { @apply flex items-center gap-3; }
+  .icon-container { @apply flex-shrink-0; }
 }
