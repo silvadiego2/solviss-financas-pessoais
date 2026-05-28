@@ -20,6 +20,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { BackHeader } from '@/components/layout/BackHeader';
 
+// Bug #3 fix: chaves alinhadas com os valores do banco/form
+// O formulário salva: daily | weekly | monthly | yearly
+// Chaves extras (biweekly, quarterly, semiannual) são legado — mantidas para
+// exibir corretamente caso existam no banco de dados de usuários antigos.
 const frequencyLabels: Record<string, string> = {
   daily: '📅 Diária',
   weekly: '🗓️ Semanal',
@@ -27,7 +31,7 @@ const frequencyLabels: Record<string, string> = {
   monthly: '🔄 Mensal',
   quarterly: '📊 Trimestral',
   semiannual: '📈 Semestral',
-  annual: '🎯 Anual',
+  yearly: '🎯 Anual',   // corrigido: era 'annual', agora bate com o banco
 };
 
 interface RecurringTransactionsManagerProps {
@@ -92,6 +96,9 @@ export const RecurringTransactionsManager: React.FC<RecurringTransactionsManager
             <div className="text-center py-8 text-muted-foreground">
               <Repeat className="h-12 w-12 mx-auto mb-4 opacity-50" />
               <p>Nenhuma transação recorrente configurada</p>
+              <p className="text-xs mt-2">
+                Ao adicionar uma transação, marque a opção &ldquo;Recorrente&rdquo; para ela aparecer aqui.
+              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -102,13 +109,15 @@ export const RecurringTransactionsManager: React.FC<RecurringTransactionsManager
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2">
                           <h4 className="font-semibold">{transaction.description}</h4>
-                          <Badge variant={transaction.is_active ? 'default' : 'secondary'}>
-                            {transaction.is_active ? 'Ativa' : 'Pausada'}
+                          <Badge variant={transaction.is_active !== false ? 'default' : 'secondary'}>
+                            {transaction.is_active !== false ? 'Ativa' : 'Pausada'}
                           </Badge>
                         </div>
                         
                         <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-                          <span>{frequencyLabels[transaction.recurrence_frequency] || transaction.recurrence_frequency}</span>
+                          <span>
+                            {frequencyLabels[transaction.recurrence_frequency] || transaction.recurrence_frequency || 'Frequência não definida'}
+                          </span>
                           {transaction.category && (
                             <span>• {transaction.category.icon} {transaction.category.name}</span>
                           )}
@@ -140,13 +149,13 @@ export const RecurringTransactionsManager: React.FC<RecurringTransactionsManager
 
                       <div className="flex items-center gap-2">
                         <div className="flex items-center gap-2">
-                          {transaction.is_active ? (
+                          {transaction.is_active !== false ? (
                             <Pause className="h-4 w-4 text-muted-foreground" />
                           ) : (
                             <Play className="h-4 w-4 text-muted-foreground" />
                           )}
                           <Switch
-                            checked={transaction.is_active}
+                            checked={transaction.is_active !== false}
                             onCheckedChange={(checked) =>
                               toggleRecurrence({ id: transaction.id, isActive: checked })
                             }
