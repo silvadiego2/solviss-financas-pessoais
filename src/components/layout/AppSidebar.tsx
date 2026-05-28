@@ -44,8 +44,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Brand */}
-      <div className="flex items-center justify-between h-14 px-4 border-b border-border">
-        <span className="text-lg font-bold text-primary tracking-tight">Finanças</span>
+      <div className="flex items-center justify-between h-16 px-5 border-b border-border">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-display font-bold text-sm shadow-premium-sm">
+            S
+          </div>
+          <span className="font-display text-base font-bold tracking-tight">Solviss</span>
+        </div>
         {isMobile && (
           <Button variant="ghost" size="icon" onClick={() => setMobileOpen(false)} className="h-8 w-8">
             <X size={18} />
@@ -54,15 +59,15 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
       </div>
 
       {/* New transaction */}
-      <div className="px-3 py-3">
-        <Button onClick={() => handleNav('add')} className="w-full gap-2" size="default">
-          <PlusCircle size={18} />
-          <span>Nova Transação</span>
+      <div className="px-4 py-4">
+        <Button onClick={() => handleNav('add')} className="w-full gap-2 shadow-premium-sm" size="default">
+          <PlusCircle size={16} />
+          <span className="font-medium">Nova Transação</span>
         </Button>
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-2 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto px-3 space-y-0.5">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           return (
@@ -70,13 +75,13 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
               key={item.id}
               onClick={() => handleNav(item.id)}
               className={cn(
-                'flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                'flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm transition-all',
                 isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                  ? 'bg-accent text-primary font-semibold'
+                  : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground font-medium'
               )}
             >
-              <item.icon size={18} />
+              <item.icon size={17} strokeWidth={isActive ? 2.25 : 1.75} />
               <span>{item.label}</span>
             </button>
           );

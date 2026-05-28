@@ -60,24 +60,24 @@ export const TransactionsList: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
-        <p className="text-sm font-medium text-muted-foreground">Transações</p>
-        <h1 className="text-2xl font-bold mt-1">Suas Transações</h1>
+        <p className="label-eyebrow">Transações</p>
+        <h1 className="text-3xl font-semibold mt-1 tracking-tight">Movimentações</h1>
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-card rounded-xl border border-border p-4">
-          <p className="text-xs text-muted-foreground">Receitas</p>
-          <p className="text-lg font-bold text-chart-income mt-1">{formatCurrency(totalIncome)}</p>
+      <div className="grid grid-cols-3 gap-4">
+        <div className="card-elevated p-5">
+          <p className="label-eyebrow">Receitas</p>
+          <p className="figure-hero text-2xl mt-2 text-success">{formatCurrency(totalIncome)}</p>
         </div>
-        <div className="bg-card rounded-xl border border-border p-4">
-          <p className="text-xs text-muted-foreground">Despesas</p>
-          <p className="text-lg font-bold text-chart-expense mt-1">{formatCurrency(totalExpense)}</p>
+        <div className="card-elevated p-5">
+          <p className="label-eyebrow">Despesas</p>
+          <p className="figure-hero text-2xl mt-2 text-destructive">{formatCurrency(totalExpense)}</p>
         </div>
-        <div className="bg-card rounded-xl border border-border p-4">
-          <p className="text-xs text-muted-foreground">Balanço</p>
-          <p className="text-lg font-bold mt-1">{formatCurrency(totalIncome - totalExpense)}</p>
+        <div className="card-elevated p-5">
+          <p className="label-eyebrow">Balanço</p>
+          <p className="figure-hero text-2xl mt-2">{formatCurrency(totalIncome - totalExpense)}</p>
         </div>
       </div>
 
