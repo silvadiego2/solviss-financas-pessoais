@@ -6,11 +6,11 @@ import { toast } from 'sonner';
 const isSchemaError = (err: any) =>
   err?.message?.includes('does not exist') ||
   err?.message?.includes('column') ||
-  err?.code === '42703' || // undefined_column
-  err?.code === '42P01';  // undefined_table
+  err?.code === '42703' ||
+  err?.code === '42P01';
 
 export const useRecurringTransactions = () => {
-  const { user } = useAuth();
+  const { user }    = useAuth();
   const queryClient = useQueryClient();
 
   const { data: recurringTransactions = [], isLoading } = useQuery({
@@ -18,27 +18,47 @@ export const useRecurringTransactions = () => {
     queryFn: async () => {
       if (!user) return [];
 
-      // Busca apenas as colunas que sabemos existir + is_recurring opcionalmente
+      // Tentativa 1: filtrar diretamente no banco por is_recurring = true
       const { data, error } = await supabase
         .from('transactions')
         .select(`
-          *,
+          id, description, amount, type, date, status,
+          is_recurring, recurrence_frequency, recurrence_end_date,
+          category_id, account_id,
           category:categories(name, icon, color),
-          account:accounts(name, type)
+          account:accounts!transactions_account_id_fkey(name, type)
         `)
         .eq('user_id', user.id)
-        .order('date', { ascending: false });
+        .eq('is_recurring', true)
+        .order('date', { ascending: false })
+        .limit(200);
 
-      if (error) {
-        if (isSchemaError(error)) return [];
-        throw error;
+      if (!error) return data ?? [];
+
+      // Tentativa 2: coluna is_recurring pode não existir — tenta recurrence_frequency
+      if (isSchemaError(error)) {
+        const { data: data2, error: err2 } = await supabase
+          .from('transactions')
+          .select(`
+            id, description, amount, type, date, status,
+            recurrence_frequency,
+            category_id, account_id,
+            category:categories(name, icon, color),
+            account:accounts!transactions_account_id_fkey(name, type)
+          `)
+          .eq('user_id', user.id)
+          .not('recurrence_frequency', 'is', null)
+          .order('date', { ascending: false })
+          .limit(200);
+
+        if (err2) {
+          if (isSchemaError(err2)) return []; // schema incompleto, retorna vazio sem quebrar
+          throw err2;
+        }
+        return data2 ?? [];
       }
 
-      // Filtra localmente: is_recurring true OU recurrence_frequency preenchido
-      return (data ?? []).filter((t: any) =>
-        t.is_recurring === true ||
-        (t.recurrence_frequency != null && t.recurrence_frequency !== '')
-      );
+      throw error;
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000,
@@ -48,7 +68,6 @@ export const useRecurringTransactions = () => {
   const toggleRecurrenceMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
       if (!user) throw new Error('Usuário não autenticado');
-      // Tenta atualizar is_active; se coluna não existir, usa is_recurring
       const { error } = await supabase
         .from('transactions')
         .update({ is_active: isActive })
@@ -56,7 +75,6 @@ export const useRecurringTransactions = () => {
         .eq('user_id', user.id);
       if (error) {
         if (isSchemaError(error)) {
-          // Coluna is_active não existe — toggle via is_recurring
           const { error: e2 } = await supabase
             .from('transactions')
             .update({ is_recurring: isActive })
