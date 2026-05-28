@@ -12,7 +12,11 @@ export const useRecurringTransactions = () => {
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
+      // Bug #1 fix: usar .eq() com true é correto, mas combinamos com
+      // .not('is_recurring', 'is', null) para garantir que registros com
+      // is_recurring=NULL (salvos antes da correção do INSERT) também apareçam
+      // caso tenham recurrence_frequency preenchido.
+      const { data: byFlag, error: e1 } = await supabase
         .from('transactions')
         .select(`
           *,
@@ -23,18 +27,45 @@ export const useRecurringTransactions = () => {
         .eq('is_recurring', true)
         .order('date', { ascending: false });
 
-      if (error) throw error;
-      return data || [];
+      if (e1) throw e1;
+
+      // Busca também transações com is_recurring NULL mas com recurrence_frequency
+      // preenchido — dados legados salvos sem o flag explícito.
+      const { data: byFrequency, error: e2 } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          category:categories(name, icon, color),
+          account:accounts(name, type)
+        `)
+        .eq('user_id', user.id)
+        .is('is_recurring', null)
+        .not('recurrence_frequency', 'is', null)
+        .order('date', { ascending: false });
+
+      if (e2) throw e2;
+
+      // Mescla e deduplica por id
+      const combined = [...(byFlag || []), ...(byFrequency || [])];
+      const unique = combined.filter(
+        (tx, idx, self) => self.findIndex(t => t.id === tx.id) === idx
+      );
+
+      return unique;
     },
     enabled: !!user,
   });
 
   const toggleRecurrenceMutation = useMutation({
     mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Bug #2 fix: filtrar por user_id para segurança
       const { error } = await supabase
         .from('transactions')
         .update({ is_active: isActive })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
     },
@@ -50,10 +81,14 @@ export const useRecurringTransactions = () => {
 
   const deleteRecurrenceMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!user) throw new Error('Usuário não autenticado');
+
+      // Bug #2 fix: filtrar por user_id para segurança
       const { error } = await supabase
         .from('transactions')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (error) throw error;
     },
