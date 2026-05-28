@@ -84,9 +84,13 @@ export const FinanceApp: React.FC = () => {
       case 'add':
         return <AddTransactionForm />;
 
-      // 'budgets' na sidebar abre o Planejamento (Planejamento.tsx)
+      // Sidebar 'budgets' → Planejamento de dívidas/prioridades
       case 'budgets':
         return <Planejamento />;
+
+      // MoreOptions 'budgets-list' → Orçamentos mensais por categoria
+      case 'budgets-list':
+        return <BudgetsList onBack={handleBack} />;
 
       case 'recurring-transactions':
         return <RecurringTransactionsManager onBack={handleBack} />;
@@ -99,7 +103,7 @@ export const FinanceApp: React.FC = () => {
       case 'intelligence':
         return <Inteligencia />;
 
-      // 'reports' na sidebar → SimpleReports (única instância)
+      // Sidebar 'reports' → SimpleReports (única instância)
       case 'reports':
         return <SimpleReports onBack={handleBack} />;
 
@@ -108,7 +112,7 @@ export const FinanceApp: React.FC = () => {
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} />;
 
-      // ── Subpáginas (acessadas via MoreOptions ou DashboardOverview) ─────
+      // ── Subpáginas (via MoreOptions ou DashboardOverview) ─────────────
       case 'accounts':
         return <AccountsList onBack={handleBack} />;
       case 'categories':
