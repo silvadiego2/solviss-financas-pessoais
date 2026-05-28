@@ -1,36 +1,80 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Download,
-  Upload,
-  Tags,
-  User,
-  Building,
-  ChevronRight,
-  Shield,
-  Cloud,
-  TrendingUp,
-  Zap,
-  Database,
-  Trash2,
-  BarChart3,
-  Settings,
-  Copy,
-  Sparkles,
-  CalendarClock,
-  Bell,
-  CalendarRange,
-  ScanLine,
+  Download, Upload, Tags, User, Building, ChevronRight,
+  Shield, Cloud, TrendingUp, Zap, Database, Trash2, BarChart3,
+  Settings, Copy, Sparkles, CalendarClock, Bell, CalendarRange,
+  ScanLine, Brain, CreditCard, Target, Repeat, TrendingDown,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface MoreOptionsProps {
   onNavigate: (tab: string) => void;
 }
 
+interface MenuItem {
+  title: string;
+  description: string;
+  icon: React.ElementType;
+  action: () => void;
+  highlight?: boolean;
+  destructive?: boolean;
+  badge?: string;
+}
+
+const Section: React.FC<{ title: string; items: MenuItem[] }> = ({ title, items }) => (
+  <section className="space-y-1">
+    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 px-1 mb-2">
+      {title}
+    </p>
+    <div className="grid grid-cols-1 gap-1">
+      {items.map((item) => (
+        <button
+          key={item.title}
+          onClick={item.action}
+          className={cn(
+            'flex items-center gap-3 w-full rounded-xl px-4 py-3 text-left transition-all group',
+            item.destructive
+              ? 'hover:bg-destructive/8 text-destructive'
+              : item.highlight
+              ? 'bg-primary/5 border border-primary/20 hover:bg-primary/10'
+              : 'hover:bg-accent'
+          )}
+        >
+          <div className={cn(
+            'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors',
+            item.destructive
+              ? 'bg-destructive/10 text-destructive'
+              : item.highlight
+              ? 'bg-primary/15 text-primary'
+              : 'bg-muted text-muted-foreground group-hover:bg-accent-foreground/10 group-hover:text-foreground'
+          )}>
+            <item.icon size={17} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'text-sm font-medium',
+                item.destructive ? 'text-destructive' : 'text-foreground'
+              )}>
+                {item.title}
+              </span>
+              {item.badge && (
+                <span className="text-[10px] font-semibold bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">
+                  {item.badge}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</p>
+          </div>
+          <ChevronRight size={15} className="text-muted-foreground/50 flex-shrink-0 group-hover:text-muted-foreground transition-colors" />
+        </button>
+      ))}
+    </div>
+  </section>
+);
+
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
-  const manageItems = [
+  const financeItems: MenuItem[] = [
     {
       title: 'Agenda Financeira',
       description: 'Contas a pagar e a receber',
@@ -45,11 +89,67 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       action: () => onNavigate('budgets-list'),
     },
     {
-      title: 'Scanner de Recibos',
-      description: 'Escanear comprovantes e notas fiscais',
-      icon: ScanLine,
-      action: () => onNavigate('receipt-scanner'),
+      title: 'Cartões de Crédito',
+      description: 'Faturas e limites',
+      icon: CreditCard,
+      action: () => onNavigate('cards'),
     },
+    {
+      title: 'Metas Financeiras',
+      description: 'Acompanhar objetivos de poupança',
+      icon: Target,
+      action: () => onNavigate('goals'),
+    },
+    {
+      title: 'Transações Recorrentes',
+      description: 'Assinaturas e cobranças fixas',
+      icon: Repeat,
+      action: () => onNavigate('recurring-transactions'),
+    },
+    {
+      title: 'Fluxo de Caixa',
+      description: 'Projeção de entradas e saídas',
+      icon: TrendingUp,
+      action: () => onNavigate('cash-flow'),
+    },
+  ];
+
+  const analyticItems: MenuItem[] = [
+    {
+      title: 'Inteligência Financeira',
+      description: 'Insights e previsões por IA',
+      icon: Brain,
+      action: () => onNavigate('intelligence'),
+      badge: 'IA',
+    },
+    {
+      title: 'Central de Analytics',
+      description: 'Analytics avançados',
+      icon: BarChart3,
+      action: () => onNavigate('analytics'),
+    },
+    {
+      title: 'Categorização Automática',
+      description: 'Classificação por IA',
+      icon: Sparkles,
+      action: () => onNavigate('auto-categorization'),
+      badge: 'IA',
+    },
+    {
+      title: 'Automação Financeira',
+      description: 'Regras automáticas',
+      icon: Zap,
+      action: () => onNavigate('auto-rules'),
+    },
+    {
+      title: 'Detector de Duplicatas',
+      description: 'Identificar lançamentos repetidos',
+      icon: Copy,
+      action: () => onNavigate('duplicate-detection'),
+    },
+  ];
+
+  const dataItems: MenuItem[] = [
     {
       title: 'Contas Bancárias',
       description: 'Gerenciar contas e saldos',
@@ -63,65 +163,32 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       action: () => onNavigate('categories'),
     },
     {
+      title: 'Scanner de Recibos',
+      description: 'Escanear comprovantes',
+      icon: ScanLine,
+      action: () => onNavigate('receipt-scanner'),
+    },
+    {
       title: 'Importar Transações',
-      description: 'Importar de planilha CSV ou Excel',
+      description: 'Importar de CSV ou Excel',
       icon: Upload,
       action: () => onNavigate('import-transactions'),
     },
     {
       title: 'Exportar Relatórios',
-      description: 'Exportar dados financeiros',
+      description: 'Baixar dados financeiros',
       icon: Download,
       action: () => onNavigate('export'),
     },
     {
-      title: 'Notificações',
-      description: 'Alertas de vencimento e orçamento',
-      icon: Bell,
-      action: () => onNavigate('notifications'),
-    },
-  ];
-
-  const trackItems = [
-    {
-      title: 'Relatórios Financeiros',
-      description: 'Visualizar análises e gráficos',
-      icon: BarChart3,
-      action: () => onNavigate('reports'),
-    },
-    {
-      title: 'Central de Analytics',
-      description: 'Analytics avançados e insights inteligentes',
-      icon: TrendingUp,
-      action: () => onNavigate('analytics'),
-    },
-    {
-      title: 'Automação Financeira',
-      description: 'Regras automáticas para suas finanças',
-      icon: Zap,
-      action: () => onNavigate('auto-rules'),
-    },
-    {
-      title: 'Categorização Automática',
-      description: 'Classificar transações automaticamente por IA',
-      icon: Sparkles,
-      action: () => onNavigate('auto-categorization'),
-    },
-    {
-      title: 'Detector de Duplicatas',
-      description: 'Identificar e remover transações duplicadas',
-      icon: Copy,
-      action: () => onNavigate('duplicate-detection'),
-    },
-    {
       title: 'Backup Automático',
-      description: 'Configurar backup automático dos dados',
+      description: 'Configurar backup na nuvem',
       icon: Cloud,
       action: () => onNavigate('auto-backup'),
     },
   ];
 
-  const accountItems = [
+  const accountItems: MenuItem[] = [
     {
       title: 'Perfil do Usuário',
       description: 'Editar informações pessoais',
@@ -130,9 +197,15 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     },
     {
       title: 'Configurações',
-      description: 'Tema, moeda, notificações e mais',
+      description: 'Tema, moeda, notificações',
       icon: Settings,
       action: () => onNavigate('settings'),
+    },
+    {
+      title: 'Notificações',
+      description: 'Alertas de vencimento e orçamento',
+      icon: Bell,
+      action: () => onNavigate('notifications'),
     },
     {
       title: 'Segurança e Auditoria',
@@ -141,60 +214,37 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       action: () => onNavigate('security'),
     },
     {
+      title: 'Planos e Assinatura',
+      description: 'Ver planos premium disponíveis',
+      icon: TrendingDown,
+      action: () => onNavigate('plans'),
+    },
+    {
       title: 'Dados de Demonstração',
-      description: 'Criar dados de exemplo para testar o app',
+      description: 'Criar dados de exemplo',
       icon: Database,
       action: () => onNavigate('demo-data'),
     },
     {
       title: 'Limpar Todos os Dados',
-      description: '⚠️ Remover todos os dados (irreversível)',
+      description: 'Remover todos os dados (irreversível)',
       icon: Trash2,
       action: () => onNavigate('data-reset'),
-      variant: 'destructive' as const,
+      destructive: true,
     },
   ];
 
-  const renderItems = (items: typeof manageItems) =>
-    items.map((item, index) => (
-      <Button
-        key={index}
-        variant={item.variant || 'ghost'}
-        className={`w-full justify-start h-auto py-3 ${
-          (item as any).highlight ? 'border border-primary/30 bg-primary/5 hover:bg-primary/10' : ''
-        }`}
-        onClick={item.action}
-      >
-        <div className="flex items-center gap-3 flex-1">
-          <div className="flex-shrink-0">
-            <item.icon className={`h-5 w-5 ${(item as any).highlight ? 'text-primary' : ''}`} />
-          </div>
-          <div className="flex-1 text-left">
-            <div className="text-sm font-medium">{item.title}</div>
-            <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
-          </div>
-          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        </div>
-      </Button>
-    ));
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Menu Principal</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="manage" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="manage">Gerenciar</TabsTrigger>
-            <TabsTrigger value="track">Acompanhar</TabsTrigger>
-            <TabsTrigger value="account">Conta</TabsTrigger>
-          </TabsList>
-          <TabsContent value="manage" className="space-y-3 mt-4">{renderItems(manageItems)}</TabsContent>
-          <TabsContent value="track" className="space-y-3 mt-4">{renderItems(trackItems)}</TabsContent>
-          <TabsContent value="account" className="space-y-3 mt-4">{renderItems(accountItems)}</TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+    <div className="space-y-8 pb-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Mais opções</h1>
+        <p className="text-sm text-muted-foreground mt-1">Gerencie todas as funções do Solviss</p>
+      </div>
+
+      <Section title="Finanças" items={financeItems} />
+      <Section title="Análise & Automação" items={analyticItems} />
+      <Section title="Dados & Importação" items={dataItems} />
+      <Section title="Conta" items={accountItems} />
+    </div>
   );
 };
