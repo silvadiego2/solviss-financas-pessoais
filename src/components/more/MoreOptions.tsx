@@ -6,8 +6,6 @@ import {
   Download, 
   Upload,
   Tags, 
-  Target, 
-  CreditCard, 
   User,
   Building,
   ChevronRight,
@@ -17,7 +15,6 @@ import {
   Zap,
   Database,
   Trash2,
-  Repeat,
   BarChart3,
   Settings,
   Copy,
@@ -28,12 +25,16 @@ import {
 
 interface MoreOptionsProps {
   onNavigate: (tab: string) => void;
-  onToggleTheme?: () => void;
 }
 
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
 
-  // "Gerenciar" — operações do dia a dia
+  // "Gerenciar" — itens que NÃO estão na barra lateral
+  // Removidos (já existem como botões na sidebar):
+  //   Cartões de Crédito → 'cards'
+  //   Orçamentos Mensais → 'budgets'
+  //   Objetivos Financeiros → 'goals'
+  //   Transações Recorrentes → 'recurring-transactions'
   const manageItems = [
     {
       title: 'Agenda Financeira',
@@ -49,34 +50,10 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       action: () => onNavigate('accounts'),
     },
     {
-      title: 'Cartões de Crédito',
-      description: 'Gerenciar cartões e faturas',
-      icon: CreditCard,
-      action: () => onNavigate('cards'),
-    },
-    {
-      title: 'Orçamentos Mensais',
-      description: 'Controlar gastos por categoria',
-      icon: Target,
-      action: () => onNavigate('budgets'),
-    },
-    {
-      title: 'Objetivos Financeiros',
-      description: 'Definir e acompanhar metas',
-      icon: Target,
-      action: () => onNavigate('goals'),
-    },
-    {
       title: 'Gerenciar Categorias',
       description: 'Criar e editar categorias',
       icon: Tags,
       action: () => onNavigate('categories'),
-    },
-    {
-      title: 'Transações Recorrentes',
-      description: 'Gerencie suas recorrências automáticas',
-      icon: Repeat,
-      action: () => onNavigate('recurring-transactions'),
     },
     {
       title: 'Importar Transações',
@@ -138,9 +115,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     },
   ];
 
-  // "Conta" — perfil, configurações, dados perigosos
-  // Removidos daqui: "Tema da Interface" (está em Configurações)
-  // e "Completar Cadastro" (duplicata de Perfil do Usuário)
+  // "Conta" — perfil, configurações, dados
   const accountItems = [
     {
       title: 'Perfil do Usuário',
