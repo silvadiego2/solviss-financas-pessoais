@@ -1,7 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard, Plus, Edit, Target, ChevronRight, AlertTriangle, ArrowLeftRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import {
+  ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard,
+  Plus, Target, ChevronRight, AlertTriangle, ArrowLeftRight,
+} from 'lucide-react';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
@@ -9,23 +13,34 @@ import { useGoals } from '@/hooks/useGoals';
 import { useBudgets } from '@/hooks/useBudgets';
 import { useRecurringTransactions } from '@/hooks/useRecurringTransactions';
 import { useDashboardStats } from '@/hooks/useDashboardStats';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { AddTransactionForm } from '@/components/transactions/AddTransactionForm';
 import { EditTransactionForm } from '@/components/transactions/EditTransactionForm';
 import { TransferForm } from '@/components/accounts/TransferForm';
 import { AgendaWidget } from './AgendaWidget';
 import { DashboardSkeleton } from '@/components/ui/skeleton-loaders';
-import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
+import {
+  PieChart, Pie, Cell, ResponsiveContainer,
+  AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
+} from 'recharts';
 import { formatCurrency, formatDateBR } from '@/utils/formatters';
-import { useMemo } from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface DashboardOverviewProps {
   onNavigate?: (tab: string) => void;
 }
 
+// Cores do design system — respeitam dark mode via variáveis CSS
 const CHART_COLORS = [
-  'hsl(221, 83%, 53%)', 'hsl(262, 83%, 58%)', 'hsl(30, 95%, 52%)',
-  'hsl(174, 62%, 47%)', 'hsl(340, 75%, 55%)', 'hsl(152, 60%, 42%)',
-  'hsl(45, 93%, 47%)', 'hsl(199, 89%, 48%)',
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+  'hsl(var(--primary))',
+  'hsl(var(--chart-income))',
+  'hsl(var(--chart-expense))',
 ];
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
@@ -35,12 +50,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const { goals, isLoading: goalsLoading } = useGoals();
   const { budgets, loading: budgetsLoading } = useBudgets();
   const { recurringTransactions } = useRecurringTransactions();
+  const { user } = useAuth();
+
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addType, setAddType] = useState<'income' | 'expense'>('expense');
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
   const totalBalance = regularAccounts.reduce((sum, a) => sum + Number(a.balance), 0);
-
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
 
@@ -48,16 +63,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
     monthlyIncome,
     monthlyExpenses,
     available,
-    budgetUsed,
     spendingChartData,
     expensesByCategory,
   } = useDashboardStats(transactions);
 
-  const recurringWeekAmount = useMemo(() => {
-    return (recurringTransactions || [])
+  // % de receita já gasta (não % do calendário)
+  const incomeUsedPct = monthlyIncome > 0
+    ? Math.min((monthlyExpenses / monthlyIncome) * 100, 100)
+    : 0;
+
+  const recurringWeekAmount = useMemo(() =>
+    (recurringTransactions || [])
       .filter((r: any) => r.type === 'expense')
-      .reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
-  }, [recurringTransactions]);
+      .reduce((s: number, r: any) => s + Number(r.amount || 0), 0),
+    [recurringTransactions]
+  );
 
   const monthBudgets = budgets.filter(b => b.month === currentMonth + 1 && b.year === currentYear);
   const totalBudgetUsage = monthBudgets.length > 0
@@ -68,6 +88,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const totalGoalProgress = activeGoals.length > 0
     ? activeGoals.reduce((s, g) => s + (Number(g.current_amount) / Number(g.target_amount)) * 100, 0) / activeGoals.length
     : 0;
+
+  // Nome amigável do usuário (parte antes do @)
+  const userName = user?.user_metadata?.full_name
+    || user?.email?.split('@')[0]
+    || 'você';
+
+  const todayLabel = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
+  // Capitaliza primeiro caractere
+  const todayFormatted = todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1);
 
   if (showAddForm) return <AddTransactionForm onClose={() => setShowAddForm(false)} />;
   if (editingTransaction) return <EditTransactionForm transaction={editingTransaction} onClose={() => setEditingTransaction(null)} />;
@@ -80,8 +109,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <p className="label-eyebrow">Visão geral</p>
-        <h1 className="text-3xl font-semibold mt-1 tracking-tight">Olá, bem-vindo de volta</h1>
+        <p className="label-eyebrow">{todayFormatted}</p>
+        <h1 className="text-3xl font-semibold mt-1 tracking-tight">
+          Olá, <span className="text-primary capitalize">{userName}</span> 👋
+        </h1>
       </div>
 
       {/* Alert Banner */}
@@ -94,10 +125,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </div>
       )}
 
-      {/* Balance Hero + Budget */}
+      {/* Balance Hero + Disponível */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Card principal */}
         <div className="lg:col-span-2 relative overflow-hidden rounded-2xl bg-primary text-primary-foreground p-7 shadow-premium">
-          <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div
+            className="absolute inset-0 opacity-[0.04] pointer-events-none"
+            style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }}
+          />
           <div className="relative">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -131,6 +166,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
 
+        {/* Card disponível */}
         <div className="card-elevated p-6 flex flex-col">
           <p className="label-eyebrow">Disponível no mês</p>
           <p className={`figure-hero text-3xl mt-2 ${available >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -138,21 +174,62 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </p>
           <div className="w-full bg-muted rounded-full h-1.5 mt-4">
             <div
-              className={`h-1.5 rounded-full transition-all ${budgetUsed >= 90 ? 'bg-destructive' : budgetUsed >= 70 ? 'bg-warning' : 'bg-primary'}`}
-              style={{ width: `${Math.min(budgetUsed, 100)}%` }}
+              className={`h-1.5 rounded-full transition-all ${
+                incomeUsedPct >= 90 ? 'bg-destructive' : incomeUsedPct >= 70 ? 'bg-warning' : 'bg-primary'
+              }`}
+              style={{ width: `${incomeUsedPct}%` }}
             />
           </div>
-          <p className="text-xs text-muted-foreground mt-2">{budgetUsed.toFixed(0)}% do mês utilizado</p>
+          <p className="text-xs text-muted-foreground mt-2">
+            {incomeUsedPct.toFixed(0)}% da receita gasta
+          </p>
           <div className="flex gap-2 mt-auto pt-5">
-            <Button size="sm" variant="outline" className="flex-1" onClick={() => { setAddType('income'); setShowAddForm(true); }}>
+            <Button size="sm" variant="outline" className="flex-1" onClick={() => setShowAddForm(true)}>
               <Plus size={14} className="mr-1" /> Receita
             </Button>
-            <Button size="sm" className="flex-1" onClick={() => { setAddType('expense'); setShowAddForm(true); }}>
+            <Button size="sm" className="flex-1" onClick={() => setShowAddForm(true)}>
               <Plus size={14} className="mr-1" /> Despesa
             </Button>
           </div>
         </div>
       </div>
+
+      {/* Cartões de Crédito */}
+      {creditCards.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Cartões de Crédito</p>
+            <Button variant="ghost" size="sm" className="text-xs text-primary h-auto py-1" onClick={() => onNavigate?.('cards')}>
+              Ver todos <ChevronRight size={14} className="ml-1" />
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {creditCards.slice(0, 3).map((card) => (
+              <div
+                key={card.id}
+                className="card-elevated p-4 flex items-center gap-3 cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => onNavigate?.('cards')}
+              >
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                  <CreditCard size={18} className="text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{card.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Limite: {formatCurrency(Number(card.credit_limit))}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-bold text-destructive">
+                    {formatCurrency(Number(card.current_balance ?? 0))}
+                  </p>
+                  <p className="text-xs text-muted-foreground">fatura</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Agenda Widget */}
       <AgendaWidget onNavigate={onNavigate} />
@@ -176,7 +253,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke="hsl(var(--muted-foreground))"
+                  tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`}
+                />
                 <Tooltip
                   formatter={(value: number) => formatCurrency(value)}
                   contentStyle={{
@@ -186,20 +267,31 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                     fontSize: '12px',
                   }}
                 />
-                <Area type="monotone" dataKey="amount" stroke="hsl(var(--primary))" fill="url(#spendGradient)" strokeWidth={2} name="Acumulado" />
+                <Area
+                  type="monotone"
+                  dataKey="amount"
+                  stroke="hsl(var(--primary))"
+                  fill="url(#spendGradient)"
+                  strokeWidth={2}
+                  name="Acumulado"
+                />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
 
-      {/* Recent Transactions + Category Breakdown */}
+      {/* Últimas Transações + Categorias */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium">Últimas Transações</CardTitle>
-              <Button variant="ghost" size="sm" className="text-xs text-primary h-auto py-1" onClick={() => onNavigate?.('transactions')}>
+              <Button
+                variant="ghost" size="sm"
+                className="text-xs text-primary h-auto py-1"
+                onClick={() => onNavigate?.('transactions')}
+              >
                 Ver todas <ChevronRight size={14} className="ml-1" />
               </Button>
             </div>
@@ -213,13 +305,22 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    t.type === 'income' ? 'bg-emerald-50 dark:bg-emerald-950/40 text-chart-income' : 'bg-red-50 dark:bg-red-950/40 text-chart-expense'
+                    t.type === 'income'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-chart-income'
+                      : 'bg-red-50 dark:bg-red-950/40 text-chart-expense'
                   }`}>
                     {t.type === 'income' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{t.description}</p>
-                    <p className="text-xs text-muted-foreground">{formatDateBR(t.date)}</p>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-xs text-muted-foreground">{formatDateBR(t.date)}</span>
+                      {(t as any).category_name && (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                          {(t as any).category_name}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <span className={`text-sm font-semibold flex-shrink-0 ml-2 ${
@@ -246,7 +347,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               <div className="flex items-center gap-4">
                 <ResponsiveContainer width="45%" height={160}>
                   <PieChart>
-                    <Pie data={expensesByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={35} outerRadius={65} paddingAngle={2} strokeWidth={0}>
+                    <Pie
+                      data={expensesByCategory}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%" cy="50%"
+                      innerRadius={35} outerRadius={65}
+                      paddingAngle={2} strokeWidth={0}
+                    >
                       {expensesByCategory.map((_, i) => (
                         <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                       ))}
@@ -256,7 +364,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                 <div className="flex-1 space-y-2 overflow-hidden">
                   {expensesByCategory.slice(0, 5).map((cat, i) => (
                     <div key={cat.name} className="flex items-center gap-2 text-xs">
-                      <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                      <div
+                        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }}
+                      />
                       <span className="truncate flex-1 text-muted-foreground">{cat.name}</span>
                       <span className="font-medium">{formatCurrency(cat.value)}</span>
                     </div>
@@ -268,9 +379,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
         </Card>
       </div>
 
-      {/* Budget + Goals */}
+      {/* Orçamentos + Metas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate?.('budgets')}>
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => onNavigate?.('budgets-list')}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center">
@@ -282,13 +396,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               </div>
             </div>
             <div className="w-full bg-muted rounded-full h-1.5">
-              <div className={`h-1.5 rounded-full transition-all ${totalBudgetUsage >= 90 ? 'bg-destructive' : totalBudgetUsage >= 70 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${Math.min(totalBudgetUsage, 100)}%` }} />
+              <div
+                className={`h-1.5 rounded-full transition-all ${
+                  totalBudgetUsage >= 90 ? 'bg-destructive' : totalBudgetUsage >= 70 ? 'bg-amber-500' : 'bg-primary'
+                }`}
+                style={{ width: `${Math.min(totalBudgetUsage, 100)}%` }}
+              />
             </div>
             <p className="text-xs text-muted-foreground mt-1">{totalBudgetUsage.toFixed(0)}% utilizado</p>
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate?.('goals')}>
+        <Card
+          className="cursor-pointer hover:shadow-md transition-shadow"
+          onClick={() => onNavigate?.('goals')}
+        >
           <CardContent className="p-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="h-9 w-9 rounded-lg bg-chart-2/10 flex items-center justify-center">
@@ -300,7 +422,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               </div>
             </div>
             <div className="w-full bg-muted rounded-full h-1.5">
-              <div className="h-1.5 rounded-full bg-chart-2 transition-all" style={{ width: `${Math.min(totalGoalProgress, 100)}%` }} />
+              <div
+                className="h-1.5 rounded-full bg-chart-2 transition-all"
+                style={{ width: `${Math.min(totalGoalProgress, 100)}%` }}
+              />
             </div>
             <p className="text-xs text-muted-foreground mt-1">{totalGoalProgress.toFixed(0)}% concluído</p>
           </CardContent>
