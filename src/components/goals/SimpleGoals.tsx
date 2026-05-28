@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Target, CheckCircle, Plus, Edit, Trash2, Info } from 'lucide-react'; // Importado Info
+import { Badge } from '@/components/ui/badge';
+import { Target, CheckCircle, Plus, Edit, Trash2 } from 'lucide-react';
 import { useGoals, Goal } from '@/hooks/useGoals';
 import { AddGoalForm } from './AddGoalForm';
 import { BackHeader } from '@/components/layout/BackHeader';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert'; // Importar componentes de alerta
+import { formatCurrency } from '@/utils/formatters';
 
 interface SimpleGoalsProps {
   onBack?: () => void;
@@ -17,23 +18,12 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
-  const getProgress = (current: number, target: number) => {
-    return Math.min((current / target) * 100, 100);
-  };
+  const getProgress = (current: number, target: number) =>
+    Math.min((current / target) * 100, 100);
 
   const getDaysRemaining = (targetDate: string) => {
-    const today = new Date();
-    const target = new Date(targetDate);
-    const diffTime = target.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    const diff = new Date(targetDate).getTime() - new Date().getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
   };
 
   const handleEdit = (goal: Goal) => {
@@ -42,9 +32,7 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
   };
 
   const handleDelete = (goalId: string) => {
-    if (confirm('Tem certeza que deseja excluir esta meta?')) {
-      deleteGoal(goalId);
-    }
+    if (confirm('Tem certeza que deseja excluir esta meta?')) deleteGoal(goalId);
   };
 
   const handleCloseForm = () => {
@@ -58,137 +46,94 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
 
   return (
     <div className="space-y-4">
-
-      {/* Alerta explicativo */}
-      <Alert className="mb-4">
-        <Info size={16} />
-        <AlertTitle>Sobre Objetivos</AlertTitle>
-        <AlertDescription>
-          Objetivos são metas de economia de longo prazo. 
-          Para controlar gastos mensais, use "Orçamentos" no menu Mais.
-        </AlertDescription>
-      </Alert>
-
       {onBack && <BackHeader title="Objetivos Financeiros" onBack={onBack} />}
-      
-      {!onBack && (
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Objetivos Financeiros</h2>
-          <Button onClick={() => setShowAddForm(true)} size="sm">
-            <Plus size={16} className="mr-2" />
-            Adicionar Meta
-          </Button>
-        </div>
-      )}
 
-      {onBack && (
-        <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        {!onBack && <h2 className="text-lg font-semibold">Objetivos Financeiros</h2>}
+        <div className={!onBack ? '' : 'ml-auto'}>
           <Button onClick={() => setShowAddForm(true)} size="sm">
-            <Plus size={16} className="mr-2" />
-            Adicionar Meta
+            <Plus size={16} className="mr-2" /> Adicionar Meta
           </Button>
         </div>
-      )}
+      </div>
 
       {goals.length === 0 ? (
         <Card>
-          <CardContent className="text-center py-8">
-            <Target size={48} className="mx-auto text-gray-400 mb-4" />
-            <p className="text-gray-500 mb-4">Nenhuma meta cadastrada</p>
-            <p className="text-sm text-gray-400 mb-4">
-              Defina seus objetivos financeiros e acompanhe o progresso
+          <CardContent className="text-center py-10">
+            <Target size={40} className="mx-auto text-muted-foreground/40 mb-3" />
+            <p className="font-medium text-muted-foreground">Nenhuma meta cadastrada</p>
+            <p className="text-sm text-muted-foreground/70 mt-1 mb-4">
+              Defina objetivos financeiros e acompanhe o progresso
             </p>
-            <Button onClick={() => setShowAddForm(true)}>
-              <Plus size={16} className="mr-2" />
-              Adicionar Primeira Meta
+            <Button onClick={() => setShowAddForm(true)} size="sm">
+              <Plus size={16} className="mr-2" /> Adicionar Primeira Meta
             </Button>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {goals.map((goal) => {
-            const progress = getProgress(goal.current_amount, goal.target_amount);
+            const progress      = getProgress(goal.current_amount, goal.target_amount);
             const daysRemaining = goal.target_date ? getDaysRemaining(goal.target_date) : null;
-            
+            const overdue       = daysRemaining !== null && daysRemaining < 0;
+
             return (
-              <Card key={goal.id}>
+              <Card key={goal.id} className="overflow-hidden">
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base flex items-center">
-                      {goal.is_completed ? (
-                        <CheckCircle size={20} className="text-green-600 mr-2" />
-                      ) : (
-                        <Target size={20} className="text-blue-600 mr-2" />
-                      )}
-                      {goal.name}
-                    </CardTitle>
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      {goal.is_completed
+                        ? <CheckCircle size={18} className="text-success flex-shrink-0" />
+                        : <Target size={18} className="text-primary flex-shrink-0" />}
+                      <CardTitle className="text-base truncate">{goal.name}</CardTitle>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
                       {goal.target_date && (
-                        <span className={`text-sm px-2 py-1 rounded-full ${
-                          goal.is_completed 
-                            ? 'bg-green-100 text-green-800'
-                            : daysRemaining && daysRemaining < 0
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-blue-100 text-blue-800'
-                        }`}>
-                          {goal.is_completed 
-                            ? 'Concluído'
-                            : daysRemaining && daysRemaining < 0
-                              ? 'Atrasado'
-                              : `${daysRemaining} dias`
-                          }
-                        </span>
+                        <Badge
+                          variant="secondary"
+                          className={goal.is_completed
+                            ? 'bg-success/10 text-success'
+                            : overdue
+                              ? 'bg-destructive/10 text-destructive'
+                              : 'bg-primary/10 text-primary'}
+                        >
+                          {goal.is_completed ? 'Concluído' : overdue ? 'Atrasado' : `${daysRemaining}d`}
+                        </Badge>
                       )}
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEdit(goal)}
-                          className="h-8 w-8"
-                        >
-                          <Edit size={14} />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(goal.id)}
-                          disabled={isDeletingGoal}
-                          className="h-8 w-8 text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(goal)} className="h-7 w-7">
+                        <Edit size={13} />
+                      </Button>
+                      <Button
+                        variant="ghost" size="icon"
+                        onClick={() => handleDelete(goal.id)}
+                        disabled={isDeletingGoal}
+                        className="h-7 w-7 text-destructive hover:text-destructive"
+                      >
+                        <Trash2 size={13} />
+                      </Button>
                     </div>
                   </div>
                   {goal.description && (
-                    <p className="text-sm text-gray-600">{goal.description}</p>
+                    <p className="text-sm text-muted-foreground mt-1">{goal.description}</p>
                   )}
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span>Progresso</span>
-                    <span>{progress.toFixed(1)}%</span>
-                  </div>
-                  
+                <CardContent className="space-y-3 pt-0">
                   <Progress value={progress} className="h-2" />
-                  
-                  <div className="flex justify-between items-center">
-                    <div className="text-sm">
-                      <span className="text-gray-600">Atual: </span>
-                      <span className="font-medium">{formatCurrency(goal.current_amount)}</span>
-                    </div>
-                    <div className="text-sm">
-                      <span className="text-gray-600">Meta: </span>
-                      <span className="font-medium">{formatCurrency(goal.target_amount)}</span>
-                    </div>
-                  </div>
-                  
-                  <div className="text-sm text-gray-600">
-                    <span>Faltam: </span>
-                    <span className="font-medium text-orange-600">
-                      {formatCurrency(Math.max(0, goal.target_amount - goal.current_amount))}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      <span className="font-medium text-foreground">{formatCurrency(goal.current_amount)}</span>
+                      {' '}de {formatCurrency(goal.target_amount)}
                     </span>
+                    <span className="font-medium">{progress.toFixed(1)}%</span>
                   </div>
+                  {!goal.is_completed && (
+                    <p className="text-xs text-muted-foreground">
+                      Faltam{' '}
+                      <span className="font-semibold text-foreground">
+                        {formatCurrency(Math.max(0, goal.target_amount - goal.current_amount))}
+                      </span>
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             );

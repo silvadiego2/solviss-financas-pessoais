@@ -18,24 +18,27 @@ export const useRecurringTransactions = () => {
     queryFn: async () => {
       if (!user) return [];
 
-      // Tentativa 1: filtrar diretamente no banco por is_recurring = true
+      // Query principal: is_recurring = true OR recurrence_frequency IS NOT NULL
+      // Motivo: alguns registros podem ter is_recurring = NULL (inseridos antes da coluna
+      // existir) mas já possuem recurrence_frequency preenchido — ambos devem aparecer.
       const { data, error } = await supabase
         .from('transactions')
         .select(`
           id, description, amount, type, date, status,
           is_recurring, recurrence_frequency, recurrence_end_date,
+          last_processed_at,
           category_id, account_id,
           category:categories(name, icon, color),
           account:accounts!transactions_account_id_fkey(name, type)
         `)
         .eq('user_id', user.id)
-        .eq('is_recurring', true)
+        .or('is_recurring.eq.true,recurrence_frequency.not.is.null')
         .order('date', { ascending: false })
         .limit(200);
 
       if (!error) return data ?? [];
 
-      // Tentativa 2: coluna is_recurring pode não existir — tenta recurrence_frequency
+      // Fallback schema antigo: tenta só recurrence_frequency
       if (isSchemaError(error)) {
         const { data: data2, error: err2 } = await supabase
           .from('transactions')
@@ -52,7 +55,7 @@ export const useRecurringTransactions = () => {
           .limit(200);
 
         if (err2) {
-          if (isSchemaError(err2)) return []; // schema incompleto, retorna vazio sem quebrar
+          if (isSchemaError(err2)) return [];
           throw err2;
         }
         return data2 ?? [];
@@ -125,7 +128,7 @@ export const useRecurringTransactions = () => {
           .from('transactions')
           .select('id')
           .eq('user_id', user.id)
-          .eq('is_recurring', true)
+          .or('is_recurring.eq.true,recurrence_frequency.not.is.null')
           .lte('date', today);
         if (qErr && !isSchemaError(qErr)) throw qErr;
         return { source: 'local' as const, count: pending?.length ?? 0 };
