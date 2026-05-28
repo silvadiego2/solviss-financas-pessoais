@@ -1,190 +1,232 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { BackHeader } from '@/components/layout/BackHeader';
 import { Separator } from '@/components/ui/separator';
-import { 
-  Bell, Settings, Shield, Lock, Cloud, 
-  Trash2, Globe, Palette, AlertTriangle
+import { BackHeader } from '@/components/layout/BackHeader';
+import {
+  Bell, Palette, Shield, FileText, Trash2,
+  AlertTriangle, ChevronRight, Moon, Sun,
+  Download, Globe,
 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 interface SettingsScreenProps {
   onBack?: () => void;
 }
 
+/* ─── Row primitives ─────────────────────────────────────────────────────── */
+
+interface RowProps {
+  icon: React.ReactNode;
+  label: string;
+  description?: string;
+  right?: React.ReactNode;
+  onClick?: () => void;
+  danger?: boolean;
+}
+
+const Row: React.FC<RowProps> = ({ icon, label, description, right, onClick, danger }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={!onClick && !right}
+    className={[
+      'w-full flex items-center gap-3 px-4 py-3 text-left transition-colors',
+      onClick ? 'hover:bg-muted/50 active:bg-muted cursor-pointer' : 'cursor-default',
+      danger ? 'text-destructive' : '',
+    ].join(' ')}
+  >
+    <span className={`shrink-0 ${danger ? 'text-destructive' : 'text-muted-foreground'}`}>
+      {icon}
+    </span>
+    <span className="flex-1 min-w-0">
+      <span className="block text-sm font-medium leading-snug">{label}</span>
+      {description && (
+        <span className="block text-xs text-muted-foreground leading-snug mt-0.5">
+          {description}
+        </span>
+      )}
+    </span>
+    {right ?? (onClick && <ChevronRight size={16} className="shrink-0 text-muted-foreground" />)}
+  </button>
+);
+
+const Group: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+  <section>
+    <p className="px-4 pb-1 pt-5 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+      {title}
+    </p>
+    <div className="rounded-xl border bg-card overflow-hidden divide-y divide-border">
+      {children}
+    </div>
+  </section>
+);
+
+/* ─── Main component ─────────────────────────────────────────────────────── */
+
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   const { theme, toggleTheme } = useTheme();
+  const [notifications, setNotifications] = useState(true);
+  const [billReminders, setBillReminders] = useState(true);
   const [currency, setCurrency] = useState('BRL');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
-  const handleDeleteAccount = () => {
-    const confirmed = window.confirm(
-      '⚠️ ATENÇÃO: Esta ação é IRREVERSÍVEL!\n\n' +
-      'Todos os seus dados serão permanentemente excluídos:\n' +
-      '- Contas e cartões\n' +
-      '- Transações\n' +
-      '- Orçamentos e objetivos\n' +
-      '- Configurações\n\n' +
-      'Tem certeza que deseja excluir sua conta?'
-    );
-    
-    if (confirmed) {
-      // Lógica de exclusão aqui
-      toast.error('Conta excluída com sucesso');
-    }
+  const handleExport = () => {
+    toast.info('Exportação iniciada — o arquivo será baixado em instantes.');
+    // TODO: wire to real export logic
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-1 pb-8">
       {onBack && <BackHeader title="Configurações" onBack={onBack} />}
-      
-      {/* SEÇÃO: NOTIFICAÇÕES */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Bell size={20} />
-            Notificações Inteligentes
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="notifications">Ativar notificações</Label>
-            <Switch
-              id="notifications"
-              checked={notificationsEnabled}
-              onCheckedChange={setNotificationsEnabled}
-            />
-          </div>
-          <Button variant="outline" className="w-full">
-            Gerenciar Notificações
-          </Button>
-        </CardContent>
-      </Card>
 
-      {/* SEÇÃO: PREFERÊNCIAS */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Settings size={20} />
-            Preferências
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="currency">Moeda Corrente</Label>
+      {/* ── APARÊNCIA ───────────────────────────────────────────────────── */}
+      <Group title="Aparência">
+        <Row
+          icon={theme === 'dark' ? <Moon size={18} /> : <Sun size={18} />}
+          label="Tema"
+          description={theme === 'dark' ? 'Escuro' : 'Claro'}
+          right={
+            <Switch
+              checked={theme === 'dark'}
+              onCheckedChange={toggleTheme}
+              aria-label="Alternar tema"
+            />
+          }
+        />
+        <Row
+          icon={<Globe size={18} />}
+          label="Moeda"
+          right={
             <Select value={currency} onValueChange={setCurrency}>
-              <SelectTrigger id="currency">
+              <SelectTrigger className="h-8 w-28 border-none shadow-none pr-1 text-sm font-medium">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="BRL">Real Brasileiro (R$)</SelectItem>
-                <SelectItem value="USD">Dólar Americano ($)</SelectItem>
-                <SelectItem value="EUR">Euro (€)</SelectItem>
+                <SelectItem value="BRL">R$ Real</SelectItem>
+                <SelectItem value="USD">$ Dólar</SelectItem>
+                <SelectItem value="EUR">€ Euro</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          }
+        />
+      </Group>
 
-          <Separator />
+      {/* ── NOTIFICAÇÕES ────────────────────────────────────────────────── */}
+      <Group title="Notificações">
+        <Row
+          icon={<Bell size={18} />}
+          label="Notificações gerais"
+          description="Resumos e alertas do app"
+          right={
+            <Switch
+              checked={notifications}
+              onCheckedChange={setNotifications}
+              aria-label="Notificações gerais"
+            />
+          }
+        />
+        <Row
+          icon={<Bell size={18} />}
+          label="Lembrete de contas"
+          description="Aviso 1 dia antes do vencimento"
+          right={
+            <Switch
+              checked={billReminders}
+              onCheckedChange={setBillReminders}
+              disabled={!notifications}
+              aria-label="Lembrete de contas"
+            />
+          }
+        />
+      </Group>
 
-          <div className="flex items-center justify-between">
-            <div>
-              <Label>Tema da Interface</Label>
-              <p className="text-xs text-muted-foreground">
-                {theme === 'dark' ? 'Modo Escuro' : 'Modo Claro'}
-              </p>
-            </div>
-            <Button variant="outline" onClick={toggleTheme}>
-              <Palette size={16} className="mr-2" />
-              Alterar Tema
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* ── DADOS ───────────────────────────────────────────────────────── */}
+      <Group title="Dados">
+        <Row
+          icon={<Download size={18} />}
+          label="Exportar dados"
+          description="Baixar transações em CSV"
+          onClick={handleExport}
+        />
+      </Group>
 
-      {/* SEÇÃO: SEGURANÇA */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Shield size={20} />
-            Segurança
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button 
-            variant="outline" 
-            className="w-full"
-            onClick={() => {/* navegar para security dashboard */}}
-          >
-            <Shield size={16} className="mr-2" />
-            Segurança e Auditoria
-          </Button>
-        </CardContent>
-      </Card>
+      {/* ── SOBRE ───────────────────────────────────────────────────────── */}
+      <Group title="Sobre">
+        <Row
+          icon={<Shield size={18} />}
+          label="Segurança"
+          description="Autenticação e sessões ativas"
+          onClick={() => toast.info('Em breve: painel de segurança')}
+        />
+        <Row
+          icon={<FileText size={18} />}
+          label="Política de privacidade"
+          onClick={() => toast.info('Abrindo política de privacidade…')}
+        />
+        <Row
+          icon={<Palette size={18} />}
+          label="Versão do app"
+          description="1.0.0"
+          right={<span className="text-xs text-muted-foreground">1.0.0</span>}
+        />
+      </Group>
 
-      {/* SEÇÃO: PRIVACIDADE */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Lock size={20} />
-            Privacidade
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Seus dados são protegidos e criptografados.
-          </p>
-          <Button variant="outline" className="w-full">
-            Ver Política de Privacidade
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* SEÇÃO: BACKUP */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Cloud size={20} />
-            Backup Automático
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Button 
-            variant="outline" 
-            className="w-full"
-            onClick={() => {/* navegar para auto-backup */}}
-          >
-            Configurar Backup
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* SEÇÃO: EXCLUIR CONTA (PERIGOSO) */}
-      <Card className="border-red-200 dark:border-red-900">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2 text-red-600">
-            <AlertTriangle size={20} />
-            Zona de Perigo
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Button 
-            variant="destructive" 
-            className="w-full"
-            onClick={handleDeleteAccount}
-          >
-            <Trash2 size={16} className="mr-2" />
-            Excluir Conta Permanentemente
-          </Button>
-          <p className="text-xs text-muted-foreground mt-2 text-center">
-            Esta ação não pode ser desfeita
-          </p>
-        </CardContent>
-      </Card>
+      {/* ── ZONA DE PERIGO ──────────────────────────────────────────────── */}
+      <Group title="Zona de perigo">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <span>
+              <Row
+                icon={<Trash2 size={18} />}
+                label="Excluir conta"
+                description="Remove todos os dados permanentemente"
+                danger
+                onClick={() => {}}
+              />
+            </span>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle size={20} />
+                Excluir conta permanentemente?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Todos os seus dados serão removidos: contas, transações, orçamentos e objetivos.
+                <strong className="block mt-2 text-destructive">Esta ação não pode ser desfeita.</strong>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive hover:bg-destructive/90"
+                onClick={() => toast.error('Conta excluída.')}
+              >
+                Excluir minha conta
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Group>
     </div>
   );
 };
