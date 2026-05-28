@@ -110,74 +110,74 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div>
-        <p className="text-sm font-medium text-muted-foreground">Dashboard</p>
-        <h1 className="text-2xl font-bold mt-1">Visão Geral</h1>
+        <p className="label-eyebrow">Visão geral</p>
+        <h1 className="text-3xl font-semibold mt-1 tracking-tight">Olá, bem-vindo de volta</h1>
       </div>
 
       {/* Alert Banner */}
       {recurringWeekAmount > 0 && (
-        <div className="flex items-center gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 px-4 py-3">
-          <AlertTriangle size={18} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-300">
-            {formatCurrency(recurringWeekAmount)} em recorrentes programados.
+        <div className="flex items-center gap-3 rounded-lg bg-warning/10 border border-warning/30 px-4 py-3">
+          <AlertTriangle size={18} className="text-warning flex-shrink-0" />
+          <p className="text-sm text-foreground/80">
+            <span className="figure font-semibold text-foreground">{formatCurrency(recurringWeekAmount)}</span> em recorrentes programados.
           </p>
         </div>
       )}
 
-      {/* Budget Card + Balance Card */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Budget Card */}
-        <Card>
-          <CardContent className="p-5">
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Orçamento Disponível</p>
-            <p className={`text-2xl font-bold mt-1 ${available >= 0 ? 'text-chart-income' : 'text-destructive'}`}>
-              {formatCurrency(available)}
-            </p>
-            <div className="w-full bg-muted rounded-full h-2 mt-3">
-              <div
-                className={`h-2 rounded-full transition-all ${budgetUsed >= 90 ? 'bg-destructive' : budgetUsed >= 70 ? 'bg-amber-500' : 'bg-primary'}`}
-                style={{ width: `${Math.min(budgetUsed, 100)}%` }}
-              />
+      {/* Balance Hero + Budget */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        {/* Balance Hero - flat deep navy */}
+        <div className="lg:col-span-2 relative overflow-hidden rounded-2xl bg-primary text-primary-foreground p-7 shadow-premium">
+          <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+          <div className="relative">
+            <div className="flex items-center gap-2 mb-3">
+              <Wallet size={14} className="opacity-60" />
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-70">Patrimônio Total</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{budgetUsed.toFixed(0)}% utilizado do mês</p>
-            <div className="flex gap-2 mt-4">
-              <Button size="sm" variant="outline" className="flex-1 text-chart-income border-chart-income/30" onClick={() => { setAddType('income'); setShowAddForm(true); }}>
-                <Plus size={14} className="mr-1" /> Receita
-              </Button>
-              <Button size="sm" className="flex-1" onClick={() => { setAddType('expense'); setShowAddForm(true); }}>
-                <Plus size={14} className="mr-1" /> Despesa
-              </Button>
+            <p className="figure-hero text-5xl">{formatCurrency(totalBalance)}</p>
+            <div className="h-px w-full bg-white/10 my-6" />
+            <div className="grid grid-cols-2 gap-8">
+              <div>
+                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider opacity-60 font-medium">
+                  <ArrowUp size={11} /> Receitas do mês
+                </div>
+                <p className="figure text-lg mt-1.5">{formatCurrency(monthlyIncome)}</p>
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider opacity-60 font-medium">
+                  <ArrowDown size={11} /> Despesas do mês
+                </div>
+                <p className="figure text-lg mt-1.5">{formatCurrency(monthlyExpenses)}</p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Balance Card */}
-        <Card className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2 mb-1">
-              <Wallet size={16} className="opacity-80" />
-              <span className="text-xs font-medium opacity-80">Saldo Total</span>
-            </div>
-            <p className="text-3xl font-bold">{formatCurrency(totalBalance)}</p>
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <div>
-                <div className="flex items-center gap-1 text-xs opacity-80">
-                  <ArrowUp size={12} /> Receitas
-                </div>
-                <p className="text-sm font-semibold">{formatCurrency(monthlyIncome)}</p>
-              </div>
-              <div>
-                <div className="flex items-center gap-1 text-xs opacity-80">
-                  <ArrowDown size={12} /> Despesas
-                </div>
-                <p className="text-sm font-semibold">{formatCurrency(monthlyExpenses)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Budget */}
+        <div className="card-elevated p-6 flex flex-col">
+          <p className="label-eyebrow">Disponível no mês</p>
+          <p className={`figure-hero text-3xl mt-2 ${available >= 0 ? 'text-success' : 'text-destructive'}`}>
+            {formatCurrency(available)}
+          </p>
+          <div className="w-full bg-muted rounded-full h-1.5 mt-4">
+            <div
+              className={`h-1.5 rounded-full transition-all ${budgetUsed >= 90 ? 'bg-destructive' : budgetUsed >= 70 ? 'bg-warning' : 'bg-primary'}`}
+              style={{ width: `${Math.min(budgetUsed, 100)}%` }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">{budgetUsed.toFixed(0)}% do mês utilizado</p>
+          <div className="flex gap-2 mt-auto pt-5">
+            <Button size="sm" variant="outline" className="flex-1" onClick={() => { setAddType('income'); setShowAddForm(true); }}>
+              <Plus size={14} className="mr-1" /> Receita
+            </Button>
+            <Button size="sm" className="flex-1" onClick={() => { setAddType('expense'); setShowAddForm(true); }}>
+              <Plus size={14} className="mr-1" /> Despesa
+            </Button>
+          </div>
+        </div>
       </div>
 
       {/* Spending Chart */}
