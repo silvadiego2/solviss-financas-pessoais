@@ -22,7 +22,6 @@ import { AnalyticsHub } from './analytics/AnalyticsHub';
 import { NotificationManager } from './mobile/NotificationManager';
 import { ReceiptScanner } from './mobile/ReceiptScanner';
 import { AutoRules } from './automation/AutoRules';
-import { useTheme } from '@/contexts/ThemeContext';
 import { UserProfile } from './profile/UserProfile';
 import { DemoDataManager } from './demo/DemoDataManager';
 import { DataResetManager } from './advanced/DataResetManager';
@@ -37,9 +36,9 @@ import { Planos } from '@/pages/Planos';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [previousTab, setPreviousTab] = useState('more');
+  // Stack de navegação: guarda o último tab antes de entrar em subpáginas
+  const [tabHistory, setTabHistory] = useState<string[]>([]);
   const { user, loading } = useAuth();
-  const { toggleTheme } = useTheme();
 
   if (loading) {
     return (
@@ -56,15 +55,28 @@ export const FinanceApp: React.FC = () => {
     return <AuthScreen />;
   }
 
+  // Tabs de primeiro nível (não precisam de "voltar")
+  const ROOT_TABS = new Set([
+    'dashboard', 'transactions', 'budgets', 'recurring-transactions',
+    'cash-flow', 'cards', 'goals', 'intelligence', 'reports',
+    'plans', 'more', 'add',
+  ]);
+
   const handleTabChange = (tab: string) => {
-    if (activeTab === 'more' && tab !== 'more') {
-      setPreviousTab('more');
+    // Se saindo de um tab raiz para uma subpágina, empilha o origem
+    if (ROOT_TABS.has(activeTab) && !ROOT_TABS.has(tab)) {
+      setTabHistory(prev => [...prev, activeTab]);
     }
     setActiveTab(tab);
   };
 
-  const handleBackToMore = () => {
-    setActiveTab(previousTab);
+  const handleBack = () => {
+    setTabHistory(prev => {
+      const next = [...prev];
+      const origin = next.pop() ?? 'more';
+      setActiveTab(origin);
+      return next;
+    });
   };
 
   const renderContent = () => {
@@ -72,53 +84,54 @@ export const FinanceApp: React.FC = () => {
       case 'dashboard':
         return <DashboardOverview onNavigate={handleTabChange} />;
       case 'accounts':
-        return <AccountsList onBack={handleBackToMore} />;
+        return <AccountsList onBack={handleBack} />;
       case 'budgets':
-        return <BudgetsList onBack={handleBackToMore} />;
+        return <BudgetsList onBack={handleBack} />;
       case 'add':
         return <AddTransactionForm />;
       case 'transactions':
         return <TransactionsList />;
       case 'reports':
-        return <SimpleReports onBack={handleBackToMore} />;
+        return <SimpleReports onBack={handleBack} />;
       case 'cards':
-        return <CreditCardsList onBack={handleBackToMore} />;
+        return <CreditCardsList onBack={handleBack} />;
       case 'goals':
-        return <SimpleGoals onBack={handleBackToMore} />;
+        return <SimpleGoals onBack={handleBack} />;
       case 'categories':
-        return <CategoryManager onBack={handleBackToMore} />;
+        return <CategoryManager onBack={handleBack} />;
       case 'export':
-        return <ExportReports onBack={handleBackToMore} />;
+        return <ExportReports onBack={handleBack} />;
       case 'import-transactions':
-        return <ImportTransactions onBack={handleBackToMore} />;
+        return <ImportTransactions onBack={handleBack} />;
       case 'profile':
-        return <UserProfile onBack={handleBackToMore} />;
+        return <UserProfile onBack={handleBack} />;
       case 'settings':
-        return <SettingsScreen onBack={handleBackToMore} />;
+        return <SettingsScreen onBack={handleBack} />;
       case 'auto-categorization':
-        return <AutoCategorizationManager onBack={handleBackToMore} />;
+        return <AutoCategorizationManager onBack={handleBack} />;
       case 'duplicate-detection':
-        return <DuplicateDetectionManager onBack={handleBackToMore} />;
+        return <DuplicateDetectionManager onBack={handleBack} />;
       case 'auto-backup':
-        return <AutoBackupManager onBack={handleBackToMore} />;
+        return <AutoBackupManager onBack={handleBack} />;
       case 'analytics':
-        return <AnalyticsHub onBack={handleBackToMore} />;
+        return <AnalyticsHub onBack={handleBack} />;
       case 'receipt-scanner':
-        return <ReceiptScanner onBack={handleBackToMore} />;
+        return <ReceiptScanner onBack={handleBack} />;
       case 'notifications':
-        return <NotificationManager onBack={handleBackToMore} />;
+        return <NotificationManager onBack={handleBack} />;
       case 'auto-rules':
-        return <AutoRules onBack={handleBackToMore} />;
+        return <AutoRules onBack={handleBack} />;
       case 'demo-data':
-        return <DemoDataManager onBack={handleBackToMore} />;
+        return <DemoDataManager onBack={handleBack} />;
       case 'data-reset':
-        return <DataResetManager onBack={handleBackToMore} />;
+        return <DataResetManager onBack={handleBack} />;
       case 'recurring-transactions':
-        return <RecurringTransactionsManager onBack={handleBackToMore} />;
+        return <RecurringTransactionsManager onBack={handleBack} />;
       case 'security':
-        return <SecurityDashboard onBack={handleBackToMore} />;
+        return <SecurityDashboard onBack={handleBack} />;
       case 'agenda':
-        return <AgendaFinanceira onBack={handleBackToMore} />;
+        return <AgendaFinanceira onBack={handleBack} />;
+      // Páginas da sidebar (primeiro nível — sem onBack)
       case 'cash-flow':
         return <FluxoDeCaixa />;
       case 'intelligence':
@@ -127,8 +140,11 @@ export const FinanceApp: React.FC = () => {
         return <Relatorios />;
       case 'plans':
         return <Planos />;
+      // Alias: sidebar usa 'budgets' para Planejamento
+      case 'planejamento':
+        return <Planejamento />;
       case 'more':
-        return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
+        return <MoreOptions onNavigate={handleTabChange} />;
       default:
         return <DashboardOverview onNavigate={handleTabChange} />;
     }

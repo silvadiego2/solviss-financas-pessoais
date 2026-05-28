@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Home, Receipt, CalendarRange, Repeat, TrendingUp,
   CreditCard, Target, Brain, BarChart3, Crown,
-  Plug, Settings, Moon, Sun, User, LogOut,
+  Settings, Moon, Sun, User, LogOut,
   Menu, X, PlusCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -17,17 +17,17 @@ interface AppSidebarProps {
 }
 
 const navItems = [
-  { id: 'dashboard', icon: Home, label: 'Dashboard' },
-  { id: 'transactions', icon: Receipt, label: 'Transações' },
-  { id: 'budgets', icon: CalendarRange, label: 'Planejamento' },
-  { id: 'recurring-transactions', icon: Repeat, label: 'Recorrentes' },
-  { id: 'cash-flow', icon: TrendingUp, label: 'Fluxo de Caixa' },
-  { id: 'cards', icon: CreditCard, label: 'Cartões' },
-  { id: 'goals', icon: Target, label: 'Metas' },
-  { id: 'intelligence', icon: Brain, label: 'Inteligência' },
-  { id: 'reports', icon: BarChart3, label: 'Relatórios' },
-  { id: 'plans', icon: Crown, label: 'Planos' },
-  { id: 'integrations', icon: Plug, label: 'Integrações' },
+  { id: 'dashboard',               icon: Home,          label: 'Dashboard' },
+  { id: 'transactions',            icon: Receipt,       label: 'Transações' },
+  { id: 'budgets',                 icon: CalendarRange, label: 'Planejamento' },
+  { id: 'recurring-transactions',  icon: Repeat,        label: 'Recorrentes' },
+  { id: 'cash-flow',               icon: TrendingUp,    label: 'Fluxo de Caixa' },
+  { id: 'cards',                   icon: CreditCard,    label: 'Cartões' },
+  { id: 'goals',                   icon: Target,        label: 'Metas' },
+  { id: 'intelligence',            icon: Brain,         label: 'Inteligência' },
+  { id: 'reports',                 icon: BarChart3,     label: 'Relatórios' },
+  { id: 'plans',                   icon: Crown,         label: 'Planos' },
+  // 'integrations' removido: não há componente/rota implementada
 ];
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }) => {
@@ -58,7 +58,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
         )}
       </div>
 
-      {/* New transaction */}
+      {/* Nova Transação */}
       <div className="px-4 py-4">
         <Button onClick={() => handleNav('add')} className="w-full gap-2 shadow-premium-sm" size="default">
           <PlusCircle size={16} />
@@ -111,7 +111,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
           <span>{theme === 'light' ? 'Modo Escuro' : 'Modo Claro'}</span>
         </button>
 
-        {/* User */}
         <div className="flex items-center gap-2 px-3 py-2">
           <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
             <User size={14} className="text-primary" />
@@ -132,7 +131,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
 
   return (
     <>
-      {/* Mobile hamburger trigger */}
       {isMobile && !mobileOpen && (
         <button
           onClick={() => setMobileOpen(true)}
@@ -141,13 +139,9 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange }
           <Menu size={20} />
         </button>
       )}
-
-      {/* Mobile overlay */}
       {isMobile && mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setMobileOpen(false)} />
       )}
-
-      {/* Sidebar */}
       <aside
         className={cn(
           'bg-card border-r border-border flex-shrink-0 transition-transform duration-300 z-50',

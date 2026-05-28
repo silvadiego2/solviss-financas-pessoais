@@ -30,12 +30,7 @@ interface ScannedData {
   merchant?: string;
 }
 
-interface AddTransactionFormProps {
-  onClose?: () => void;
-}
-
-// formatDateBR is imported from '@/utils/dateHelpers'
-
+// Interface única (removida duplicata)
 interface AddTransactionFormProps {
   onClose?: () => void;
 }
@@ -68,7 +63,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
 
-  // Auto-categorize based on description keywords (only when no category selected yet).
   useEffect(() => {
     if (categoryId || !description) return;
     const suggested = suggestCategoryId(description, filteredCategories as any, type);
@@ -96,10 +90,11 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      setReceiptFile(file);
-    }
+    if (file) setReceiptFile(file);
   };
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -121,20 +116,16 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       const errors = 'errors' in validation ? validation.errors : {};
       setValidationErrors(errors);
       const firstError = Object.values(errors)[0] as string || 'Erro de validação';
-      enhancedToast.error('Erro de validação', {
-        description: firstError,
-      });
+      enhancedToast.error('Erro de validação', { description: firstError });
       return;
     }
 
     const numericAmount = parseAmount(amount);
-
     setLoading(true);
     setProgress(0);
 
     try {
       setProgress(25);
-      
       await createTransaction({
         type,
         amount: numericAmount,
@@ -148,22 +139,11 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
         recurrence_frequency: isRecurring ? recurrenceFrequency : undefined,
         recurrence_end_date: isRecurring && recurrenceEndDate ? recurrenceEndDate : undefined,
       });
-
       setProgress(100);
-
       enhancedToast.success(
         `${type === 'income' ? 'Receita' : 'Despesa'} adicionada!`,
-        {
-          description: `${formatCurrency(numericAmount)} foi registrado com sucesso.`,
-          action: {
-            label: 'Ver Relatório',
-            onClick: () => {
-              console.log('Navigate to reports');
-            }
-          }
-        }
+        { description: `${formatCurrency(numericAmount)} foi registrado com sucesso.` }
       );
-      
       setAmount('');
       setDescription('');
       setAccountId('');
@@ -175,14 +155,11 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       setRecurrenceFrequency('monthly');
       setRecurrenceEndDate('');
       setValidationErrors({});
-      
-      if (onClose) {
-        onClose();
-      }
+      if (onClose) onClose();
     } catch (error: any) {
       enhancedToast.error('Erro ao adicionar transação', {
         description: error.message || 'Tente novamente em alguns instantes.',
-        important: true
+        important: true,
       });
     } finally {
       setLoading(false);
@@ -190,37 +167,18 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     }
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
   const handleCapturePhoto = async () => {
     try {
       const photo = await capturePhoto();
-      if (photo.dataUrl) {
-        setCapturedImage(photo.dataUrl);
-        processImage(photo.dataUrl);
-      }
-    } catch (error) {
-      console.error('Erro ao capturar foto:', error);
-      toast.error('Erro ao capturar foto');
-    }
+      if (photo.dataUrl) { setCapturedImage(photo.dataUrl); processImage(photo.dataUrl); }
+    } catch { toast.error('Erro ao capturar foto'); }
   };
 
   const handleSelectFromGallery = async () => {
     try {
       const photo = await selectFromGallery();
-      if (photo.dataUrl) {
-        setCapturedImage(photo.dataUrl);
-        processImage(photo.dataUrl);
-      }
-    } catch (error) {
-      console.error('Erro ao selecionar imagem:', error);
-      toast.error('Erro ao selecionar imagem');
-    }
+      if (photo.dataUrl) { setCapturedImage(photo.dataUrl); processImage(photo.dataUrl); }
+    } catch { toast.error('Erro ao selecionar imagem'); }
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -238,25 +196,12 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const processImage = async (imageDataUrl: string) => {
     setIsProcessing(true);
-    
     try {
       toast.info('Processando imagem...');
-      
-      const { data: { text } } = await Tesseract.recognize(
-        imageDataUrl,
-        'por',
-        {
-          logger: m => console.log(m)
-        }
-      );
-
-      const extracted = extractReceiptData(text);
-      setScannedData(extracted);
-      
+      const { data: { text } } = await Tesseract.recognize(imageDataUrl, 'por', { logger: m => console.log(m) });
+      setScannedData(extractReceiptData(text));
       toast.success('Recibo processado com sucesso!');
-      
-    } catch (error) {
-      console.error('Erro ao processar imagem:', error);
+    } catch {
       toast.error('Erro ao processar imagem');
     } finally {
       setIsProcessing(false);
@@ -264,56 +209,28 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   };
 
   const extractReceiptData = (text: string): ScannedData => {
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
     const amountRegex = /(?:R\$\s*)?(\d{1,3}(?:\.\d{3})*(?:,\d{2})?|\d+(?:,\d{2})?)/g;
     const amounts = text.match(amountRegex);
-    
     let amount: number | undefined;
-    if (amounts && amounts.length > 0) {
-      const numericAmounts = amounts.map(a => {
-        const cleaned = a.replace(/R\$\s*/, '').replace(/\./g, '').replace(',', '.');
-        return parseFloat(cleaned);
-      }).filter(n => !isNaN(n));
-      
-      if (numericAmounts.length > 0) {
-        amount = Math.max(...numericAmounts);
-      }
+    if (amounts?.length) {
+      const nums = amounts.map(a => parseFloat(a.replace(/R\$\s*/, '').replace(/\./g, '').replace(',', '.'))).filter(n => !isNaN(n));
+      if (nums.length) amount = Math.max(...nums);
     }
-
-    const dateRegex = /(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/;
-    const dateMatch = text.match(dateRegex);
+    const dateMatch = text.match(/(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})/);
     let date: string | undefined;
     if (dateMatch) {
-      const dateStr = dateMatch[1];
-      const parts = dateStr.split(/[\/\-\.]/);
+      const parts = dateMatch[1].split(/[\/\-\.]/);
       if (parts.length === 3) {
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        let year = parts[2];
-        if (year.length === 2) {
-          year = '20' + year;
-        }
-        date = `${year}-${month}-${day}`;
+        const [d, m, y] = parts;
+        date = `${y.length === 2 ? '20' + y : y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
       }
     }
-
     let merchant: string | undefined;
-    if (lines.length > 0) {
-      for (const line of lines.slice(0, 5)) {
-        if (line.length > 3 && line.length < 50 && !/^\d+$/.test(line)) {
-          merchant = line;
-          break;
-        }
-      }
+    for (const line of lines.slice(0, 5)) {
+      if (line.length > 3 && line.length < 50 && !/^\d+$/.test(line)) { merchant = line; break; }
     }
-
-    return {
-      amount,
-      date,
-      merchant,
-      description: merchant || 'Transação escaneada',
-    };
+    return { amount, date, merchant, description: merchant || 'Transação escaneada' };
   };
 
   const handleUseScannedData = async () => {
@@ -321,19 +238,14 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       setAmount(scannedData.amount?.toString().replace('.', ',') || '');
       setDescription(scannedData.description || '');
       setDate(scannedData.date || date);
-      
       if (capturedImage) {
         try {
           const response = await fetch(capturedImage);
           const blob = await response.blob();
-          const file = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
-          setReceiptFile(file);
-        } catch (error) {
-          console.error('Erro ao converter imagem:', error);
-        }
+          setReceiptFile(new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+        } catch { /* ignora */ }
       }
     }
-    
     setCapturedImage(null);
     setIsProcessing(false);
     setScannedData(null);
@@ -370,26 +282,14 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             <div className="space-y-2">
               <Label htmlFor="amount">Valor *</Label>
-              <Input
-                id="amount"
-                type="text"
-                placeholder="0,00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
+              <Input id="amount" type="text" placeholder="0,00" value={amount} onChange={(e) => setAmount(e.target.value)} required />
+              {validationErrors.amount && <p className="text-xs text-destructive">{validationErrors.amount}</p>}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="description">Descrição *</Label>
-              <Input
-                id="description"
-                type="text"
-                placeholder="Ex: Almoço, Salário, Compras..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
-              />
+              <Input id="description" type="text" placeholder="Ex: Almoço, Salário, Compras..." value={description} onChange={(e) => setDescription(e.target.value)} required />
+              {validationErrors.description && <p className="text-xs text-destructive">{validationErrors.description}</p>}
             </div>
 
             <div className="space-y-2">
@@ -400,13 +300,11 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                 </SelectTrigger>
                 <SelectContent>
                   {allAccounts.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground text-center">
-                      Nenhuma conta cadastrada
-                    </div>
+                    <div className="p-2 text-sm text-muted-foreground text-center">Nenhuma conta cadastrada</div>
                   ) : (
                     allAccounts.map((account) => (
                       <SelectItem key={account.id} value={account.id}>
-                        {account.type === 'credit_card' ? '💳' : '🏦'} {account.name} {account.type === 'credit_card' ? `(Cartão)` : '(Conta)'}
+                        {account.type === 'credit_card' ? '💳' : '🏦'} {account.name} {account.type === 'credit_card' ? '(Cartão)' : '(Conta)'}
                       </SelectItem>
                     ))
                   )}
@@ -416,47 +314,26 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             <div className="space-y-2">
               <Label htmlFor="category">Categoria *</Label>
-              <CategoryCombobox
-                categories={filteredCategories as any}
-                value={categoryId}
-                onChange={setCategoryId}
-                placeholder="Selecione uma categoria"
-              />
+              <CategoryCombobox categories={filteredCategories as any} value={categoryId} onChange={setCategoryId} placeholder="Selecione uma categoria" />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="date">Data</Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
+              <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
 
+            {/* Recorrência */}
             <div className="space-y-3 pt-2 border-t">
               <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="recurring"
-                  checked={isRecurring}
-                  onCheckedChange={(checked) => setIsRecurring(checked as boolean)}
-                />
-                <Label htmlFor="recurring" className="cursor-pointer">
-                  Transação Recorrente
-                </Label>
+                <Checkbox id="recurring" checked={isRecurring} onCheckedChange={(checked) => setIsRecurring(checked as boolean)} />
+                <Label htmlFor="recurring" className="cursor-pointer">Transação Recorrente</Label>
               </div>
-
               {isRecurring && (
                 <div className="grid grid-cols-2 gap-4 pl-6">
                   <div className="space-y-2">
                     <Label htmlFor="frequency">Frequência</Label>
-                    <Select
-                      value={recurrenceFrequency}
-                      onValueChange={(value: any) => setRecurrenceFrequency(value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                    <Select value={recurrenceFrequency} onValueChange={(value: any) => setRecurrenceFrequency(value)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="daily">Diária</SelectItem>
                         <SelectItem value="weekly">Semanal</SelectItem>
@@ -465,35 +342,22 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                       </SelectContent>
                     </Select>
                   </div>
-
                   <div className="space-y-2">
                     <Label htmlFor="endDate">Data Final</Label>
-                    <Input
-                      id="endDate"
-                      type="date"
-                      value={recurrenceEndDate}
-                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                      min={date}
-                    />
+                    <Input id="endDate" type="date" value={recurrenceEndDate} onChange={(e) => setRecurrenceEndDate(e.target.value)} min={date} />
                   </div>
                 </div>
               )}
             </div>
 
+            {/* Comprovante */}
             <div className="space-y-2">
               <Label htmlFor="receipt">Anexar Comprovante/Nota Fiscal</Label>
               <div className="flex gap-2">
                 <div className="flex-1 flex items-center space-x-2">
-                  <Input
-                    id="receipt"
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={handleFileChange}
-                    className="flex-1"
-                  />
+                  <Input id="receipt" type="file" accept="image/*,.pdf" onChange={handleFileChange} className="flex-1" />
                   <Upload size={20} className="text-gray-400" />
                 </div>
-                
                 <Dialog open={showScannerDialog} onOpenChange={setShowScannerDialog}>
                   <DialogTrigger asChild>
                     <Button type="button" variant="outline" size="icon" title="Escanear recibo">
@@ -501,87 +365,47 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Scanner de Recibo</DialogTitle>
-                    </DialogHeader>
-                    
+                    <DialogHeader><DialogTitle>Scanner de Recibo</DialogTitle></DialogHeader>
                     <div className="space-y-4">
                       {!capturedImage && (
                         <div className="grid grid-cols-1 gap-3">
                           <Button type="button" onClick={handleCapturePhoto} className="flex items-center gap-2">
-                            <Camera size={18} />
-                            Tirar Foto
+                            <Camera size={18} /> Tirar Foto
                           </Button>
-                          
                           <Button type="button" variant="outline" onClick={handleSelectFromGallery} className="flex items-center gap-2">
-                            <FileImage size={18} />
-                            Selecionar da Galeria
+                            <FileImage size={18} /> Selecionar da Galeria
                           </Button>
-                          
                           <div className="relative">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              className="w-full flex items-center gap-2"
-                              onClick={() => document.getElementById('scanner-file-upload')?.click()}
-                            >
-                              <Upload size={18} />
-                              Upload de Arquivo
+                            <Button type="button" variant="outline" className="w-full flex items-center gap-2" onClick={() => document.getElementById('scanner-file-upload')?.click()}>
+                              <Upload size={18} /> Upload de Arquivo
                             </Button>
-                            <input
-                              id="scanner-file-upload"
-                              type="file"
-                              accept="image/*"
-                              onChange={handleFileUpload}
-                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                            />
+                            <input id="scanner-file-upload" type="file" accept="image/*" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                           </div>
                         </div>
                       )}
-                      
                       {capturedImage && isProcessing && (
                         <div className="text-center space-y-4">
-                          <img
-                            src={capturedImage}
-                            alt="Recibo capturado"
-                            className="max-w-full max-h-64 rounded-lg border mx-auto"
-                          />
+                          <img src={capturedImage} alt="Recibo capturado" className="max-w-full max-h-64 rounded-lg border mx-auto" />
                           <div className="flex items-center justify-center gap-2 text-muted-foreground">
                             <Loader2 size={18} className="animate-spin" />
                             <span>Processando OCR...</span>
                           </div>
                         </div>
                       )}
-                      
                       {capturedImage && !isProcessing && scannedData && (
                         <div className="space-y-4">
-                          <img
-                            src={capturedImage}
-                            alt="Recibo capturado"
-                            className="max-w-full max-h-48 rounded-lg border mx-auto"
-                          />
-                          
+                          <img src={capturedImage} alt="Recibo capturado" className="max-w-full max-h-48 rounded-lg border mx-auto" />
                           <div className="space-y-2 p-3 bg-muted rounded-lg">
                             <p className="text-sm font-medium">Dados Extraídos:</p>
-                            {scannedData.amount && (
-                              <p className="text-sm">Valor: <span className="font-semibold">{formatCurrency(scannedData.amount)}</span></p>
-                            )}
-                            {scannedData.description && (
-                              <p className="text-sm">Descrição: <span className="font-semibold">{scannedData.description}</span></p>
-                            )}
-                            {scannedData.date && (
-                              <p className="text-sm">Data: <span className="font-semibold">{formatDateBR(scannedData.date)}</span></p>
-                            )}
+                            {scannedData.amount && <p className="text-sm">Valor: <span className="font-semibold">{formatCurrency(scannedData.amount)}</span></p>}
+                            {scannedData.description && <p className="text-sm">Descrição: <span className="font-semibold">{scannedData.description}</span></p>}
+                            {scannedData.date && <p className="text-sm">Data: <span className="font-semibold">{formatDateBR(scannedData.date)}</span></p>}
                           </div>
-                          
                           <div className="flex gap-2">
                             <Button type="button" variant="outline" onClick={resetScanner} className="flex-1">
-                              <Trash2 size={16} className="mr-2" />
-                              Descartar
+                              <Trash2 size={16} className="mr-2" /> Descartar
                             </Button>
-                            <Button type="button" onClick={handleUseScannedData} className="flex-1">
-                              Usar Dados
-                            </Button>
+                            <Button type="button" onClick={handleUseScannedData} className="flex-1">Usar Dados</Button>
                           </div>
                         </div>
                       )}
@@ -589,40 +413,22 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                   </DialogContent>
                 </Dialog>
               </div>
-              {receiptFile && (
-                <p className="text-sm text-green-600">
-                  Arquivo selecionado: {receiptFile.name}
-                </p>
-              )}
+              {receiptFile && <p className="text-sm text-green-600">Arquivo selecionado: {receiptFile.name}</p>}
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={loading}
-            >
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? (
                 <div className="flex items-center space-x-2">
-                  <ProgressIndicator 
-                    variant="circular" 
-                    size="sm" 
-                    message="" 
-                  />
+                  <ProgressIndicator variant="circular" size="sm" message="" />
                   <span>Adicionando...</span>
                 </div>
               ) : (
                 `Adicionar ${type === 'income' ? 'Receita' : 'Despesa'}`
               )}
             </Button>
-
             {loading && progress > 0 && (
               <div className="mt-2">
-                <ProgressIndicator 
-                  progress={progress}
-                  message="Salvando transação..."
-                  showPercentage={false}
-                  size="sm"
-                />
+                <ProgressIndicator progress={progress} message="Salvando transação..." showPercentage={false} size="sm" />
               </div>
             )}
           </form>
