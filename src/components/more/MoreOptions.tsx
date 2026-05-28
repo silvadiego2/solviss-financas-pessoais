@@ -23,7 +23,9 @@ import {
   BarChart3,
   Settings,
   Copy,
-  Sparkles
+  Sparkles,
+  CalendarClock,
+  Bell
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -33,8 +35,14 @@ interface MoreOptionsProps {
 
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTheme }) => {
 
-  // Aba: GERENCIAR
   const manageItems = [
+    {
+      title: 'Agenda Financeira',
+      description: 'Contas a pagar e a receber',
+      icon: CalendarClock,
+      action: () => onNavigate('agenda'),
+      highlight: true,
+    },
     {
       title: 'Contas Bancárias',
       description: 'Gerenciar contas e saldos',
@@ -84,6 +92,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       action: () => onNavigate('export')
     },
     {
+      title: 'Notificações',
+      description: 'Alertas de vencimento e orçamento',
+      icon: Bell,
+      action: () => onNavigate('notifications')
+    },
+    {
       title: 'Configurações',
       description: 'Preferências, segurança e mais',
       icon: Settings,
@@ -91,7 +105,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
     },
   ];
 
-  // Aba: ACOMPANHAR
   const trackItems = [
     {
       title: 'Relatórios Financeiros',
@@ -131,7 +144,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
     },
   ];
 
-  // Aba: SOBRE
   const aboutItems = [
     {
       title: 'Perfil do Usuário',
@@ -172,6 +184,29 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
     },
   ];
 
+  const renderItems = (items: typeof manageItems) =>
+    items.map((item, index) => (
+      <Button
+        key={index}
+        variant={item.variant || 'ghost'}
+        className={`w-full justify-start h-auto py-3 ${
+          (item as any).highlight ? 'border border-primary/30 bg-primary/5 hover:bg-primary/10' : ''
+        }`}
+        onClick={item.action}
+      >
+        <div className="flex items-center gap-3 flex-1">
+          <div className="flex-shrink-0">
+            <item.icon className={`h-5 w-5 ${ (item as any).highlight ? 'text-primary' : ''}`} />
+          </div>
+          <div className="flex-1 text-left">
+            <div className="text-sm font-medium">{item.title}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{item.description}</div>
+          </div>
+          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        </div>
+      </Button>
+    ));
+
   return (
     <Card>
       <CardHeader>
@@ -184,81 +219,9 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
             <TabsTrigger value="track">Acompanhar</TabsTrigger>
             <TabsTrigger value="about">Sobre</TabsTrigger>
           </TabsList>
-
-          {/* Aba: GERENCIAR */}
-          <TabsContent value="manage" className="space-y-3 mt-4">
-            {manageItems.map((item, index) => (
-              <Button
-                key={index}
-                variant="ghost"
-                className="w-full justify-start h-auto py-3"
-                onClick={item.action}
-              >
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="flex-shrink-0">
-                    <item.icon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium">{item.title}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {item.description}
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                </div>
-              </Button>
-            ))}
-          </TabsContent>
-
-          {/* Aba: ACOMPANHAR */}
-          <TabsContent value="track" className="space-y-3 mt-4">
-            {trackItems.map((item, index) => (
-              <Button
-                key={index}
-                variant="ghost"
-                className="w-full justify-start h-auto py-3"
-                onClick={item.action}
-              >
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="flex-shrink-0">
-                    <item.icon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium">{item.title}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {item.description}
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                </div>
-              </Button>
-            ))}
-          </TabsContent>
-
-          {/* Aba: SOBRE */}
-          <TabsContent value="about" className="space-y-3 mt-4">
-            {aboutItems.map((item, index) => (
-              <Button
-                key={index}
-                variant={item.variant || "ghost"}
-                className="w-full justify-start h-auto py-3"
-                onClick={item.action}
-              >
-                <div className="flex items-center gap-3 flex-1">
-                  <div className="flex-shrink-0">
-                    <item.icon className="h-5 w-5" />
-                  </div>
-                  <div className="flex-1 text-left">
-                    <div className="text-sm font-medium">{item.title}</div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {item.description}
-                    </div>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                </div>
-              </Button>
-            ))}
-          </TabsContent>
+          <TabsContent value="manage" className="space-y-3 mt-4">{renderItems(manageItems)}</TabsContent>
+          <TabsContent value="track" className="space-y-3 mt-4">{renderItems(trackItems)}</TabsContent>
+          <TabsContent value="about" className="space-y-3 mt-4">{renderItems(aboutItems)}</TabsContent>
         </Tabs>
       </CardContent>
     </Card>

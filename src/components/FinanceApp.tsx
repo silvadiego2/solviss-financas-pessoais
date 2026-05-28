@@ -28,6 +28,7 @@ import { DemoDataManager } from './demo/DemoDataManager';
 import { DataResetManager } from './advanced/DataResetManager';
 import { RecurringTransactionsManager } from './transactions/RecurringTransactionsManager';
 import { SettingsScreen } from './settings/SettingsScreen';
+import { AgendaFinanceira } from './agenda/AgendaFinanceira';
 import { Planejamento } from '@/pages/Planejamento';
 import { FluxoDeCaixa } from '@/pages/FluxoDeCaixa';
 import { Inteligencia } from '@/pages/Inteligencia';
@@ -116,6 +117,8 @@ export const FinanceApp: React.FC = () => {
         return <RecurringTransactionsManager onBack={handleBackToMore} />;
       case 'security':
         return <SecurityDashboard onBack={handleBackToMore} />;
+      case 'agenda':
+        return <AgendaFinanceira onBack={handleBackToMore} />;
       case 'cash-flow':
         return <FluxoDeCaixa />;
       case 'intelligence':

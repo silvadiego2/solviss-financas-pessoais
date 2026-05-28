@@ -1,14 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { BackHeader } from '@/components/layout/BackHeader';
-import { LocalNotifications } from '@capacitor/local-notifications';
-import { Bell, Calendar, DollarSign, Target, AlertTriangle } from 'lucide-react';
+import { Bell, Calendar, DollarSign, Target, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface NotificationRule {
@@ -25,160 +23,100 @@ interface NotificationManagerProps {
   onBack?: () => void;
 }
 
-export const NotificationManager: React.FC<NotificationManagerProps> = ({ onBack }) => {
-  const [notificationRules, setNotificationRules] = useState<NotificationRule[]>([
-    {
-      id: '1',
-      type: 'budget_alert',
-      title: 'Alerta de Orçamento (80%)',
-      enabled: true,
-      threshold: 80,
-    },
-    {
-      id: '2',
-      type: 'bill_reminder',
-      title: 'Lembrete de Contas',
-      enabled: true,
-      days: 3,
-      time: '09:00',
-    },
-    {
-      id: '3',
-      type: 'goal_deadline',
-      title: 'Prazo de Metas',
-      enabled: false,
-      days: 7,
-    },
-    {
-      id: '4',
-      type: 'spending_alert',
-      title: 'Gastos Excessivos',
-      enabled: true,
-      threshold: 500,
-    },
-  ]);
+const STORAGE_KEY = 'solviss_notification_rules';
 
-  const [permissionGranted, setPermissionGranted] = useState(false);
+const DEFAULT_RULES: NotificationRule[] = [
+  { id: '1', type: 'budget_alert', title: 'Alerta de Orçamento (80%)', enabled: true, threshold: 80 },
+  { id: '2', type: 'bill_reminder', title: 'Lembrete de Contas', enabled: true, days: 3, time: '09:00' },
+  { id: '3', type: 'goal_deadline', title: 'Prazo de Metas', enabled: false, days: 7 },
+  { id: '4', type: 'spending_alert', title: 'Gastos Excessivos', enabled: true, threshold: 500 },
+];
+
+export const NotificationManager: React.FC<NotificationManagerProps> = ({ onBack }) => {
+  const [rules, setRules] = useState<NotificationRule[]>(() => {
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY);
+      return saved ? JSON.parse(saved) : DEFAULT_RULES;
+    } catch {
+      return DEFAULT_RULES;
+    }
+  });
+  const [permission, setPermission] = useState<NotificationPermission>('default');
 
   useEffect(() => {
-    checkNotificationPermission();
+    if ('Notification' in window) {
+      setPermission(Notification.permission);
+    }
   }, []);
 
-  const checkNotificationPermission = async () => {
-    try {
-      const permission = await LocalNotifications.checkPermissions();
-      setPermissionGranted(permission.display === 'granted');
-    } catch (error) {
-      console.error('Error checking notification permissions:', error);
-    }
-  };
+  useEffect(() => {
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(rules)); } catch {}
+  }, [rules]);
 
   const requestPermission = async () => {
-    try {
-      const permission = await LocalNotifications.requestPermissions();
-      setPermissionGranted(permission.display === 'granted');
-      
-      if (permission.display === 'granted') {
-        toast.success('Permissões de notificação concedidas!');
-      } else {
-        toast.error('Permissões de notificação negadas');
-      }
-    } catch (error) {
-      console.error('Error requesting permissions:', error);
-      toast.error('Erro ao solicitar permissões');
-    }
-  };
-
-  const toggleRule = (ruleId: string) => {
-    setNotificationRules(rules =>
-      rules.map(rule =>
-        rule.id === ruleId ? { ...rule, enabled: !rule.enabled } : rule
-      )
-    );
-  };
-
-  const updateRuleThreshold = (ruleId: string, threshold: number) => {
-    setNotificationRules(rules =>
-      rules.map(rule =>
-        rule.id === ruleId ? { ...rule, threshold } : rule
-      )
-    );
-  };
-
-  const updateRuleDays = (ruleId: string, days: number) => {
-    setNotificationRules(rules =>
-      rules.map(rule =>
-        rule.id === ruleId ? { ...rule, days } : rule
-      )
-    );
-  };
-
-  const updateRuleTime = (ruleId: string, time: string) => {
-    setNotificationRules(rules =>
-      rules.map(rule =>
-        rule.id === ruleId ? { ...rule, time } : rule
-      )
-    );
-  };
-
-  const sendTestNotification = async () => {
-    if (!permissionGranted) {
-      toast.error('Permissões de notificação necessárias');
+    if (!('Notification' in window)) {
+      toast.error('Seu navegador não suporta notificações');
       return;
     }
-
-    try {
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            title: 'ExpensePilot Go',
-            body: 'Esta é uma notificação de teste!',
-            id: Date.now(),
-            schedule: { at: new Date(Date.now() + 2000) },
-          },
-        ],
-      });
-      toast.success('Notificação de teste enviada!');
-    } catch (error) {
-      console.error('Error sending test notification:', error);
-      toast.error('Erro ao enviar notificação de teste');
+    const result = await Notification.requestPermission();
+    setPermission(result);
+    if (result === 'granted') {
+      toast.success('Notificações ativadas!');
+    } else {
+      toast.error('Permissão de notificação negada');
     }
   };
+
+  const sendTestNotification = () => {
+    if (permission !== 'granted') {
+      toast.error('Ative as notificações primeiro');
+      return;
+    }
+    new Notification('Solviss Finanças', {
+      body: 'Notificações funcionando corretamente! 🎉',
+      icon: '/favicon.ico',
+    });
+    toast.success('Notificação de teste enviada!');
+  };
+
+  const sendBudgetAlert = useCallback((categoryName: string, percent: number) => {
+    if (permission !== 'granted') return;
+    new Notification('⚠️ Alerta de Orçamento — Solviss', {
+      body: `${categoryName}: ${percent.toFixed(0)}% do orçamento utilizado.`,
+      icon: '/favicon.ico',
+    });
+  }, [permission]);
+
+  const sendBillReminder = useCallback((description: string, dueDate: string) => {
+    if (permission !== 'granted') return;
+    new Notification('📅 Conta a Vencer — Solviss', {
+      body: `${description} vence em ${dueDate}.`,
+      icon: '/favicon.ico',
+    });
+  }, [permission]);
+
+  const toggleRule = (id: string) =>
+    setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
+
+  const updateRule = (id: string, patch: Partial<NotificationRule>) =>
+    setRules(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'budget_alert':
-        return <DollarSign className="w-4 h-4" />;
-      case 'bill_reminder':
-        return <Calendar className="w-4 h-4" />;
-      case 'goal_deadline':
-        return <Target className="w-4 h-4" />;
-      case 'spending_alert':
-        return <AlertTriangle className="w-4 h-4" />;
-      default:
-        return <Bell className="w-4 h-4" />;
+      case 'budget_alert': return <DollarSign className="w-4 h-4" />;
+      case 'bill_reminder': return <Calendar className="w-4 h-4" />;
+      case 'goal_deadline': return <Target className="w-4 h-4" />;
+      case 'spending_alert': return <AlertTriangle className="w-4 h-4" />;
+      default: return <Bell className="w-4 h-4" />;
     }
   };
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'budget_alert':
-        return 'Orçamento';
-      case 'bill_reminder':
-        return 'Contas';
-      case 'goal_deadline':
-        return 'Metas';
-      case 'spending_alert':
-        return 'Gastos';
-      default:
-        return 'Geral';
-    }
-  };
+  const permissionGranted = permission === 'granted';
 
   return (
     <div className="space-y-4">
       {onBack && <BackHeader title="Gerenciar Notificações" onBack={onBack} />}
-      
+
       {!onBack && (
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-foreground">Notificações</h1>
@@ -186,7 +124,7 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({ onBack
         </div>
       )}
 
-      {/* Permission Status */}
+      {/* Status */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -197,90 +135,82 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({ onBack
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium">Notificações Push</p>
+              <p className="font-medium">Notificações do Navegador</p>
               <p className="text-sm text-muted-foreground">
-                {permissionGranted ? 'Ativadas' : 'Desativadas'}
+                {permissionGranted ? 'Ativadas e funcionando' : permission === 'denied' ? 'Bloqueadas pelo navegador' : 'Aguardando permissão'}
               </p>
             </div>
-            <Badge variant={permissionGranted ? 'default' : 'secondary'}>
-              {permissionGranted ? 'Ativo' : 'Inativo'}
+            <Badge variant={permissionGranted ? 'default' : 'secondary'} className="flex items-center gap-1">
+              {permissionGranted && <CheckCircle2 className="w-3 h-3" />}
+              {permissionGranted ? 'Ativo' : permission === 'denied' ? 'Bloqueado' : 'Inativo'}
             </Badge>
           </div>
-          
-          {!permissionGranted && (
+
+          {!permissionGranted && permission !== 'denied' && (
             <Button onClick={requestPermission} className="w-full">
-              Ativar Notificações
+              <Bell className="w-4 h-4 mr-2" /> Ativar Notificações
             </Button>
           )}
-          
+
+          {permission === 'denied' && (
+            <p className="text-sm text-muted-foreground p-3 bg-muted rounded-lg">
+              As notificações estão bloqueadas. Para ativar, vá nas configurações do seu navegador e permita notificações para este site.
+            </p>
+          )}
+
           {permissionGranted && (
             <Button variant="outline" onClick={sendTestNotification} className="w-full">
-              Enviar Teste
+              Enviar Notificação de Teste
             </Button>
           )}
         </CardContent>
       </Card>
 
-      {/* Notification Rules */}
-      <div className="space-y-4">
-        {notificationRules.map((rule) => (
+      {/* Regras */}
+      <div className="space-y-3">
+        {rules.map(rule => (
           <Card key={rule.id}>
-            <CardHeader>
+            <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {getIcon(rule.type)}
                   <div>
-                    <CardTitle className="text-base">{rule.title}</CardTitle>
-                    <Badge variant="outline" className="text-xs">
-                      {getTypeLabel(rule.type)}
-                    </Badge>
+                    <p className="text-sm font-medium">{rule.title}</p>
                   </div>
                 </div>
-                <Switch
-                  checked={rule.enabled}
-                  onCheckedChange={() => toggleRule(rule.id)}
-                />
+                <Switch checked={rule.enabled} onCheckedChange={() => toggleRule(rule.id)} />
               </div>
             </CardHeader>
-            
+
             {rule.enabled && (
-              <CardContent className="space-y-4 pt-0">
+              <CardContent className="space-y-3 pt-0">
                 {rule.threshold !== undefined && (
-                  <div className="space-y-2">
-                    <Label htmlFor={`threshold-${rule.id}`}>
-                      Limite ({rule.type === 'budget_alert' ? '%' : 'R$'})
-                    </Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Limite ({rule.type === 'budget_alert' ? '%' : 'R$'})</Label>
                     <Input
-                      id={`threshold-${rule.id}`}
                       type="number"
                       value={rule.threshold}
-                      onChange={(e) => updateRuleThreshold(rule.id, Number(e.target.value))}
-                      placeholder="Digite o valor limite"
+                      onChange={e => updateRule(rule.id, { threshold: Number(e.target.value) })}
                     />
                   </div>
                 )}
-                
                 {rule.days !== undefined && (
-                  <div className="space-y-2">
-                    <Label htmlFor={`days-${rule.id}`}>Dias de Antecedência</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Dias de antecedência</Label>
                     <Input
-                      id={`days-${rule.id}`}
                       type="number"
                       value={rule.days}
-                      onChange={(e) => updateRuleDays(rule.id, Number(e.target.value))}
-                      placeholder="Número de dias"
+                      onChange={e => updateRule(rule.id, { days: Number(e.target.value) })}
                     />
                   </div>
                 )}
-                
                 {rule.time !== undefined && (
-                  <div className="space-y-2">
-                    <Label htmlFor={`time-${rule.id}`}>Horário</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Horário</Label>
                     <Input
-                      id={`time-${rule.id}`}
                       type="time"
                       value={rule.time}
-                      onChange={(e) => updateRuleTime(rule.id, e.target.value)}
+                      onChange={e => updateRule(rule.id, { time: e.target.value })}
                     />
                   </div>
                 )}
