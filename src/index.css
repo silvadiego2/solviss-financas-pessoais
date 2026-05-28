@@ -65,6 +65,7 @@
     --shadow-sm: 0 1px 3px 0 hsl(215 35% 12% / 0.05), 0 1px 2px -1px hsl(215 35% 12% / 0.04);
     --shadow-md: 0 4px 12px -2px hsl(215 35% 12% / 0.06), 0 2px 4px -2px hsl(215 35% 12% / 0.04);
     --shadow-lg: 0 12px 32px -8px hsl(215 35% 12% / 0.10), 0 4px 8px -4px hsl(215 35% 12% / 0.05);
+    --shadow-premium: 0 8px 40px -8px hsl(196 80% 18% / 0.28), 0 2px 8px -2px hsl(196 80% 18% / 0.12);
   }
 
   .dark {
@@ -119,6 +120,9 @@
     --sidebar-accent-foreground: 174 60% 70%;
     --sidebar-border: 215 25% 16%;
     --sidebar-ring: 174 60% 50%;
+
+    /* shadow-premium em dark: brilho sutil em cima do card escuro */
+    --shadow-premium: 0 8px 40px -8px hsl(174 60% 50% / 0.20), 0 2px 8px -2px hsl(174 60% 50% / 0.08);
   }
 }
 
@@ -163,6 +167,11 @@
   .card-elevated {
     @apply bg-card border border-border/70 rounded-xl;
     box-shadow: var(--shadow-sm);
+  }
+
+  /* Hero card com sombra colorida (usada no DashboardOverview) */
+  .shadow-premium {
+    box-shadow: var(--shadow-premium);
   }
 
   /* Financial figure - emphasized typography */

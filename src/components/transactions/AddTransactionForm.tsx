@@ -22,6 +22,7 @@ import Tesseract from 'tesseract.js';
 import { validateTransaction, parseAmount } from '@/utils/transactionSchema';
 import { todayISO, formatDateBR } from '@/utils/dateHelpers';
 import { suggestCategoryId } from '@/utils/autoCategorize';
+import { formatCurrency } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 
 interface ScannedData {
@@ -35,7 +36,6 @@ interface AddTransactionFormProps {
   onClose?: () => void;
 }
 
-// Formata valor numérico como BRL enquanto o usuário digita
 const maskBRL = (raw: string): string => {
   const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
@@ -72,7 +72,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
 
-  // Auto-categorização ao digitar descrição
   useEffect(() => {
     if (categoryId || !description) return;
     const suggested = suggestCategoryId(description, filteredCategories as any, type);
@@ -110,9 +109,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const formatCurrencyLocal = (value: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationErrors({});
@@ -147,9 +143,8 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
       });
       enhancedToast.success(
         `${type === 'income' ? 'Receita' : 'Despesa'} adicionada!`,
-        { description: `${formatCurrencyLocal(numericAmount)} registrado com sucesso.` }
+        { description: `${formatCurrency(numericAmount)} registrado com sucesso.` }
       );
-      // Reset
       setAmount(''); setDescription(''); setAccountId('');
       setCategoryId(''); setDate(todayISO());
       removeReceipt(); setIsRecurring(false);
@@ -166,7 +161,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     }
   };
 
-  // Scanner helpers
   const handleCapturePhoto = async () => {
     try { const p = await capturePhoto(); if (p.dataUrl) { setCapturedImage(p.dataUrl); processImage(p.dataUrl); } }
     catch { toast.error('Erro ao capturar foto'); }
@@ -244,7 +238,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Tipo de transação — botões visuais */}
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
@@ -272,7 +265,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               </button>
             </div>
 
-            {/* Valor + Data lado a lado */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="amount">Valor *</Label>
@@ -296,7 +288,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               </div>
             </div>
 
-            {/* Descrição */}
             <div className="space-y-2">
               <Label htmlFor="description">Descrição *</Label>
               <Input
@@ -309,10 +300,9 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               {validationErrors.description && <p className="text-xs text-destructive">{validationErrors.description}</p>}
             </div>
 
-            {/* Conta + Categoria lado a lado */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="account">Conta / Cartão *</Label>
+                <Label>Conta / Cartão *</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione" />
@@ -324,8 +314,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                       allAccounts.map((a) => (
                         <SelectItem key={a.id} value={a.id}>
                           <span className="flex items-center gap-2">
-                            {a.icon}
-                            {a.name}
+                            {a.icon} {a.name}
                             <span className="text-xs text-muted-foreground">
                               {a.type === 'credit_card' ? '(Cartão)' : '(Conta)'}
                             </span>
@@ -338,7 +327,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                 {validationErrors.accountId && <p className="text-xs text-destructive">{validationErrors.accountId}</p>}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category">Categoria *</Label>
+                <Label>Categoria *</Label>
                 <CategoryCombobox
                   categories={filteredCategories as any}
                   value={categoryId}
@@ -349,7 +338,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               </div>
             </div>
 
-            {/* Recorrência */}
             <div className="rounded-xl border border-border p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Checkbox
@@ -358,8 +346,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                   onCheckedChange={(c) => setIsRecurring(c as boolean)}
                 />
                 <Label htmlFor="recurring" className="cursor-pointer flex items-center gap-1.5">
-                  <Repeat size={14} className="text-muted-foreground" />
-                  Transação Recorrente
+                  <Repeat size={14} className="text-muted-foreground" /> Transação Recorrente
                 </Label>
               </div>
               {isRecurring && (
@@ -384,7 +371,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               )}
             </div>
 
-            {/* Comprovante */}
             <div className="space-y-2">
               <Label>Comprovante / Nota Fiscal</Label>
               {!receiptPreview ? (
@@ -436,7 +422,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                             <img src={capturedImage} alt="Recibo" className="max-w-full max-h-48 rounded-lg border mx-auto" />
                             <div className="space-y-2 p-3 bg-muted rounded-lg">
                               <p className="text-sm font-medium">Dados Extraídos:</p>
-                              {scannedData.amount && <p className="text-sm">Valor: <span className="font-semibold">{formatCurrencyLocal(scannedData.amount)}</span></p>}
+                              {scannedData.amount && <p className="text-sm">Valor: <span className="font-semibold">{formatCurrency(scannedData.amount)}</span></p>}
                               {scannedData.description && <p className="text-sm">Descrição: <span className="font-semibold">{scannedData.description}</span></p>}
                               {scannedData.date && <p className="text-sm">Data: <span className="font-semibold">{formatDateBR(scannedData.date)}</span></p>}
                             </div>
@@ -465,7 +451,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               )}
             </div>
 
-            {/* Submit */}
             <Button type="submit" className="w-full h-11 text-sm font-semibold" disabled={loading}>
               {loading ? (
                 <><Loader2 size={16} className="mr-2 animate-spin" /> Salvando...</>
