@@ -3,8 +3,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Edit, Trash2, Repeat, Search, Filter, ArrowUpRight, ArrowDownRight, X, SlidersHorizontal } from 'lucide-react';
-import { useTransactions } from '@/hooks/useTransactions';
+import { Edit, Trash2, Repeat, Search, Filter, ArrowUpRight, ArrowDownRight, X, SlidersHorizontal, Loader2 } from 'lucide-react';
+import { useTransactions, TransactionFilters } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCategories } from '@/hooks/useCategories';
 import { EditTransactionForm } from './EditTransactionForm';
@@ -14,51 +14,66 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export const TransactionsList: React.FC = () => {
-  const { transactions, deleteTransaction, loading } = useTransactions();
-  const { accounts } = useAccounts();
-  const { categories } = useCategories();
-  const [editingTransaction, setEditingTransaction] = useState<any>(null);
-  const [search, setSearch] = useState('');
-  const [filterType, setFilterType] = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
-  const [filterAccount, setFilterAccount] = useState('all');
+  // ── Filtros locais ───────────────────────────────────────────────────────
+  const [search,         setSearch]         = useState('');
+  const [filterType,     setFilterType]     = useState<TransactionFilters['type']>('all');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [filterAccount,  setFilterAccount]  = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [filterDateTo,   setFilterDateTo]   = useState('');
+  const [showAdvanced,   setShowAdvanced]   = useState(false);
+
+  // Debounce de 350ms no search para não disparar query a cada tecla
+  const debouncedSearch = useDebounce(search, 350);
+
+  // ── Query com filtros server-side ────────────────────────────────────────
+  const filters: TransactionFilters = useMemo(() => ({
+    type:        filterType,
+    category_id: filterCategory || undefined,
+    account_id:  filterAccount  || undefined,
+    dateFrom:    filterDateFrom || undefined,
+    dateTo:      filterDateTo   || undefined,
+    search:      debouncedSearch || undefined,
+  }), [filterType, filterCategory, filterAccount, filterDateFrom, filterDateTo, debouncedSearch]);
+
+  const {
+    transactions,
+    deleteTransaction,
+    loading,
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useTransactions(filters);
+
+  const { accounts }   = useAccounts();
+  const { categories } = useCategories();
+
+  const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
   const activeFiltersCount = [
-    filterCategory !== 'all',
-    filterAccount !== 'all',
+    filterCategory !== '',
+    filterAccount  !== '',
     filterDateFrom !== '',
-    filterDateTo !== '',
+    filterDateTo   !== '',
   ].filter(Boolean).length;
 
   const clearFilters = () => {
     setSearch('');
     setFilterType('all');
-    setFilterCategory('all');
-    setFilterAccount('all');
+    setFilterCategory('');
+    setFilterAccount('');
     setFilterDateFrom('');
     setFilterDateTo('');
   };
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter(t => {
-      const matchSearch = !search || t.description.toLowerCase().includes(search.toLowerCase());
-      const matchType = filterType === 'all' || t.type === filterType;
-      const matchCategory = filterCategory === 'all' || (t as any).category_id === filterCategory;
-      const matchAccount = filterAccount === 'all' || (t as any).account_id === filterAccount;
-      const matchDateFrom = !filterDateFrom || t.date >= filterDateFrom;
-      const matchDateTo = !filterDateTo || t.date <= filterDateTo;
-      return matchSearch && matchType && matchCategory && matchAccount && matchDateFrom && matchDateTo;
-    });
-  }, [transactions, search, filterType, filterCategory, filterAccount, filterDateFrom, filterDateTo]);
+  // KPIs calculados apenas sobre os registros já carregados
+  const totalIncome  = useMemo(() => transactions.filter(t => t.type === 'income' ).reduce((s, t) => s + t.amount, 0), [transactions]);
+  const totalExpense = useMemo(() => transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [transactions]);
 
-  const totalIncome = filteredTransactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-  const totalExpense = filteredTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-
+  // ── Loading skeleton ─────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="space-y-7">
@@ -87,6 +102,7 @@ export const TransactionsList: React.FC = () => {
         <h1 className="text-3xl font-semibold mt-1 tracking-tight">Movimentações</h1>
       </div>
 
+      {/* KPIs */}
       <div className="grid grid-cols-3 gap-4">
         <div className="card-elevated p-5">
           <p className="label-eyebrow">Receitas</p>
@@ -114,7 +130,7 @@ export const TransactionsList: React.FC = () => {
               className="pl-9"
             />
           </div>
-          <Select value={filterType} onValueChange={setFilterType}>
+          <Select value={filterType ?? 'all'} onValueChange={v => setFilterType(v as TransactionFilters['type'])}>
             <SelectTrigger className="w-36">
               <Filter className="w-4 h-4 mr-2" />
               <SelectValue />
@@ -146,10 +162,8 @@ export const TransactionsList: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-muted-foreground">Categoria</p>
-                  <Select value={filterCategory} onValueChange={setFilterCategory}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Todas as categorias" />
-                    </SelectTrigger>
+                  <Select value={filterCategory || 'all'} onValueChange={v => setFilterCategory(v === 'all' ? '' : v)}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Todas as categorias" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas</SelectItem>
                       {categories.map(c => (
@@ -160,10 +174,8 @@ export const TransactionsList: React.FC = () => {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-medium text-muted-foreground">Conta</p>
-                  <Select value={filterAccount} onValueChange={setFilterAccount}>
-                    <SelectTrigger className="h-9">
-                      <SelectValue placeholder="Todas as contas" />
-                    </SelectTrigger>
+                  <Select value={filterAccount || 'all'} onValueChange={v => setFilterAccount(v === 'all' ? '' : v)}>
+                    <SelectTrigger className="h-9"><SelectValue placeholder="Todas as contas" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">Todas</SelectItem>
                       {accounts.map(a => (
@@ -193,7 +205,7 @@ export const TransactionsList: React.FC = () => {
 
       {/* Lista */}
       <div className="bg-card rounded-2xl border border-border divide-y divide-border">
-        {filteredTransactions.length === 0 ? (
+        {transactions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-sm">
             <Search className="h-8 w-8 mb-3 opacity-30" />
             <p className="font-medium">Nenhuma transação encontrada</p>
@@ -204,7 +216,7 @@ export const TransactionsList: React.FC = () => {
             )}
           </div>
         ) : (
-          filteredTransactions.map((t) => (
+          transactions.map((t) => (
             <div key={t.id} className="flex items-center gap-3 px-5 py-4 hover:bg-muted/30 transition-colors group">
               <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
                 t.type === 'income'
@@ -226,15 +238,15 @@ export const TransactionsList: React.FC = () => {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {(t as any).category?.name && `${(t as any).category.name} · `}
+                  {t.category?.name && `${t.category.name} · `}
                   {formatDateBR(t.date)}
-                  {(t as any).account?.name && ` · ${(t as any).account.name}`}
+                  {t.account?.name && ` · ${t.account.name}`}
                 </p>
               </div>
               <p className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
                 t.type === 'income' ? 'text-chart-income' : 'text-foreground'
               }`}>
-                {t.type === 'income' ? '+' : '-'}{formatCurrency(Number(t.amount))}
+                {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
               </p>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button
@@ -268,8 +280,25 @@ export const TransactionsList: React.FC = () => {
         )}
       </div>
 
+      {/* Botão Carregar mais */}
+      {hasNextPage && (
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="min-w-[160px]"
+          >
+            {isFetchingNextPage
+              ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Carregando...</>
+              : `Carregar mais`
+            }
+          </Button>
+        </div>
+      )}
+
       <p className="text-xs text-muted-foreground text-center">
-        {filteredTransactions.length} de {transactions.length} transação(ões)
+        {transactions.length} transação(ões) carregada(s){hasNextPage ? ' — há mais' : ''}
       </p>
     </div>
   );
