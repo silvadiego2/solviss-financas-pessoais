@@ -22,6 +22,7 @@ import {
   CalendarClock,
   Bell,
   CalendarRange,
+  ScanLine,
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -42,6 +43,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       description: 'Limites de gasto por categoria',
       icon: CalendarRange,
       action: () => onNavigate('budgets-list'),
+    },
+    {
+      title: 'Scanner de Recibos',
+      description: 'Escanear comprovantes e notas fiscais',
+      icon: ScanLine,
+      action: () => onNavigate('receipt-scanner'),
     },
     {
       title: 'Contas Bancárias',
