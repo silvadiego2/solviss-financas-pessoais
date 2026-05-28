@@ -18,6 +18,17 @@ export default {
 			}
 		},
 		extend: {
+			fontFamily: {
+				sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+				display: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif'],
+				mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+			},
+			boxShadow: {
+				'xs': '0 1px 2px 0 hsl(215 35% 12% / 0.04)',
+				'premium-sm': '0 1px 3px 0 hsl(215 35% 12% / 0.05), 0 1px 2px -1px hsl(215 35% 12% / 0.04)',
+				'premium': '0 4px 12px -2px hsl(215 35% 12% / 0.06), 0 2px 4px -2px hsl(215 35% 12% / 0.04)',
+				'premium-lg': '0 12px 32px -8px hsl(215 35% 12% / 0.10), 0 4px 8px -4px hsl(215 35% 12% / 0.05)',
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',
