@@ -1,19 +1,22 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard, Plus, Edit, Target, ChevronRight, AlertTriangle } from 'lucide-react';
+import { ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard, Plus, Edit, Target, ChevronRight, AlertTriangle, ArrowLeftRight } from 'lucide-react';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useGoals } from '@/hooks/useGoals';
 import { useBudgets } from '@/hooks/useBudgets';
-import { useCategories } from '@/hooks/useCategories';
 import { useRecurringTransactions } from '@/hooks/useRecurringTransactions';
+import { useDashboardStats } from '@/hooks/useDashboardStats';
 import { AddTransactionForm } from '@/components/transactions/AddTransactionForm';
 import { EditTransactionForm } from '@/components/transactions/EditTransactionForm';
+import { TransferForm } from '@/components/accounts/TransferForm';
+import { AgendaWidget } from './AgendaWidget';
 import { DashboardSkeleton } from '@/components/ui/skeleton-loaders';
 import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { parseDateOnly, formatDateBR } from '@/utils/dateHelpers';
+import { formatCurrency, formatDateBR } from '@/utils/formatters';
+import { useMemo } from 'react';
 
 interface DashboardOverviewProps {
   onNavigate?: (tab: string) => void;
@@ -25,16 +28,12 @@ const CHART_COLORS = [
   'hsl(45, 93%, 47%)', 'hsl(199, 89%, 48%)',
 ];
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
   const { regularAccounts, loading: accountsLoading } = useAccounts();
   const { transactions, loading: transactionsLoading } = useTransactions();
   const { creditCards, loading: cardsLoading } = useCreditCards();
   const { goals, isLoading: goalsLoading } = useGoals();
   const { budgets, loading: budgetsLoading } = useBudgets();
-  const { categories } = useCategories();
   const { recurringTransactions } = useRecurringTransactions();
   const [showAddForm, setShowAddForm] = useState(false);
   const [addType, setAddType] = useState<'income' | 'expense'>('expense');
@@ -45,53 +44,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
 
-  const monthlyTransactions = transactions.filter(t => {
-    const d = parseDateOnly(t.date);
-    return !!d && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-  });
+  const {
+    monthlyIncome,
+    monthlyExpenses,
+    available,
+    budgetUsed,
+    spendingChartData,
+    expensesByCategory,
+  } = useDashboardStats(transactions);
 
-  const monthlyIncome = monthlyTransactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-  const monthlyExpenses = monthlyTransactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-  const available = monthlyIncome - monthlyExpenses;
-  const budgetUsed = monthlyIncome > 0 ? (monthlyExpenses / monthlyIncome) * 100 : 0;
-
-  // Recurring this week
   const recurringWeekAmount = useMemo(() => {
     return (recurringTransactions || [])
       .filter((r: any) => r.type === 'expense')
       .reduce((s: number, r: any) => s + Number(r.amount || 0), 0);
   }, [recurringTransactions]);
 
-  // Spending chart data (cumulative expenses over days this month)
-  const spendingChartData = useMemo(() => {
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    const today = new Date().getDate();
-    let cumulative = 0;
-    const data: { day: number; amount: number }[] = [];
-    for (let d = 1; d <= Math.min(today, daysInMonth); d++) {
-      const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const dayExpenses = monthlyTransactions
-        .filter(t => t.type === 'expense' && t.date === dateStr)
-        .reduce((s, t) => s + Number(t.amount), 0);
-      cumulative += dayExpenses;
-      data.push({ day: d, amount: cumulative });
-    }
-    return data;
-  }, [monthlyTransactions, currentMonth, currentYear]);
-
-  // Expenses by category
-  const expensesByCategory = useMemo(() => {
-    const map = new Map<string, { name: string; value: number }>();
-    monthlyTransactions.filter(t => t.type === 'expense').forEach(t => {
-      const catName = (t as any).category?.name || 'Sem Categoria';
-      const existing = map.get(catName);
-      if (existing) existing.value += Number(t.amount);
-      else map.set(catName, { name: catName, value: Number(t.amount) });
-    });
-    return Array.from(map.values()).sort((a, b) => b.value - a.value);
-  }, [monthlyTransactions]);
-
-  // Budget info
   const monthBudgets = budgets.filter(b => b.month === currentMonth + 1 && b.year === currentYear);
   const totalBudgetUsage = monthBudgets.length > 0
     ? monthBudgets.reduce((s, b) => s + (Number(b.spent) / Number(b.amount)) * 100, 0) / monthBudgets.length
@@ -129,13 +96,21 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
 
       {/* Balance Hero + Budget */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Balance Hero - flat deep navy */}
         <div className="lg:col-span-2 relative overflow-hidden rounded-2xl bg-primary text-primary-foreground p-7 shadow-premium">
           <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }} />
           <div className="relative">
-            <div className="flex items-center gap-2 mb-3">
-              <Wallet size={14} className="opacity-60" />
-              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-70">Patrimônio Total</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Wallet size={14} className="opacity-60" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-70">Patrimônio Total</span>
+              </div>
+              <TransferForm
+                trigger={
+                  <Button size="sm" variant="secondary" className="h-7 px-3 text-xs bg-white/10 hover:bg-white/20 text-primary-foreground border-0">
+                    <ArrowLeftRight size={12} className="mr-1" /> Transferir
+                  </Button>
+                }
+              />
             </div>
             <p className="figure-hero text-5xl">{formatCurrency(totalBalance)}</p>
             <div className="h-px w-full bg-white/10 my-6" />
@@ -156,7 +131,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
 
-        {/* Budget */}
         <div className="card-elevated p-6 flex flex-col">
           <p className="label-eyebrow">Disponível no mês</p>
           <p className={`figure-hero text-3xl mt-2 ${available >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -179,6 +153,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
       </div>
+
+      {/* Agenda Widget */}
+      <AgendaWidget onNavigate={onNavigate} />
 
       {/* Spending Chart */}
       <Card>
@@ -218,7 +195,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
 
       {/* Recent Transactions + Category Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Recent Transactions */}
         <Card>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
@@ -243,9 +219,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{t.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatDateBR(t.date)}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{formatDateBR(t.date)}</p>
                   </div>
                 </div>
                 <span className={`text-sm font-semibold flex-shrink-0 ml-2 ${
@@ -261,7 +235,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </CardContent>
         </Card>
 
-        {/* Category Breakdown */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Despesas por Categoria</CardTitle>
@@ -273,17 +246,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               <div className="flex items-center gap-4">
                 <ResponsiveContainer width="45%" height={160}>
                   <PieChart>
-                    <Pie
-                      data={expensesByCategory}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={35}
-                      outerRadius={65}
-                      paddingAngle={2}
-                      strokeWidth={0}
-                    >
+                    <Pie data={expensesByCategory} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={35} outerRadius={65} paddingAngle={2} strokeWidth={0}>
                       {expensesByCategory.map((_, i) => (
                         <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                       ))}
