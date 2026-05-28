@@ -38,47 +38,50 @@ export interface CreateRuleInput {
   enabled?: boolean;
 }
 
+const TABLE = 'automation_rules';
+
+const isSchemaError = (err: any) =>
+  err?.message?.includes('does not exist') ||
+  err?.message?.includes('relation') ||
+  err?.code === '42P01';
+
 export const useAutomationRules = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
-  const fetchRules = async (): Promise<AutomationRule[]> => {
-    if (!user) return [];
-    
-    const { data, error } = await supabase
-      .from('automation_rules')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('priority', { ascending: true });
-
-    if (error) {
-      console.error('Erro ao buscar regras:', error);
-      throw error;
-    }
-    
-    // Type cast to ensure compatibility
-    return (data || []).map(rule => ({
-      ...rule,
-      conditions: rule.conditions as unknown as RuleCondition[],
-      actions: rule.actions as unknown as RuleAction[],
-      rule_type: rule.rule_type as 'categorization' | 'recurring' | 'budget' | 'alert'
-    }));
-  };
-
   const { data: rules = [], isLoading, error } = useQuery({
-    queryKey: ['automation_rules', user?.id],
-    queryFn: fetchRules,
+    queryKey: [TABLE, user?.id],
+    queryFn: async (): Promise<AutomationRule[]> => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from(TABLE)
+        .select('*')
+        .eq('user_id', user.id)
+        .order('priority', { ascending: true });
+      // Tabela pode não existir ainda — retorna vazio silenciosamente
+      if (error) {
+        if (isSchemaError(error)) return [];
+        console.error('Erro ao buscar regras:', error);
+        throw error;
+      }
+      return (data ?? []).map(r => ({
+        ...r,
+        conditions: r.conditions as unknown as RuleCondition[],
+        actions: r.actions as unknown as RuleAction[],
+        rule_type: r.rule_type as AutomationRule['rule_type'],
+      }));
+    },
     enabled: !!user,
+    retry: (count, err: any) => !isSchemaError(err) && count < 2,
   });
 
   const createRuleMutation = useMutation({
     mutationFn: async (ruleData: CreateRuleInput) => {
       if (!user) throw new Error('Usuário não autenticado');
-
       const { data, error } = await supabase
-        .from('automation_rules')
-        .insert({ 
-          ...ruleData, 
+        .from(TABLE)
+        .insert({
+          ...ruleData,
           user_id: user.id,
           enabled: ruleData.enabled ?? true,
           priority: ruleData.priority ?? 1,
@@ -87,98 +90,83 @@ export const useAutomationRules = () => {
         })
         .select()
         .single();
-
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation_rules'] });
+      queryClient.invalidateQueries({ queryKey: [TABLE] });
       toast.success('Regra criada com sucesso!');
     },
-    onError: (error) => {
-      console.error('Erro ao criar regra:', error);
-      toast.error('Erro ao criar regra');
+    onError: (err: any) => {
+      if (isSchemaError(err)) {
+        toast.error('Funcionalidade de automação ainda não disponível.');
+      } else {
+        toast.error('Erro ao criar regra');
+      }
     },
   });
 
   const updateRuleMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<AutomationRule> & { id: string }) => {
-      const updateData = {
-        ...updates,
-        conditions: updates.conditions as any,
-        actions: updates.actions as any,
-      };
-
       const { data, error } = await supabase
-        .from('automation_rules')
-        .update(updateData)
+        .from(TABLE)
+        .update({ ...updates, conditions: updates.conditions as any, actions: updates.actions as any })
         .eq('id', id)
-        .eq('user_id', user?.id)
+        .eq('user_id', user?.id ?? '')
         .select()
         .single();
-
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation_rules'] });
-      toast.success('Regra atualizada com sucesso!');
+      queryClient.invalidateQueries({ queryKey: [TABLE] });
+      toast.success('Regra atualizada!');
     },
-    onError: (error) => {
-      console.error('Erro ao atualizar regra:', error);
-      toast.error('Erro ao atualizar regra');
-    },
+    onError: (err: any) => toast.error(isSchemaError(err) ? 'Funcionalidade indisponível.' : 'Erro ao atualizar regra'),
   });
 
   const deleteRuleMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
-        .from('automation_rules')
+        .from(TABLE)
         .delete()
         .eq('id', id)
-        .eq('user_id', user?.id);
-
+        .eq('user_id', user?.id ?? '');
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation_rules'] });
-      toast.success('Regra excluída com sucesso!');
+      queryClient.invalidateQueries({ queryKey: [TABLE] });
+      toast.success('Regra excluída!');
     },
-    onError: (error) => {
-      console.error('Erro ao deletar regra:', error);
-      toast.error('Erro ao deletar regra');
-    },
+    onError: (err: any) => toast.error(isSchemaError(err) ? 'Funcionalidade indisponível.' : 'Erro ao excluir regra'),
   });
 
   const toggleRuleMutation = useMutation({
     mutationFn: async (id: string) => {
       const rule = rules.find(r => r.id === id);
       if (!rule) throw new Error('Regra não encontrada');
-
       const { data, error } = await supabase
-        .from('automation_rules')
+        .from(TABLE)
         .update({ enabled: !rule.enabled })
         .eq('id', id)
-        .eq('user_id', user?.id)
+        .eq('user_id', user?.id ?? '')
         .select()
         .single();
-
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['automation_rules'] });
+      queryClient.invalidateQueries({ queryKey: [TABLE] });
       toast.success('Regra atualizada!');
     },
-    onError: (error) => {
-      console.error('Erro ao alterar regra:', error);
-      toast.error('Erro ao alterar regra');
-    },
+    onError: (err: any) => toast.error(isSchemaError(err) ? 'Funcionalidade indisponível.' : 'Erro ao alterar regra'),
   });
 
   return {
     rules,
     loading: isLoading,
+    error: isSchemaError(error) ? null : error, // não expõe erro de schema
+    tableExists: !isSchemaError(error),
     createRule: createRuleMutation.mutate,
     updateRule: updateRuleMutation.mutate,
     deleteRule: deleteRuleMutation.mutate,
@@ -187,6 +175,6 @@ export const useAutomationRules = () => {
     isUpdating: updateRuleMutation.isPending,
     isDeleting: deleteRuleMutation.isPending,
     isToggling: toggleRuleMutation.isPending,
-    refetch: () => queryClient.invalidateQueries({ queryKey: ['automation_rules'] }),
+    refetch: () => queryClient.invalidateQueries({ queryKey: [TABLE] }),
   };
 };

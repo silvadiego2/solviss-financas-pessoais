@@ -14,6 +14,11 @@ export interface AuditLog {
   created_at: string;
 }
 
+const isSchemaError = (err: any) =>
+  err?.message?.includes('does not exist') ||
+  err?.message?.includes('relation') ||
+  err?.code === '42P01';
+
 export const useAuditLogs = () => {
   const { user } = useAuth();
 
@@ -21,36 +26,34 @@ export const useAuditLogs = () => {
     queryKey: ['audit-logs', user?.id],
     queryFn: async (): Promise<AuditLog[]> => {
       if (!user) return [];
-      
       const { data, error } = await supabase
         .from('audit_logs')
         .select('*')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(100);
-      
       if (error) {
-        console.error('Error fetching audit logs:', error);
+        // Tabela pode não existir — retorna vazio silenciosamente
+        if (isSchemaError(error)) return [];
+        console.error('Erro ao buscar audit logs:', error);
         return [];
       }
-      
-      return (data || []).map(log => ({
+      return (data ?? []).map(log => ({
         id: log.id,
         user_id: log.user_id,
         table_name: log.table_name,
-        operation: log.operation as 'INSERT' | 'UPDATE' | 'DELETE',
+        operation: log.operation as AuditLog['operation'],
         old_data: log.old_data,
         new_data: log.new_data,
         ip_address: log.ip_address as string | undefined,
         user_agent: log.user_agent as string | undefined,
-        created_at: log.created_at
+        created_at: log.created_at,
       }));
     },
     enabled: !!user,
+    retry: (count, err: any) => !isSchemaError(err) && count < 2,
+    staleTime: 2 * 60 * 1000,
   });
 
-  return {
-    auditLogs,
-    loading: isLoading,
-  };
+  return { auditLogs, loading: isLoading };
 };
