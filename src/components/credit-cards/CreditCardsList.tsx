@@ -33,9 +33,9 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
   };
 
   const getUsageColor = (percentage: number) => {
-    if (percentage >= 80) return 'bg-red-500';
-    if (percentage >= 60) return 'bg-yellow-500';
-    return 'bg-green-500';
+    if (percentage >= 80) return 'bg-destructive';
+    if (percentage >= 60) return 'bg-warning';
+    return 'bg-success';
   };
 
   const handleDelete = (cardId: string) => {
