@@ -12,7 +12,6 @@ import { SimpleGoals } from './goals/SimpleGoals';
 import { CategoryManager } from './categories/CategoryManager';
 import { ExportReports } from './reports/ExportReports';
 import { ImportTransactions } from './transactions/ImportTransactions';
-import { BankConnectionManager } from './banking/BankConnectionManager';
 import { SecurityDashboard } from './security/SecurityDashboard';
 import { useAuth } from './auth/AuthProvider';
 import { AuthScreen } from './auth/AuthScreen';
@@ -34,8 +33,6 @@ import { FluxoDeCaixa } from '@/pages/FluxoDeCaixa';
 import { Inteligencia } from '@/pages/Inteligencia';
 import { Relatorios } from '@/pages/Relatorios';
 import { Planos } from '@/pages/Planos';
-import { Integracoes } from '@/pages/Integracoes';
-import { IntegracoesConfig } from '@/pages/IntegracoesConfig';
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -93,8 +90,6 @@ export const FinanceApp: React.FC = () => {
         return <ExportReports onBack={handleBackToMore} />;
       case 'import-transactions':
         return <ImportTransactions onBack={handleBackToMore} />;
-      case 'banking':
-        return <BankConnectionManager onBack={handleBackToMore} />;
       case 'profile':
         return <UserProfile onBack={handleBackToMore} />;
       case 'settings':
@@ -129,10 +124,6 @@ export const FinanceApp: React.FC = () => {
         return <Relatorios />;
       case 'plans':
         return <Planos />;
-      case 'integrations':
-        return <Integracoes onNavigate={handleTabChange} />;
-      case 'integrations-config':
-        return <IntegracoesConfig onBack={() => handleTabChange('integrations')} />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} onToggleTheme={toggleTheme} />;
       default:

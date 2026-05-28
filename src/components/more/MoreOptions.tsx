@@ -36,8 +36,8 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
   // Aba: GERENCIAR
   const manageItems = [
     {
-      title: 'Contas e Conexões Bancárias',
-      description: 'Gerenciar contas e sincronizar bancos',
+      title: 'Contas Bancárias',
+      description: 'Gerenciar contas e saldos',
       icon: Building,
       action: () => onNavigate('accounts')
     },
@@ -122,12 +122,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Identificar e remover transações duplicadas',
       icon: Copy,
       action: () => onNavigate('duplicate-detection')
-    },
-    {
-      title: 'Conexões Bancárias',
-      description: 'Conectar e sincronizar contas bancárias',
-      icon: Building,
-      action: () => onNavigate('banking')
     },
     {
       title: 'Backup Automático',
