@@ -31,12 +31,17 @@ import { AgendaFinanceira } from './agenda/AgendaFinanceira';
 import { Planejamento } from '@/pages/Planejamento';
 import { FluxoDeCaixa } from '@/pages/FluxoDeCaixa';
 import { Inteligencia } from '@/pages/Inteligencia';
-import { Relatorios } from '@/pages/Relatorios';
 import { Planos } from '@/pages/Planos';
+
+// Tabs de primeiro nível da sidebar (não empilham histórico de navegação)
+const ROOT_TABS = new Set([
+  'dashboard', 'transactions', 'budgets', 'recurring-transactions',
+  'cash-flow', 'cards', 'goals', 'intelligence', 'reports',
+  'plans', 'more', 'add',
+]);
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
-  // Stack de navegação: guarda o último tab antes de entrar em subpáginas
   const [tabHistory, setTabHistory] = useState<string[]>([]);
   const { user, loading } = useAuth();
 
@@ -44,26 +49,16 @@ export const FinanceApp: React.FC = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
       </div>
     );
   }
 
-  if (!user) {
-    return <AuthScreen />;
-  }
-
-  // Tabs de primeiro nível (não precisam de "voltar")
-  const ROOT_TABS = new Set([
-    'dashboard', 'transactions', 'budgets', 'recurring-transactions',
-    'cash-flow', 'cards', 'goals', 'intelligence', 'reports',
-    'plans', 'more', 'add',
-  ]);
+  if (!user) return <AuthScreen />;
 
   const handleTabChange = (tab: string) => {
-    // Se saindo de um tab raiz para uma subpágina, empilha o origem
     if (ROOT_TABS.has(activeTab) && !ROOT_TABS.has(tab)) {
       setTabHistory(prev => [...prev, activeTab]);
     }
@@ -81,22 +76,41 @@ export const FinanceApp: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
+      // ── Sidebar primária ────────────────────────────────────────────────
       case 'dashboard':
         return <DashboardOverview onNavigate={handleTabChange} />;
-      case 'accounts':
-        return <AccountsList onBack={handleBack} />;
-      case 'budgets':
-        return <BudgetsList onBack={handleBack} />;
-      case 'add':
-        return <AddTransactionForm />;
       case 'transactions':
         return <TransactionsList />;
-      case 'reports':
-        return <SimpleReports onBack={handleBack} />;
+      case 'add':
+        return <AddTransactionForm />;
+
+      // 'budgets' na sidebar abre o Planejamento (Planejamento.tsx)
+      case 'budgets':
+        return <Planejamento />;
+
+      case 'recurring-transactions':
+        return <RecurringTransactionsManager onBack={handleBack} />;
+      case 'cash-flow':
+        return <FluxoDeCaixa />;
       case 'cards':
         return <CreditCardsList onBack={handleBack} />;
       case 'goals':
         return <SimpleGoals onBack={handleBack} />;
+      case 'intelligence':
+        return <Inteligencia />;
+
+      // 'reports' na sidebar → SimpleReports (única instância)
+      case 'reports':
+        return <SimpleReports onBack={handleBack} />;
+
+      case 'plans':
+        return <Planos />;
+      case 'more':
+        return <MoreOptions onNavigate={handleTabChange} />;
+
+      // ── Subpáginas (acessadas via MoreOptions ou DashboardOverview) ─────
+      case 'accounts':
+        return <AccountsList onBack={handleBack} />;
       case 'categories':
         return <CategoryManager onBack={handleBack} />;
       case 'export':
@@ -125,26 +139,11 @@ export const FinanceApp: React.FC = () => {
         return <DemoDataManager onBack={handleBack} />;
       case 'data-reset':
         return <DataResetManager onBack={handleBack} />;
-      case 'recurring-transactions':
-        return <RecurringTransactionsManager onBack={handleBack} />;
       case 'security':
         return <SecurityDashboard onBack={handleBack} />;
       case 'agenda':
         return <AgendaFinanceira onBack={handleBack} />;
-      // Páginas da sidebar (primeiro nível — sem onBack)
-      case 'cash-flow':
-        return <FluxoDeCaixa />;
-      case 'intelligence':
-        return <Inteligencia />;
-      case 'relatorios':
-        return <Relatorios />;
-      case 'plans':
-        return <Planos />;
-      // Alias: sidebar usa 'budgets' para Planejamento
-      case 'planejamento':
-        return <Planejamento />;
-      case 'more':
-        return <MoreOptions onNavigate={handleTabChange} />;
+
       default:
         return <DashboardOverview onNavigate={handleTabChange} />;
     }
