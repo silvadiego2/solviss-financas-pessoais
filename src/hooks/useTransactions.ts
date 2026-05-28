@@ -1,4 +1,3 @@
-
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -150,10 +149,14 @@ export const useTransactions = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      // Fix: invalidate recurring list when a recurring transaction is created
+      if (variables.is_recurring) {
+        queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
+      }
       toast.success('Transação adicionada com sucesso!');
     },
     onError: (error) => {
@@ -185,6 +188,7 @@ export const useTransactions = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
       toast.success('Transação atualizada com sucesso!');
     },
     onError: (error) => {
@@ -207,6 +211,7 @@ export const useTransactions = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
       toast.success('Transação excluída com sucesso!');
     },
     onError: (error) => {

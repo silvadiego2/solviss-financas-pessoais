@@ -1,12 +1,12 @@
 /**
  * useUserPreferences
  *
- * Persists user settings with two strategies:
- *  - `currency`  → synced to `profiles.currency` in Supabase (already a real column)
- *  - `notifications` / `billReminders` → localStorage (no schema change needed;
- *    gracefully falls back to defaults if storage is unavailable)
+ * Persiste preferências do usuário com duas estratégias:
+ *  - currency  → profiles.currency no Supabase (coluna existente)
+ *  - notifications / billReminders → sessionStorage com fallback em memória
+ *    (sessionStorage funciona em iframes; localStorage pode ser bloqueado)
  */
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -22,56 +22,58 @@ const DEFAULTS: UserPreferences = {
   billReminders: true,
 };
 
-// Safe localStorage helpers (sandboxed iframe may block access)
-function lsGet<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw !== null ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
+// Tenta sessionStorage primeiro (funciona em iframes), depois localStorage
+function storageGet<T>(key: string, fallback: T): T {
+  for (const store of [sessionStorage, localStorage]) {
+    try {
+      const raw = store.getItem(key);
+      if (raw !== null) return JSON.parse(raw) as T;
+    } catch { /* ignorar */ }
   }
+  return fallback;
 }
 
-function lsSet(key: string, value: unknown): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // silently ignore (quota or sandbox restriction)
+function storageSet(key: string, value: unknown): void {
+  for (const store of [sessionStorage, localStorage]) {
+    try { store.setItem(key, JSON.stringify(value)); return; } catch { /* ignorar */ }
   }
+  // Se ambos falharem, apenas mantém em memória (o estado React já foi atualizado)
 }
 
 export function useUserPreferences() {
   const [prefs, setPrefs] = useState<UserPreferences>(DEFAULTS);
   const [loading, setLoading] = useState(true);
+  const savingCurrency = useRef(false);
 
-  // ── Load on mount ─────────────────────────────────────────────────────────
+  // Carrega na montagem
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
-      // 1. Optimistically restore from localStorage first (instant UI)
+      // 1. Restaura instantaneamente do storage (sem flash de estado padrão)
       const local: UserPreferences = {
-        currency: lsGet('pref_currency', DEFAULTS.currency),
-        notifications: lsGet('pref_notifications', DEFAULTS.notifications),
-        billReminders: lsGet('pref_bill_reminders', DEFAULTS.billReminders),
+        currency:      storageGet('pref_currency',       DEFAULTS.currency),
+        notifications: storageGet('pref_notifications',  DEFAULTS.notifications),
+        billReminders: storageGet('pref_bill_reminders', DEFAULTS.billReminders),
       };
       if (!cancelled) setPrefs(local);
 
-      // 2. Then fetch the authoritative currency from Supabase
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || cancelled) { setLoading(false); return; }
+      // 2. Busca currency autoritativa do Supabase
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) { setLoading(false); return; }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('currency')
-        .eq('id', user.id)
-        .maybeSingle();
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('currency')
+          .eq('id', user.id)
+          .maybeSingle();
 
-      if (!cancelled && profile?.currency) {
-        const merged = { ...local, currency: profile.currency };
-        setPrefs(merged);
-        lsSet('pref_currency', profile.currency);
-      }
+        if (!cancelled && profile?.currency) {
+          setPrefs(p => ({ ...p, currency: profile.currency! }));
+          storageSet('pref_currency', profile.currency);
+        }
+      } catch { /* falha silenciosa — usa valor do storage */ }
 
       if (!cancelled) setLoading(false);
     }
@@ -80,45 +82,42 @@ export function useUserPreferences() {
     return () => { cancelled = true; };
   }, []);
 
-  // ── Updaters ──────────────────────────────────────────────────────────────
-
   const setCurrency = useCallback(async (value: string) => {
+    if (savingCurrency.current) return;
+    savingCurrency.current = true;
+
     setPrefs(p => ({ ...p, currency: value }));
-    lsSet('pref_currency', value);
+    storageSet('pref_currency', value);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { error } = await supabase
-      .from('profiles')
-      .update({ currency: value, updated_at: new Date().toISOString() })
-      .eq('id', user.id);
-
-    if (error) {
-      toast.error('Erro ao salvar moeda. Tente novamente.');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ currency: value, updated_at: new Date().toISOString() })
+          .eq('id', user.id);
+        if (error) toast.error('Erro ao salvar moeda. Tente novamente.');
+      }
+    } catch { /* falha silenciosa */ } finally {
+      savingCurrency.current = false;
     }
   }, []);
 
   const setNotifications = useCallback((value: boolean) => {
-    setPrefs(p => ({ ...p, notifications: value }));
-    lsSet('pref_notifications', value);
-    // Disable bill reminders automatically when master toggle goes off
-    if (!value) {
-      setPrefs(p => ({ ...p, billReminders: false }));
-      lsSet('pref_bill_reminders', false);
-    }
+    setPrefs(p => ({
+      ...p,
+      notifications: value,
+      // Desativa lembretes automaticamente quando notificações gerais são desligadas
+      billReminders: value ? p.billReminders : false,
+    }));
+    storageSet('pref_notifications', value);
+    if (!value) storageSet('pref_bill_reminders', false);
   }, []);
 
   const setBillReminders = useCallback((value: boolean) => {
     setPrefs(p => ({ ...p, billReminders: value }));
-    lsSet('pref_bill_reminders', value);
+    storageSet('pref_bill_reminders', value);
   }, []);
 
-  return {
-    prefs,
-    loading,
-    setCurrency,
-    setNotifications,
-    setBillReminders,
-  };
+  return { prefs, loading, setCurrency, setNotifications, setBillReminders };
 }

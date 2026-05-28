@@ -8,9 +8,7 @@ import {
   Tags, 
   Target, 
   CreditCard, 
-  Palette, 
   User,
-  UserPlus,
   Building,
   ChevronRight,
   Shield,
@@ -33,8 +31,9 @@ interface MoreOptionsProps {
   onToggleTheme?: () => void;
 }
 
-export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTheme }) => {
+export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
 
+  // "Gerenciar" — operações do dia a dia
   const manageItems = [
     {
       title: 'Agenda Financeira',
@@ -47,140 +46,132 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       title: 'Contas Bancárias',
       description: 'Gerenciar contas e saldos',
       icon: Building,
-      action: () => onNavigate('accounts')
+      action: () => onNavigate('accounts'),
     },
     {
       title: 'Cartões de Crédito',
       description: 'Gerenciar cartões e faturas',
       icon: CreditCard,
-      action: () => onNavigate('cards')
+      action: () => onNavigate('cards'),
     },
     {
       title: 'Orçamentos Mensais',
       description: 'Controlar gastos por categoria',
       icon: Target,
-      action: () => onNavigate('budgets')
+      action: () => onNavigate('budgets'),
     },
     {
       title: 'Objetivos Financeiros',
       description: 'Definir e acompanhar metas',
       icon: Target,
-      action: () => onNavigate('goals')
+      action: () => onNavigate('goals'),
     },
     {
       title: 'Gerenciar Categorias',
       description: 'Criar e editar categorias',
       icon: Tags,
-      action: () => onNavigate('categories')
+      action: () => onNavigate('categories'),
     },
     {
       title: 'Transações Recorrentes',
       description: 'Gerencie suas recorrências automáticas',
       icon: Repeat,
-      action: () => onNavigate('recurring-transactions')
+      action: () => onNavigate('recurring-transactions'),
     },
     {
       title: 'Importar Transações',
       description: 'Importar de planilha CSV ou Excel',
       icon: Upload,
-      action: () => onNavigate('import-transactions')
+      action: () => onNavigate('import-transactions'),
     },
     {
       title: 'Exportar Relatórios',
       description: 'Exportar dados financeiros',
       icon: Download,
-      action: () => onNavigate('export')
+      action: () => onNavigate('export'),
     },
     {
       title: 'Notificações',
       description: 'Alertas de vencimento e orçamento',
       icon: Bell,
-      action: () => onNavigate('notifications')
-    },
-    {
-      title: 'Configurações',
-      description: 'Preferências, segurança e mais',
-      icon: Settings,
-      action: () => onNavigate('settings')
+      action: () => onNavigate('notifications'),
     },
   ];
 
+  // "Acompanhar" — análises e automação
   const trackItems = [
     {
       title: 'Relatórios Financeiros',
       description: 'Visualizar análises e gráficos',
       icon: BarChart3,
-      action: () => onNavigate('reports')
+      action: () => onNavigate('reports'),
     },
     {
       title: 'Central de Analytics',
       description: 'Analytics avançados e insights inteligentes',
       icon: TrendingUp,
-      action: () => onNavigate('analytics')
+      action: () => onNavigate('analytics'),
     },
     {
       title: 'Automação Financeira',
       description: 'Regras automáticas para suas finanças',
       icon: Zap,
-      action: () => onNavigate('auto-rules')
+      action: () => onNavigate('auto-rules'),
     },
     {
       title: 'Categorização Automática',
       description: 'Classificar transações automaticamente por IA',
       icon: Sparkles,
-      action: () => onNavigate('auto-categorization')
+      action: () => onNavigate('auto-categorization'),
     },
     {
       title: 'Detector de Duplicatas',
       description: 'Identificar e remover transações duplicadas',
       icon: Copy,
-      action: () => onNavigate('duplicate-detection')
+      action: () => onNavigate('duplicate-detection'),
     },
     {
       title: 'Backup Automático',
       description: 'Configurar backup automático dos dados',
       icon: Cloud,
-      action: () => onNavigate('auto-backup')
+      action: () => onNavigate('auto-backup'),
     },
   ];
 
-  const aboutItems = [
+  // "Conta" — perfil, configurações, dados perigosos
+  // Removidos daqui: "Tema da Interface" (está em Configurações)
+  // e "Completar Cadastro" (duplicata de Perfil do Usuário)
+  const accountItems = [
     {
       title: 'Perfil do Usuário',
       description: 'Editar informações pessoais',
       icon: User,
-      action: () => onNavigate('profile')
+      action: () => onNavigate('profile'),
     },
     {
-      title: 'Completar Cadastro',
-      description: 'Adicione informações adicionais ao seu perfil',
-      icon: UserPlus,
-      action: () => onNavigate('profile')
-    },
-    {
-      title: 'Tema da Interface',
-      description: 'Alternar entre claro e escuro',
-      icon: Palette,
-      action: () => onToggleTheme?.()
+      title: 'Configurações',
+      description: 'Tema, moeda, notificações e mais',
+      icon: Settings,
+      action: () => onNavigate('settings'),
     },
     {
       title: 'Segurança e Auditoria',
-      description: 'Log de atividades e validações',
+      description: 'Log de atividades e sessões',
       icon: Shield,
-      action: () => onNavigate('security')
+      action: () => onNavigate('security'),
     },
     {
       title: 'Dados de Demonstração',
       description: 'Criar dados de exemplo para testar o app',
       icon: Database,
-      action: () => onNavigate('demo-data')
+      action: () => onNavigate('demo-data'),
     },
     {
       title: 'Limpar Todos os Dados',
       description: '⚠️ Remover todos os dados (irreversível)',
       icon: Trash2,
       action: () => onNavigate('data-reset'),
-      variant: 'destructive' as const
+      variant: 'destructive' as const,
     },
   ];
 
@@ -217,11 +208,11 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="manage">Gerenciar</TabsTrigger>
             <TabsTrigger value="track">Acompanhar</TabsTrigger>
-            <TabsTrigger value="about">Sobre</TabsTrigger>
+            <TabsTrigger value="account">Conta</TabsTrigger>
           </TabsList>
           <TabsContent value="manage" className="space-y-3 mt-4">{renderItems(manageItems)}</TabsContent>
           <TabsContent value="track" className="space-y-3 mt-4">{renderItems(trackItems)}</TabsContent>
-          <TabsContent value="about" className="space-y-3 mt-4">{renderItems(aboutItems)}</TabsContent>
+          <TabsContent value="account" className="space-y-3 mt-4">{renderItems(accountItems)}</TabsContent>
         </Tabs>
       </CardContent>
     </Card>
