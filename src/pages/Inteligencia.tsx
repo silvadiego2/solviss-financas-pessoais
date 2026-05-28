@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Brain, RefreshCw, TrendingUp, PiggyBank, CreditCard,
   Target, AlertTriangle, Wallet, Sparkles, Cpu, Bot,
@@ -9,6 +9,10 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/auth/AuthProvider';
+
+const CACHE_KEY = 'solviss_ai_analysis_v1';
+const CACHE_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas
 
 interface Recommendation {
   title: string;
@@ -34,6 +38,12 @@ interface AnalysisResult {
   analysis: Analysis;
   summary: Record<string, number>;
   source: 'openai' | 'local';
+}
+
+interface CachedAnalysis {
+  result: AnalysisResult;
+  generatedAt: number;
+  userId: string;
 }
 
 const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -85,9 +95,40 @@ const errorMessage = (e: any): string => {
   return msg || 'Erro ao gerar análise. Tente novamente.';
 };
 
+const formatAge = (ts: number): string => {
+  const diff = Date.now() - ts;
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return 'agora mesmo';
+  if (mins < 60) return `há ${mins} min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `há ${hrs}h`;
+  return `há ${Math.floor(hrs / 24)}d`;
+};
+
 export const Inteligencia: React.FC<{ onBack?: () => void }> = () => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [generatedAt, setGeneratedAt] = useState<number | null>(null);
+
+  // Carregar cache ao montar o componente
+  useEffect(() => {
+    if (!user?.id) return;
+    try {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (!raw) return;
+      const cached: CachedAnalysis = JSON.parse(raw);
+      if (cached.userId !== user.id) return; // cache de outro usuário
+      const age = Date.now() - cached.generatedAt;
+      if (age < CACHE_TTL_MS) {
+        setResult(cached.result);
+        setGeneratedAt(cached.generatedAt);
+      }
+    } catch {
+      // cache corrompido — ignora
+      localStorage.removeItem(CACHE_KEY);
+    }
+  }, [user?.id]);
 
   const runAnalysis = async () => {
     setLoading(true);
@@ -95,7 +136,14 @@ export const Inteligencia: React.FC<{ onBack?: () => void }> = () => {
       const { data, error } = await supabase.functions.invoke('ai-financial-analysis');
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      const now = Date.now();
       setResult(data as AnalysisResult);
+      setGeneratedAt(now);
+      // Persistir no localStorage
+      if (user?.id) {
+        const payload: CachedAnalysis = { result: data as AnalysisResult, generatedAt: now, userId: user.id };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+      }
       toast.success('Análise atualizada!');
     } catch (e: any) {
       console.error(e);
@@ -103,6 +151,13 @@ export const Inteligencia: React.FC<{ onBack?: () => void }> = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const clearCache = () => {
+    localStorage.removeItem(CACHE_KEY);
+    setResult(null);
+    setGeneratedAt(null);
+    toast.info('Cache limpo. Gere uma nova análise.');
   };
 
   const analysis = result?.analysis ?? null;
@@ -121,11 +176,25 @@ export const Inteligencia: React.FC<{ onBack?: () => void }> = () => {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Análise personalizada dos seus dados financeiros</p>
         </div>
-        <Button onClick={runAnalysis} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          {analysis ? 'Atualizar análise' : 'Gerar análise'}
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {analysis && (
+            <Button variant="outline" size="sm" onClick={clearCache}>
+              Limpar
+            </Button>
+          )}
+          <Button onClick={runAnalysis} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            {analysis ? 'Atualizar análise' : 'Gerar análise'}
+          </Button>
+        </div>
       </div>
+
+      {/* Badge de quando foi gerada */}
+      {generatedAt && !loading && (
+        <p className="text-xs text-muted-foreground -mt-4">
+          ⏱ Gerada {formatAge(generatedAt)} · válida por 4h · <button onClick={clearCache} className="underline hover:no-underline">forçar nova</button>
+        </p>
+      )}
 
       {/* Estado vazio */}
       {!analysis && !loading && (
