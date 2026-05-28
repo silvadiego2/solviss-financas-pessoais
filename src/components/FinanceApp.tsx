@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { AppSidebar } from './layout/AppSidebar';
 import { DashboardOverview } from './dashboard/DashboardOverview';
 import { AccountsList } from './accounts/AccountsList';
-import { AddTransactionForm } from './transactions/AddTransactionForm';
 import { TransactionsList } from './transactions/TransactionsList';
 import { BudgetsList } from './budgets/BudgetsList';
 import { SimpleReports } from './reports/SimpleReports';
@@ -32,17 +31,22 @@ import { Planejamento } from '@/pages/Planejamento';
 import { FluxoDeCaixa } from '@/pages/FluxoDeCaixa';
 import { Inteligencia } from '@/pages/Inteligencia';
 import { Planos } from '@/pages/Planos';
+import { TransactionSheet } from './transactions/TransactionSheet';
 
 // Tabs de primeiro nível da sidebar (não empilham histórico de navegação)
 const ROOT_TABS = new Set([
   'dashboard', 'transactions', 'budgets', 'recurring-transactions',
   'cash-flow', 'cards', 'goals', 'intelligence', 'reports',
-  'plans', 'more', 'add',
+  'plans', 'more',
+  // 'add' removido — agora abre Sheet, não é mais uma rota
 ]);
 
 export const FinanceApp: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [tabHistory, setTabHistory] = useState<string[]>([]);
+  const [activeTab, setActiveTab]     = useState('dashboard');
+  const [tabHistory, setTabHistory]   = useState<string[]>([]);
+  // ── Sheet global de nova transação ─────────────────────────────────
+  const [addSheetOpen, setAddSheetOpen] = useState(false);
+
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -59,6 +63,11 @@ export const FinanceApp: React.FC = () => {
   if (!user) return <AuthScreen />;
 
   const handleTabChange = (tab: string) => {
+    // FAB / botão "Nova Transação" → abre Sheet, não navega
+    if (tab === 'add') {
+      setAddSheetOpen(true);
+      return;
+    }
     if (ROOT_TABS.has(activeTab) && !ROOT_TABS.has(tab)) {
       setTabHistory(prev => [...prev, activeTab]);
     }
@@ -76,22 +85,14 @@ export const FinanceApp: React.FC = () => {
 
   const renderContent = () => {
     switch (activeTab) {
-      // ── Sidebar primária ────────────────────────────────────────────────
       case 'dashboard':
         return <DashboardOverview onNavigate={handleTabChange} />;
       case 'transactions':
         return <TransactionsList />;
-      case 'add':
-        return <AddTransactionForm />;
-
-      // Sidebar 'budgets' → Planejamento de dívidas/prioridades
       case 'budgets':
         return <Planejamento />;
-
-      // MoreOptions 'budgets-list' → Orçamentos mensais por categoria
       case 'budgets-list':
         return <BudgetsList onBack={handleBack} />;
-
       case 'recurring-transactions':
         return <RecurringTransactionsManager onBack={handleBack} />;
       case 'cash-flow':
@@ -102,17 +103,12 @@ export const FinanceApp: React.FC = () => {
         return <SimpleGoals onBack={handleBack} />;
       case 'intelligence':
         return <Inteligencia />;
-
-      // Sidebar 'reports' → SimpleReports (única instância)
       case 'reports':
         return <SimpleReports onBack={handleBack} />;
-
       case 'plans':
         return <Planos />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} />;
-
-      // ── Subpáginas (via MoreOptions ou DashboardOverview) ─────────────
       case 'accounts':
         return <AccountsList onBack={handleBack} />;
       case 'categories':
@@ -147,7 +143,6 @@ export const FinanceApp: React.FC = () => {
         return <SecurityDashboard onBack={handleBack} />;
       case 'agenda':
         return <AgendaFinanceira onBack={handleBack} />;
-
       default:
         return <DashboardOverview onNavigate={handleTabChange} />;
     }
@@ -155,7 +150,17 @@ export const FinanceApp: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex w-full">
-      <AppSidebar activeTab={activeTab} onTabChange={handleTabChange} />
+      {/* Sheet global de nova transação — acessível de qualquer tela */}
+      <TransactionSheet
+        state={addSheetOpen ? { mode: 'add' } : { mode: 'closed' }}
+        onClose={() => setAddSheetOpen(false)}
+      />
+
+      <AppSidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        onOpenAddSheet={() => setAddSheetOpen(true)}
+      />
       <main className="flex-1 min-h-screen overflow-y-auto">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 pt-16 lg:pt-8">
           {renderContent()}
