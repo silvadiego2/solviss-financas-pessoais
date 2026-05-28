@@ -101,6 +101,8 @@ export const FinanceApp: React.FC = () => {
         return <SettingsScreen onBack={handleBackToMore} />;
       case 'auto-categorization':
         return <AutoCategorizationManager onBack={handleBackToMore} />;
+      case 'duplicate-detection':
+        return <DuplicateDetectionManager onBack={handleBackToMore} />;
       case 'auto-backup':
         return <AutoBackupManager onBack={handleBackToMore} />;
       case 'analytics':
