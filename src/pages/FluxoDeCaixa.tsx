@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, Legend
@@ -7,7 +8,8 @@ import { TrendingUp, TrendingDown, Wallet, ArrowUpCircle, ArrowDownCircle } from
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BackHeader } from '@/components/layout/BackHeader';
-import { useTransactions } from '@/hooks/useTransactions';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/components/auth/AuthProvider';
 
 const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -31,10 +33,36 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 export const FluxoDeCaixa: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
-  const { transactions, loading } = useTransactions();
+  const { user } = useAuth();
   const [months, setMonths] = useState('6');
-
   const monthsCount = parseInt(months);
+
+  // Data de início do período selecionado
+  const since = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (monthsCount - 1));
+    d.setDate(1);
+    return d.toISOString().split('T')[0];
+  }, [monthsCount]);
+
+  // Query própria — só date/type/amount/status dentro do período
+  const { data: rawTransactions = [], isLoading } = useQuery({
+    queryKey: ['fluxo-caixa', user?.id, months],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('date, type, amount, status')
+        .eq('user_id', user.id)
+        .neq('status', 'cancelled')
+        .gte('date', since)
+        .order('date', { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+    enabled: !!user,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const data = useMemo(() => {
     const now = new Date();
@@ -52,24 +80,20 @@ export const FluxoDeCaixa: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
       });
     }
 
-    transactions.forEach((t) => {
-      if (t.status === 'cancelled') return;
-      const key = t.date.slice(0, 7);
+    rawTransactions.forEach((t: any) => {
+      const key = (t.date as string).slice(0, 7);
       const item = result.find((r) => r.key === key);
       if (!item) return;
-      if (t.type === 'income') item.income += t.amount;
-      else if (t.type === 'expense') item.expense += t.amount;
+      if (t.type === 'income') item.income += Number(t.amount);
+      else if (t.type === 'expense') item.expense += Number(t.amount);
     });
 
-    // saldo acumulado
-    let accumulated = 0;
     result.forEach((item) => {
       item.balance = item.income - item.expense;
-      accumulated += item.balance;
     });
 
     return result;
-  }, [transactions, monthsCount]);
+  }, [rawTransactions, monthsCount]);
 
   const accumulatedData = useMemo(() => {
     let acc = 0;
@@ -80,12 +104,12 @@ export const FluxoDeCaixa: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
   }, [data]);
 
   const totals = useMemo(() => ({
-    income: data.reduce((s, i) => s + i.income, 0),
+    income:  data.reduce((s, i) => s + i.income, 0),
     expense: data.reduce((s, i) => s + i.expense, 0),
     balance: data.reduce((s, i) => s + i.balance, 0),
   }), [data]);
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="space-y-6">
         {onBack && <BackHeader title="Fluxo de Caixa" onBack={onBack} />}
@@ -170,7 +194,7 @@ export const FluxoDeCaixa: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         </Card>
       </div>
 
-      {/* Gráfico de barras - Entradas vs Saídas */}
+      {/* Gráfico de barras */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Entradas vs Saídas</CardTitle>
@@ -190,15 +214,15 @@ export const FluxoDeCaixa: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                 <YAxis tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11, fill: 'var(--muted-foreground)' }} axisLine={false} tickLine={false} width={52} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 12 }} />
-                <Bar dataKey="income" name="Entradas" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="expense" name="Saídas" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="income"  name="Entradas" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="expense" name="Saídas"   fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </CardContent>
       </Card>
 
-      {/* Gráfico de linha - Saldo acumulado */}
+      {/* Gráfico de linha — saldo acumulado */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Saldo Acumulado</CardTitle>
