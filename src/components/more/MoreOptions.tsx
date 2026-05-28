@@ -21,7 +21,9 @@ import {
   Trash2,
   Repeat,
   BarChart3,
-  Settings
+  Settings,
+  Copy,
+  Sparkles
 } from 'lucide-react';
 
 interface MoreOptionsProps {
@@ -108,6 +110,18 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate, onToggleTh
       description: 'Regras automáticas para suas finanças',
       icon: Zap,
       action: () => onNavigate('auto-rules')
+    },
+    {
+      title: 'Categorização Automática',
+      description: 'Classificar transações automaticamente por IA',
+      icon: Sparkles,
+      action: () => onNavigate('auto-categorization')
+    },
+    {
+      title: 'Detector de Duplicatas',
+      description: 'Identificar e remover transações duplicadas',
+      icon: Copy,
+      action: () => onNavigate('duplicate-detection')
     },
     {
       title: 'Conexões Bancárias',
