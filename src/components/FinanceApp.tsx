@@ -38,13 +38,11 @@ const ROOT_TABS = new Set([
   'dashboard', 'transactions', 'budgets', 'recurring-transactions',
   'cash-flow', 'cards', 'goals', 'intelligence', 'reports',
   'plans', 'more',
-  // 'add' removido — agora abre Sheet, não é mais uma rota
 ]);
 
 export const FinanceApp: React.FC = () => {
   const [activeTab, setActiveTab]     = useState('dashboard');
   const [tabHistory, setTabHistory]   = useState<string[]>([]);
-  // ── Sheet global de nova transação ─────────────────────────────────
   const [addSheetOpen, setAddSheetOpen] = useState(false);
 
   const { user, loading } = useAuth();
@@ -63,7 +61,6 @@ export const FinanceApp: React.FC = () => {
   if (!user) return <AuthScreen />;
 
   const handleTabChange = (tab: string) => {
-    // FAB / botão "Nova Transação" → abre Sheet, não navega
     if (tab === 'add') {
       setAddSheetOpen(true);
       return;
@@ -94,21 +91,23 @@ export const FinanceApp: React.FC = () => {
       case 'budgets-list':
         return <BudgetsList onBack={handleBack} />;
       case 'recurring-transactions':
-        return <RecurringTransactionsManager onBack={handleBack} />;
+        return <RecurringTransactionsManager />;
       case 'cash-flow':
         return <FluxoDeCaixa />;
+      // Abas raiz — sem onBack (são destinos primários da sidebar)
       case 'cards':
-        return <CreditCardsList onBack={handleBack} />;
+        return <CreditCardsList />;
       case 'goals':
-        return <SimpleGoals onBack={handleBack} />;
+        return <SimpleGoals />;
       case 'intelligence':
         return <Inteligencia />;
       case 'reports':
-        return <SimpleReports onBack={handleBack} />;
+        return <SimpleReports />;
       case 'plans':
         return <Planos />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} />;
+      // Sub-telas (navegadas a partir do menu Mais)
       case 'accounts':
         return <AccountsList onBack={handleBack} />;
       case 'categories':
@@ -150,12 +149,10 @@ export const FinanceApp: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background flex w-full">
-      {/* Sheet global de nova transação — acessível de qualquer tela */}
       <TransactionSheet
         state={addSheetOpen ? { mode: 'add' } : { mode: 'closed' }}
         onClose={() => setAddSheetOpen(false)}
       />
-
       <AppSidebar
         activeTab={activeTab}
         onTabChange={handleTabChange}
