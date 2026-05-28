@@ -6,13 +6,7 @@ import {
   ArrowUp, ArrowDown, Wallet, TrendingUp, CreditCard,
   Plus, Target, ChevronRight, AlertTriangle, ArrowLeftRight,
 } from 'lucide-react';
-import { useAccounts } from '@/hooks/useAccounts';
-import { useTransactions } from '@/hooks/useTransactions';
-import { useCreditCards } from '@/hooks/useCreditCards';
-import { useGoals } from '@/hooks/useGoals';
-import { useBudgets } from '@/hooks/useBudgets';
-import { useRecurringTransactions } from '@/hooks/useRecurringTransactions';
-import { useDashboardStats } from '@/hooks/useDashboardStats';
+import { useDashboardData } from '@/hooks/useDashboardData';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { AddTransactionForm } from '@/components/transactions/AddTransactionForm';
 import { EditTransactionForm } from '@/components/transactions/EditTransactionForm';
@@ -31,7 +25,6 @@ interface DashboardOverviewProps {
   onNavigate?: (tab: string) => void;
 }
 
-// Cores do design system — respeitam dark mode via variáveis CSS
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
   'hsl(var(--chart-2))',
@@ -44,66 +37,78 @@ const CHART_COLORS = [
 ];
 
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
-  const { regularAccounts, loading: accountsLoading } = useAccounts();
-  const { transactions, loading: transactionsLoading } = useTransactions();
-  const { creditCards, loading: cardsLoading } = useCreditCards();
-  const { goals, isLoading: goalsLoading } = useGoals();
-  const { budgets, loading: budgetsLoading } = useBudgets();
-  const { recurringTransactions } = useRecurringTransactions();
+  // ── 1 hook em vez de 7 ───────────────────────────────────────────────────
+  const {
+    regularAccounts = [],
+    creditCards = [],
+    transactions = [],
+    recurringTransactions = [],
+    budgets = [],
+    goals = [],
+    stats,
+    isLoading,
+    month,
+    year,
+  } = useDashboardData();
+
   const { user } = useAuth();
 
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddForm, setShowAddForm]     = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<any>(null);
 
-  const totalBalance = regularAccounts.reduce((sum, a) => sum + Number(a.balance), 0);
-  const currentMonth = new Date().getMonth();
-  const currentYear = new Date().getFullYear();
+  // ── KPIs ─────────────────────────────────────────────────────────────────
+  const totalBalance = useMemo(
+    () => regularAccounts.reduce((s, a) => s + a.balance, 0),
+    [regularAccounts]
+  );
 
   const {
-    monthlyIncome,
-    monthlyExpenses,
-    available,
-    spendingChartData,
-    expensesByCategory,
-  } = useDashboardStats(transactions);
+    monthlyIncome = 0,
+    monthlyExpenses = 0,
+    available = 0,
+    spendingChartData = [],
+    expensesByCategory = [],
+  } = stats ?? {};
 
-  // % de receita já gasta (não % do calendário)
   const incomeUsedPct = monthlyIncome > 0
     ? Math.min((monthlyExpenses / monthlyIncome) * 100, 100)
     : 0;
 
-  const recurringWeekAmount = useMemo(() =>
-    (recurringTransactions || [])
-      .filter((r: any) => r.type === 'expense')
-      .reduce((s: number, r: any) => s + Number(r.amount || 0), 0),
+  const recurringWeekAmount = useMemo(
+    () => recurringTransactions
+      .filter(r => r.type === 'expense')
+      .reduce((s, r) => s + r.amount, 0),
     [recurringTransactions]
   );
 
-  const monthBudgets = budgets.filter(b => b.month === currentMonth + 1 && b.year === currentYear);
+  const currentMonth = month ?? new Date().getMonth() + 1;
+  const currentYear  = year  ?? new Date().getFullYear();
+
+  const monthBudgets = useMemo(
+    () => budgets.filter(b => b.month === currentMonth && b.year === currentYear),
+    [budgets, currentMonth, currentYear]
+  );
+
   const totalBudgetUsage = monthBudgets.length > 0
-    ? monthBudgets.reduce((s, b) => s + (Number(b.spent) / Number(b.amount)) * 100, 0) / monthBudgets.length
+    ? monthBudgets.reduce((s, b) => s + (b.spent / b.amount) * 100, 0) / monthBudgets.length
     : 0;
 
-  const activeGoals = goals.filter(g => !g.is_completed);
+  const activeGoals = useMemo(() => goals.filter(g => !g.is_completed), [goals]);
   const totalGoalProgress = activeGoals.length > 0
-    ? activeGoals.reduce((s, g) => s + (Number(g.current_amount) / Number(g.target_amount)) * 100, 0) / activeGoals.length
+    ? activeGoals.reduce((s, g) => s + (g.current_amount / g.target_amount) * 100, 0) / activeGoals.length
     : 0;
 
-  // Nome amigável do usuário (parte antes do @)
   const userName = user?.user_metadata?.full_name
     || user?.email?.split('@')[0]
     || 'você';
 
-  const todayLabel = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
-  // Capitaliza primeiro caractere
+  const todayLabel     = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
   const todayFormatted = todayLabel.charAt(0).toUpperCase() + todayLabel.slice(1);
 
-  if (showAddForm) return <AddTransactionForm onClose={() => setShowAddForm(false)} />;
+  // ── Early returns ─────────────────────────────────────────────────────────
+  if (showAddForm)        return <AddTransactionForm onClose={() => setShowAddForm(false)} />;
   if (editingTransaction) return <EditTransactionForm transaction={editingTransaction} onClose={() => setEditingTransaction(null)} />;
-
-  if (accountsLoading || transactionsLoading || cardsLoading || goalsLoading || budgetsLoading) {
-    return <DashboardSkeleton />;
-  }
+  if (isLoading)          return <DashboardSkeleton />;
 
   return (
     <div className="space-y-8">
@@ -127,7 +132,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
 
       {/* Balance Hero + Disponível */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* Card principal */}
         <div className="lg:col-span-2 relative overflow-hidden rounded-2xl bg-primary text-primary-foreground p-7 shadow-premium">
           <div
             className="absolute inset-0 opacity-[0.04] pointer-events-none"
@@ -166,7 +170,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
 
-        {/* Card disponível */}
         <div className="card-elevated p-6 flex flex-col">
           <p className="label-eyebrow">Disponível no mês</p>
           <p className={`figure-hero text-3xl mt-2 ${available >= 0 ? 'text-success' : 'text-destructive'}`}>
@@ -216,12 +219,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium truncate">{card.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    Limite: {formatCurrency(Number(card.credit_limit))}
+                    Limite: {formatCurrency(card.credit_limit)}
                   </p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-sm font-bold text-destructive">
-                    {formatCurrency(Number(card.current_balance ?? 0))}
+                    {formatCurrency(card.current_balance)}
                   </p>
                   <p className="text-xs text-muted-foreground">fatura</p>
                 </div>
@@ -315,9 +318,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                     <p className="text-sm font-medium truncate">{t.description}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-xs text-muted-foreground">{formatDateBR(t.date)}</span>
-                      {(t as any).category_name && (
+                      {t.category_name && (
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
-                          {(t as any).category_name}
+                          {t.category_name}
                         </Badge>
                       )}
                     </div>
@@ -326,7 +329,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                 <span className={`text-sm font-semibold flex-shrink-0 ml-2 ${
                   t.type === 'income' ? 'text-chart-income' : 'text-chart-expense'
                 }`}>
-                  {t.type === 'income' ? '+' : '-'}{formatCurrency(Number(t.amount))}
+                  {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                 </span>
               </button>
             ))}
