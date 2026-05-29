@@ -1,73 +1,57 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Building, Wallet, PiggyBank, TrendingUp, Plus, Edit, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useAccounts } from '@/hooks/useAccounts';
-import { useDependencyCheck } from '@/hooks/useDependencyCheck';
+import { supabase } from '@/integrations/supabase/client';
 import { AddAccountForm } from './AddAccountForm';
 import { EditAccountForm } from './EditAccountForm';
 import { AccountsListSkeleton } from '@/components/ui/skeleton-loaders';
-import { BackHeader } from '@/components/layout/BackHeader';
-
-interface AccountsListProps {
-  onBack?: () => void;
-}
 
 const getAccountIcon = (type: string) => {
   switch (type) {
-    case 'checking':
-      return <Building size={20} />;
-    case 'savings':
-      return <PiggyBank size={20} />;
-    case 'wallet':
-      return <Wallet size={20} />;
-    case 'investment':
-      return <TrendingUp size={20} />;
-    default:
-      return <Wallet size={20} />;
+    case 'checking':  return <Building size={20} />;
+    case 'savings':   return <PiggyBank size={20} />;
+    case 'wallet':    return <Wallet size={20} />;
+    case 'investment':return <TrendingUp size={20} />;
+    default:          return <Wallet size={20} />;
   }
 };
 
 const getAccountTypeName = (type: string) => {
   switch (type) {
-    case 'checking':
-      return 'Conta Corrente';
-    case 'savings':
-      return 'Poupança';
-    case 'wallet':
-      return 'Carteira';
-    case 'investment':
-      return 'Investimento';
-    default:
-      return type;
+    case 'checking':  return 'Conta Corrente';
+    case 'savings':   return 'Poupança';
+    case 'wallet':    return 'Carteira';
+    case 'investment':return 'Investimento';
+    default:          return type;
   }
 };
 
-export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+export const AccountsList: React.FC = () => {
   const { regularAccounts, loading, deleteAccount } = useAccounts();
-  const { checkAccountDependencies } = useDependencyCheck();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any>(null);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
-
   const handleDelete = async (accountId: string, accountName: string) => {
-    const deps = await checkAccountDependencies(accountId);
-    
-    if (deps.hasTransactions) {
+    const { count } = await supabase
+      .from('transactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('account_id', accountId);
+
+    const transactionCount = count ?? 0;
+
+    if (transactionCount > 0) {
       const confirmDelete = window.confirm(
-        `A conta "${accountName}" possui ${deps.transactionCount} transação(ões) vinculada(s).\n\n⚠️ ATENÇÃO: Todas as transações vinculadas a esta conta serão excluídas permanentemente.\n\nDeseja continuar?`
+        `A conta "${accountName}" possui ${transactionCount} transação(ões) vinculada(s).\n\n⚠️ ATENÇÃO: Todas as transações vinculadas a esta conta serão excluídas permanentemente.\n\nDeseja continuar?`
       );
-      
       if (!confirmDelete) return;
     }
-    
+
     deleteAccount(accountId);
   };
 
@@ -81,27 +65,15 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
     setEditingAccount(null);
   };
 
-  if (loading) {
-    return <AccountsListSkeleton />;
-  }
-
-  if (showAddForm && !editingAccount) {
-    return <AddAccountForm onClose={handleCloseForm} editingAccount={editingAccount} />;
-  }
-
-  if (editingAccount) {
-    return <EditAccountForm account={editingAccount} onClose={handleCloseForm} />;
-  }
+  if (loading) return <AccountsListSkeleton />;
+  if (showAddForm && !editingAccount) return <AddAccountForm onClose={handleCloseForm} editingAccount={editingAccount} />;
+  if (editingAccount) return <EditAccountForm account={editingAccount} onClose={handleCloseForm} />;
 
   return (
     <div className="space-y-4">
-      {onBack && <BackHeader title="Minhas Contas" onBack={onBack} />}
       <div className="flex items-center justify-between">
-        {!onBack && <h2 className="text-lg font-semibold">Minhas Contas</h2>}
-        <Button 
-          onClick={() => setShowAddForm(true)}
-          className="flex items-center space-x-2"
-        >
+        <h2 className="text-lg font-semibold">Minhas Contas</h2>
+        <Button onClick={() => setShowAddForm(true)} className="flex items-center space-x-2">
           <Plus size={16} />
           <span>Adicionar Conta</span>
         </Button>
@@ -109,7 +81,7 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
 
       <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
         <p className="text-sm text-blue-800 dark:text-blue-200">
-          💡 <strong>Contas:</strong> Inclui contas correntes, poupança, carteiras e investimentos. 
+          💡 <strong>Contas:</strong> Inclui contas correntes, poupança, carteiras e investimentos.
           Os cartões de crédito são gerenciados separadamente na aba "Cartões".
         </p>
       </div>
@@ -118,15 +90,11 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-8">
             <Wallet size={48} className="text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Nenhuma conta encontrada
-            </h3>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma conta encontrada</h3>
             <p className="text-gray-500 text-center mb-4">
               Adicione suas contas para começar a controlar suas finanças
             </p>
-            <Button onClick={() => setShowAddForm(true)}>
-              Adicionar Primeira Conta
-            </Button>
+            <Button onClick={() => setShowAddForm(true)}>Adicionar Primeira Conta</Button>
           </CardContent>
         </Card>
       ) : (
@@ -136,9 +104,7 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="text-blue-600">
-                      {getAccountIcon(account.type)}
-                    </div>
+                    <div className="text-blue-600">{getAccountIcon(account.type)}</div>
                     <div>
                       <h3 className="font-medium">{account.name}</h3>
                       <p className="text-sm text-gray-500">
@@ -149,30 +115,17 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <div className="text-right">
-                      <p className={`font-semibold ${
-                        Number(account.balance) >= 0 
-                          ? 'text-green-600' 
-                          : 'text-red-600'
-                      }`}>
+                      <p className={`font-semibold ${Number(account.balance) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                         {formatCurrency(Number(account.balance))}
                       </p>
                     </div>
                     <div className="flex flex-col space-y-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(account)}
-                        className="p-1 h-auto"
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(account)} className="p-1 h-auto">
                         <Edit size={16} />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="p-1 h-auto text-red-600 hover:text-red-800"
-                          >
+                          <Button variant="ghost" size="sm" className="p-1 h-auto text-red-600 hover:text-red-800">
                             <Trash2 size={16} />
                           </Button>
                         </AlertDialogTrigger>
@@ -185,12 +138,12 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(account.id, account.name)}
-                            className="bg-red-600 hover:bg-red-700"
-                          >
-                            Excluir
-                          </AlertDialogAction>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(account.id, account.name)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Excluir
+                            </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
