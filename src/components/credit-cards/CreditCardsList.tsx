@@ -3,61 +3,39 @@ import { Button } from '@/components/ui/button';
 import { Plus, CreditCard as CreditCardIcon, Calendar, Receipt, Edit, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useCreditCards } from '@/hooks/useCreditCards';
-import { useTransactions } from '@/hooks/useTransactions';
+import { formatCurrency } from '@/utils/formatters';
 import { AddCreditCardForm } from './AddCreditCardForm';
 import { CreditCardInvoices } from './CreditCardInvoices';
 import { EditCreditCardForm } from './EditCreditCardForm';
 
+const getUsagePercentage = (used: number, limit: number) =>
+  limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
+
+const getBarColor = (pct: number): string => {
+  if (pct >= 80) return 'var(--color-destructive, #ef4444)';
+  if (pct >= 60) return 'var(--color-warning, #f59e0b)';
+  return 'var(--color-success, #22c55e)';
+};
+
+const getPercentageTextClass = (pct: number): string => {
+  if (pct >= 80) return 'text-destructive';
+  if (pct >= 60) return 'text-yellow-500';
+  return 'text-green-500';
+};
+
 export const CreditCardsList: React.FC = () => {
   const { creditCards, loading, deleteCreditCard } = useCreditCards();
-  const { transactions } = useTransactions();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCard, setEditingCard] = useState<any>(null);
   const [selectedCardForInvoices, setSelectedCardForInvoices] = useState<any>(null);
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
-  const getUsagePercentage = (used: number, limit: number) =>
-    limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
-
-  const getBarColor = (pct: number): string => {
-    if (pct >= 80) return 'var(--color-destructive, #ef4444)';
-    if (pct >= 60) return 'var(--color-warning, #f59e0b)';
-    return 'var(--color-success, #22c55e)';
-  };
-
-  const getPercentageTextClass = (pct: number): string => {
-    if (pct >= 80) return 'text-destructive';
-    if (pct >= 60) return 'text-yellow-500';
-    return 'text-green-500';
-  };
 
   const handleDelete = (cardId: string) => deleteCreditCard(cardId);
   const handleEdit = (card: any) => { setEditingCard(card); setShowAddForm(true); };
   const handleCloseForm = () => { setShowAddForm(false); setEditingCard(null); };
 
-  const getCardStatistics = () => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
-    let totalOpenInvoices = 0;
-    let totalLimit = 0;
-
-    creditCards.forEach(card => {
-      totalLimit += card.limit;
-      const cardTx = transactions.filter(t => {
-        if (t.account_id !== card.id || t.status === 'cancelled') return false;
-        const d = new Date(t.date);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear && t.type === 'expense';
-      });
-      totalOpenInvoices += cardTx.reduce((s, t) => s + Number(t.amount), 0);
-    });
-
-    return { totalOpenInvoices, totalLimit };
-  };
-
-  const { totalOpenInvoices, totalLimit } = getCardStatistics();
+  // Totais calculados direto dos dados já agregados pelo useCreditCards (query no Supabase)
+  const totalOpenInvoices = creditCards.reduce((s, c) => s + c.used_amount, 0);
+  const totalLimit = creditCards.reduce((s, c) => s + c.limit, 0);
 
   if (loading) {
     return (
@@ -106,9 +84,7 @@ export const CreditCardsList: React.FC = () => {
           <p className="text-sm text-muted-foreground max-w-sm mb-5">
             Adicione seus cartões de crédito para controlar limites, faturas e vencimentos.
           </p>
-          <Button onClick={() => setShowAddForm(true)}>
-            Adicionar primeiro cartão
-          </Button>
+          <Button onClick={() => setShowAddForm(true)}>Adicionar primeiro cartão</Button>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -159,12 +135,8 @@ export const CreditCardsList: React.FC = () => {
                       <p className={`text-xs font-semibold ${pctClass}`}>
                         {card.limit > 0 ? `${pct.toFixed(1)}% utilizado` : 'Limite não definido'}
                       </p>
-                      {pct >= 80 && (
-                        <p className="text-xs text-destructive font-medium">⚠️ Limite crítico</p>
-                      )}
-                      {pct >= 60 && pct < 80 && (
-                        <p className="text-xs text-yellow-500 font-medium">Atenção</p>
-                      )}
+                      {pct >= 80 && <p className="text-xs text-destructive font-medium">⚠️ Limite crítico</p>}
+                      {pct >= 60 && pct < 80 && <p className="text-xs text-yellow-500 font-medium">Atenção</p>}
                     </div>
                   </div>
 
