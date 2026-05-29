@@ -1,6 +1,6 @@
 /**
  * useDashboardData
- * ─────────────────────────────────────────────────────────────────────────────
+ * ────────────────────────────────────────────────────────────────────────────────
  * Busca TODOS os dados do dashboard em uma única query coordenada via
  * Promise.all — 5 tabelas em paralelo, um único roundtrip de rede.
  *
@@ -21,7 +21,7 @@ const GC_TIME   = 10 * 60 * 1000;  // 10 min
 
 export const DASHBOARD_QUERY_KEY = (userId: string) => ['dashboard-data', userId];
 
-// ─── Tipos mínimos para o dashboard ──────────────────────────────────────────
+// ─── Tipos mínimos para o dashboard ────────────────────────────────────────────────
 
 export interface DashAccount {
   id: string;
@@ -71,7 +71,14 @@ export interface DashCreditCard {
   current_balance: number;
 }
 
-// ─── Fetcher ─────────────────────────────────────────────────────────────────
+/** Ponto do gráfico diário — agora contém receitas E despesas */
+export interface ChartDayPoint {
+  day: number;
+  income: number;
+  expense: number;
+}
+
+// ─── Fetcher ─────────────────────────────────────────────────────────────────────────
 
 async function fetchDashboard(userId: string) {
   const now = new Date();
@@ -203,7 +210,7 @@ async function fetchDashboard(userId: string) {
   };
 }
 
-// ─── Hook público ─────────────────────────────────────────────────────────────
+// ─── Hook público ──────────────────────────────────────────────────────────────────────
 
 export function useDashboardData() {
   const { user } = useAuth();
@@ -231,20 +238,25 @@ export function useDashboardData() {
     const monthlyExpenses = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     const available       = monthlyIncome - monthlyExpenses;
 
-    // Gráfico acumulado de gastos do mês (dia → acumulado)
-    const dayMap = new Map<number, number>();
-    monthTx
-      .filter(t => t.type === 'expense')
-      .forEach(t => {
-        const day = new Date(t.date + 'T00:00:00').getDate();
-        dayMap.set(day, (dayMap.get(day) ?? 0) + t.amount);
-      });
-    const today = new Date().getDate();
-    let acc = 0;
-    const spendingChartData = Array.from({ length: today }, (_, i) => {
-      acc += dayMap.get(i + 1) ?? 0;
-      return { day: i + 1, amount: acc };
+    // ── Gráfico diário — receitas E despesas por dia (não acumulado) ──
+    const incomeMap  = new Map<number, number>();
+    const expenseMap = new Map<number, number>();
+
+    monthTx.forEach(t => {
+      const day = new Date(t.date + 'T00:00:00').getDate();
+      if (t.type === 'income') {
+        incomeMap.set(day, (incomeMap.get(day) ?? 0) + t.amount);
+      } else if (t.type === 'expense') {
+        expenseMap.set(day, (expenseMap.get(day) ?? 0) + t.amount);
+      }
     });
+
+    const today = new Date().getDate();
+    const spendingChartData: ChartDayPoint[] = Array.from({ length: today }, (_, i) => ({
+      day:     i + 1,
+      income:  incomeMap.get(i + 1)  ?? 0,
+      expense: expenseMap.get(i + 1) ?? 0,
+    }));
 
     // Despesas por categoria
     const catMap = new Map<string, number>();

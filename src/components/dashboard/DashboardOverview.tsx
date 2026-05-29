@@ -14,7 +14,7 @@ import { AgendaWidget } from './AgendaWidget';
 import { DashboardSkeleton } from '@/components/ui/skeleton-loaders';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip,
-  CartesianGrid, ResponsiveContainer,
+  CartesianGrid, ResponsiveContainer, Legend,
   PieChart, Pie, Cell,
 } from 'recharts';
 import { formatCurrency, formatDateBR } from '@/utils/formatters';
@@ -38,6 +38,23 @@ const CHART_COLORS = [
   'hsl(var(--chart-5))',
 ];
 
+// Tooltip personalizado do gráfico diário
+const DayTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const income  = payload.find((p: any) => p.dataKey === 'income')?.value  ?? 0;
+  const expense = payload.find((p: any) => p.dataKey === 'expense')?.value ?? 0;
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-2 shadow-md text-xs space-y-1">
+      <p className="font-semibold text-foreground mb-1">Dia {label}</p>
+      {income  > 0 && <p className="text-emerald-500">Receitas: {formatCurrency(income)}</p>}
+      {expense > 0 && <p className="text-red-500">Despesas: {formatCurrency(expense)}</p>}
+      {income === 0 && expense === 0 && (
+        <p className="text-muted-foreground">Sem movimentações</p>
+      )}
+    </div>
+  );
+};
+
 export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate }) => {
   const {
     regularAccounts = [],
@@ -56,7 +73,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const [hideBalance, setHideBalance] = useState(false);
   const [editSheet, setEditSheet]     = useState<EditSheetState>({ mode: 'closed' });
 
-  // ── KPIs ─────────────────────────────────────────────────────────────────
+  // ── KPIs ───────────────────────────────────────────────────────────────────
   const totalBalance = useMemo(
     () => regularAccounts.reduce((s, a) => s + a.balance, 0),
     [regularAccounts]
@@ -99,11 +116,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   const todayRaw      = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
   const todayFormatted = todayRaw.charAt(0).toUpperCase() + todayRaw.slice(1);
 
-  // ── Combined chart (income + expense por dia) ───────────────────────────
-  const chartData = useMemo(() => {
-    // spendingChartData já tem {day, amount}; enriquecemos com income se disponível
-    return spendingChartData;
-  }, [spendingChartData]);
+  // Verifica se há qualquer dado no gráfico
+  const hasChartData = spendingChartData.some(
+    (p: any) => (p.income ?? 0) > 0 || (p.expense ?? 0) > 0
+  );
 
   if (isLoading) return <DashboardSkeleton />;
 
@@ -119,7 +135,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
 
       <div className="space-y-8 pb-6">
 
-        {/* ── 1. HEADER ────────────────────────────────────────────────────── */}
+        {/* ── 1. HEADER ──────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between">
           <div>
             <p className="label-eyebrow">{todayFormatted}</p>
@@ -146,14 +162,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         )}
 
-        {/* ── 2. SALDO TOTAL — heroi tipográfico ─────────────────────────── */}
+        {/* ── 2. SALDO TOTAL ───────────────────────────────────────────────── */}
         <div className="relative overflow-hidden rounded-2xl bg-primary text-primary-foreground px-7 py-8 shadow-lg">
-          {/* grade sutil */}
           <div
             className="absolute inset-0 opacity-[0.04] pointer-events-none"
             style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '24px 24px' }}
           />
-          {/* brilho */}
           <div className="absolute -top-24 -right-24 w-64 h-64 rounded-full bg-white/5 blur-3xl pointer-events-none" />
 
           <div className="relative">
@@ -171,14 +185,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               </button>
             </div>
 
-            {/* Número grande — foco visual principal */}
             <p className="figure-hero text-5xl sm:text-6xl font-bold tracking-tight leading-none mt-1">
               {mask(totalBalance)}
             </p>
 
             <div className="h-px w-full bg-white/10 my-5" />
 
-            {/* Receitas / Despesas / Disponível inline */}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <div className="flex items-center gap-1 text-[11px] uppercase tracking-wider opacity-60 font-medium mb-1">
@@ -202,7 +214,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               </div>
             </div>
 
-            {/* Barra de progresso */}
             <div className="mt-5">
               <div className="w-full bg-white/10 rounded-full h-1">
                 <div
@@ -218,9 +229,8 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
 
-        {/* ── 3. KPIs rápidos ────────────────────────────────────────────────── */}
+        {/* ── 3. KPIs rápidos ────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-3">
-          {/* Orçamentos */}
           <button
             onClick={() => onNavigate?.('budgets-list')}
             className="card-elevated p-4 text-left hover:shadow-md transition-shadow rounded-2xl"
@@ -238,7 +248,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
             <p className="text-[11px] text-muted-foreground mt-1">{totalBudgetUsage.toFixed(0)}%</p>
           </button>
 
-          {/* Metas */}
           <button
             onClick={() => onNavigate?.('goals')}
             className="card-elevated p-4 text-left hover:shadow-md transition-shadow rounded-2xl"
@@ -256,7 +265,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
             <p className="text-[11px] text-muted-foreground mt-1">{activeGoals.length} ativas</p>
           </button>
 
-          {/* Cartões */}
           <button
             onClick={() => onNavigate?.('cards')}
             className="card-elevated p-4 text-left hover:shadow-md transition-shadow rounded-2xl"
@@ -270,12 +278,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </button>
         </div>
 
-        {/* ── 4. GRÁFICO DO MÊS ────────────────────────────────────────────── */}
+        {/* ── 4. GRÁFICO DO MÊS — receitas + despesas por dia ─────────────────────── */}
         <div className="card-elevated rounded-2xl overflow-hidden">
-          <div className="px-5 pt-5 pb-3 flex items-center justify-between">
+          <div className="px-5 pt-5 pb-2 flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold">Gastos do Mês</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Evolução acumulada</p>
+              <p className="text-sm font-semibold">Movimentações do Mês</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Receitas e despesas por dia</p>
             </div>
             <Button
               variant="ghost" size="sm"
@@ -285,50 +293,66 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               Relatórios <ChevronRight size={13} className="ml-1" />
             </Button>
           </div>
-          {chartData.length === 0 ? (
+
+          {!hasChartData ? (
             <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
               Sem movimentações este mês
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <AreaChart data={chartData} margin={{ top: 0, right: 16, left: 0, bottom: 0 }}>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart
+                data={spendingChartData}
+                margin={{ top: 4, right: 16, left: 0, bottom: 0 }}
+              >
                 <defs>
-                  <linearGradient id="dashGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  <linearGradient id="gradIncome" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#10B981" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="gradExpense" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor="#EF4444" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
                   </linearGradient>
                 </defs>
+
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
                   dataKey="day"
                   tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                   axisLine={false} tickLine={false}
+                  interval={Math.floor((spendingChartData.length - 1) / 6)}
                 />
                 <YAxis hide />
-                <Tooltip
-                  formatter={(v: number) => formatCurrency(v)}
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--card))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                  }}
+                <Tooltip content={<DayTooltip />} />
+                <Legend
+                  formatter={(value) => value === 'income' ? 'Receitas' : 'Despesas'}
+                  wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+                />
+
+                <Area
+                  type="monotone"
+                  dataKey="income"
+                  stroke="#10B981"
+                  fill="url(#gradIncome)"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
                 />
                 <Area
                   type="monotone"
-                  dataKey="amount"
-                  stroke="hsl(var(--primary))"
-                  fill="url(#dashGrad)"
+                  dataKey="expense"
+                  stroke="#EF4444"
+                  fill="url(#gradExpense)"
                   strokeWidth={2}
                   dot={false}
-                  name="Acumulado"
+                  activeDot={{ r: 4 }}
                 />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </div>
 
-        {/* ── 5. TRANSAÇÕES RECENTES ───────────────────────────────────────── */}
+        {/* ── 5. TRANSAÇÕES RECENTES ────────────────────────────────────────────── */}
         <div className="card-elevated rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <p className="text-sm font-semibold">Transações Recentes</p>
@@ -384,7 +408,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
 
-        {/* ── 6. DESPESAS POR CATEGORIA ────────────────────────────────────── */}
+        {/* ── 6. DESPESAS POR CATEGORIA ─────────────────────────────────────────── */}
         {expensesByCategory.length > 0 && (
           <div className="card-elevated rounded-2xl p-5">
             <p className="text-sm font-semibold mb-4">Despesas por Categoria</p>
@@ -403,6 +427,15 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                       <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                     ))}
                   </Pie>
+                  <Tooltip
+                    formatter={(value: number) => formatCurrency(value)}
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--card))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
               <div className="flex-1 space-y-2">
@@ -418,7 +451,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         )}
 
-        {/* ── 7. CARTÕES DE CRÉDITO ───────────────────────────────────────── */}
+        {/* ── 7. CARTÕES DE CRÉDITO ─────────────────────────────────────────────── */}
         {creditCards.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -451,7 +484,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         )}
 
-        {/* ── 8. AGENDA ─────────────────────────────────────────────────────────────── */}
+        {/* ── 8. AGENDA ─────────────────────────────────────────────────────────────────────── */}
         <AgendaWidget onNavigate={onNavigate} />
 
       </div>
