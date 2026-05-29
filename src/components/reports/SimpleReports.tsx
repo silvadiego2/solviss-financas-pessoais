@@ -7,7 +7,6 @@ import {
   PieChart, Pie, Cell, Tooltip, Legend, CartesianGrid,
 } from 'recharts';
 import { useReportsData } from '@/hooks/useReportsData';
-import { BackHeader } from '@/components/layout/BackHeader';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const COLORS = ['#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
@@ -44,11 +43,7 @@ const CustomTooltipPie = ({ active, payload }: any) => {
   );
 };
 
-interface SimpleReportsProps {
-  onBack?: () => void;
-}
-
-export const SimpleReports: React.FC<SimpleReportsProps> = ({ onBack }) => {
+export const SimpleReports: React.FC = () => {
   const { data, isLoading } = useReportsData();
 
   const monthly    = data?.monthly    ?? [];
@@ -56,10 +51,8 @@ export const SimpleReports: React.FC<SimpleReportsProps> = ({ onBack }) => {
 
   return (
     <div className="space-y-4">
-      {onBack && <BackHeader title="Relatórios" onBack={onBack} />}
-      {!onBack && <h2 className="text-lg font-semibold">Relatórios</h2>}
+      <h2 className="text-lg font-semibold">Relatórios</h2>
 
-      {/* Receitas vs Despesas — 6 meses */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Receitas vs Despesas (6 meses)</CardTitle>
@@ -96,7 +89,6 @@ export const SimpleReports: React.FC<SimpleReportsProps> = ({ onBack }) => {
         </CardContent>
       </Card>
 
-      {/* Despesas por Categoria — mês atual */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Despesas por Categoria (mês atual)</CardTitle>
@@ -128,7 +120,6 @@ export const SimpleReports: React.FC<SimpleReportsProps> = ({ onBack }) => {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
-
               <div className="w-full sm:w-1/2 space-y-2">
                 {byCategory.map((cat, i) => (
                   <div key={cat.name} className="flex items-center gap-2 text-sm">
@@ -146,7 +137,6 @@ export const SimpleReports: React.FC<SimpleReportsProps> = ({ onBack }) => {
         </CardContent>
       </Card>
 
-      {/* Resumo do mês */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Resumo do Mês Atual</CardTitle>

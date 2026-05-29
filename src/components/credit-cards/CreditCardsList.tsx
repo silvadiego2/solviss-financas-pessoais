@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Plus, CreditCard as CreditCardIcon, Calendar, Receipt, Edit, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -8,27 +7,20 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { AddCreditCardForm } from './AddCreditCardForm';
 import { CreditCardInvoices } from './CreditCardInvoices';
 import { EditCreditCardForm } from './EditCreditCardForm';
-import { BackHeader } from '@/components/layout/BackHeader';
 
-interface CreditCardsListProps {
-  onBack?: () => void;
-}
-
-export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
+export const CreditCardsList: React.FC = () => {
   const { creditCards, loading, deleteCreditCard } = useCreditCards();
   const { transactions } = useTransactions();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCard, setEditingCard] = useState<any>(null);
   const [selectedCardForInvoices, setSelectedCardForInvoices] = useState<any>(null);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   const getUsagePercentage = (used: number, limit: number) =>
     limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
 
-  // Cores inline para evitar dependência de classes dinâmicas do Tailwind
   const getBarColor = (pct: number): string => {
     if (pct >= 80) return 'var(--color-destructive, #ef4444)';
     if (pct >= 60) return 'var(--color-warning, #f59e0b)';
@@ -45,7 +37,6 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
   const handleEdit = (card: any) => { setEditingCard(card); setShowAddForm(true); };
   const handleCloseForm = () => { setShowAddForm(false); setEditingCard(null); };
 
-  // Estatísticas gerais — baseadas nas transações do mês atual
   const getCardStatistics = () => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -82,29 +73,13 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
 
   return (
     <div className="space-y-7">
-      {onBack && <BackHeader title="Cartões de Crédito" onBack={onBack} />}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Cartões de Crédito</h2>
+        <Button onClick={() => setShowAddForm(true)} className="gap-2">
+          <Plus size={16} /> Novo Cartão
+        </Button>
+      </div>
 
-      {!onBack && (
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="label-eyebrow">Carteira</p>
-            <h1 className="text-3xl font-semibold mt-1 tracking-tight">Cartões de Crédito</h1>
-          </div>
-          <Button onClick={() => setShowAddForm(true)} className="gap-2 shadow-premium-sm">
-            <Plus size={16} /><span>Novo Cartão</span>
-          </Button>
-        </div>
-      )}
-
-      {onBack && (
-        <div className="flex justify-end">
-          <Button onClick={() => setShowAddForm(true)} className="gap-2 shadow-premium-sm">
-            <Plus size={16} /><span>Novo Cartão</span>
-          </Button>
-        </div>
-      )}
-
-      {/* Resumo Geral */}
       {creditCards.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="card-elevated p-5">
@@ -131,7 +106,7 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
           <p className="text-sm text-muted-foreground max-w-sm mb-5">
             Adicione seus cartões de crédito para controlar limites, faturas e vencimentos.
           </p>
-          <Button onClick={() => setShowAddForm(true)} className="shadow-premium-sm">
+          <Button onClick={() => setShowAddForm(true)}>
             Adicionar primeiro cartão
           </Button>
         </div>
@@ -145,7 +120,6 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
 
             return (
               <div key={card.id} className="card-elevated overflow-hidden flex flex-col">
-                {/* Card visual */}
                 <div className="relative bg-primary text-primary-foreground p-6">
                   <div
                     className="absolute inset-0 opacity-[0.05] pointer-events-none"
@@ -166,9 +140,7 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
                   </div>
                 </div>
 
-                {/* Body */}
                 <div className="p-5 space-y-5 flex-1">
-                  {/* Barra de uso */}
                   <div>
                     <div className="flex justify-between items-baseline mb-2">
                       <span className="text-xs text-muted-foreground font-medium">Limite Utilizado</span>
@@ -212,7 +184,6 @@ export const CreditCardsList: React.FC<CreditCardsListProps> = ({ onBack }) => {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex border-t border-border">
                   <button
                     onClick={() => setSelectedCardForInvoices(card)}

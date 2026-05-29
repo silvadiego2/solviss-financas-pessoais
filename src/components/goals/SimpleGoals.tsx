@@ -7,18 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { Target, CheckCircle, Plus, Edit, Trash2, PiggyBank, X, Check } from 'lucide-react';
 import { useGoals, Goal } from '@/hooks/useGoals';
 import { AddGoalForm } from './AddGoalForm';
-import { BackHeader } from '@/components/layout/BackHeader';
 import { formatCurrency } from '@/utils/formatters';
 
-interface SimpleGoalsProps {
-  onBack?: () => void;
-}
-
-export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
+export const SimpleGoals: React.FC = () => {
   const { goals, updateGoal, deleteGoal, isDeletingGoal, isUpdatingGoal } = useGoals();
   const [showAddForm,  setShowAddForm]  = useState(false);
   const [editingGoal,  setEditingGoal]  = useState<Goal | null>(null);
-  // id da meta com o mini-form de aporte aberto
   const [depositGoalId, setDepositGoalId] = useState<string | null>(null);
   const [depositValue,  setDepositValue]  = useState('');
 
@@ -55,13 +49,10 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
   };
 
   const handleDeposit = (goal: Goal) => {
-    // aceita vírgula como separador decimal
     const parsed = parseFloat(depositValue.replace(',', '.'));
     if (isNaN(parsed) || parsed <= 0) return;
-
     const newAmount = goal.current_amount + parsed;
     const isCompleted = newAmount >= goal.target_amount;
-
     updateGoal({
       id: goal.id,
       current_amount: Math.min(newAmount, goal.target_amount),
@@ -76,15 +67,11 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
 
   return (
     <div className="space-y-4">
-      {onBack && <BackHeader title="Objetivos Financeiros" onBack={onBack} />}
-
       <div className="flex items-center justify-between">
-        {!onBack && <h2 className="text-lg font-semibold">Objetivos Financeiros</h2>}
-        <div className={!onBack ? '' : 'ml-auto'}>
-          <Button onClick={() => setShowAddForm(true)} size="sm">
-            <Plus size={16} className="mr-2" /> Adicionar Meta
-          </Button>
-        </div>
+        <h2 className="text-lg font-semibold">Objetivos Financeiros</h2>
+        <Button onClick={() => setShowAddForm(true)} size="sm">
+          <Plus size={16} className="mr-2" /> Adicionar Meta
+        </Button>
       </div>
 
       {goals.length === 0 ? (
@@ -168,7 +155,6 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
                     </p>
                   )}
 
-                  {/* ── Aporte inline ─────────────────────────────────── */}
                   {!goal.is_completed && (
                     isDepositing ? (
                       <div className="flex items-center gap-2 pt-1">
@@ -187,8 +173,7 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
                           className="h-8 text-sm"
                         />
                         <Button
-                          size="icon"
-                          variant="ghost"
+                          size="icon" variant="ghost"
                           className="h-8 w-8 text-success hover:text-success"
                           disabled={isUpdatingGoal}
                           onClick={() => handleDeposit(goal)}
@@ -197,8 +182,7 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
                           <Check size={15} />
                         </Button>
                         <Button
-                          size="icon"
-                          variant="ghost"
+                          size="icon" variant="ghost"
                           className="h-8 w-8"
                           onClick={closeDeposit}
                           aria-label="Cancelar"
@@ -208,8 +192,7 @@ export const SimpleGoals: React.FC<SimpleGoalsProps> = ({ onBack }) => {
                       </div>
                     ) : (
                       <Button
-                        variant="outline"
-                        size="sm"
+                        variant="outline" size="sm"
                         className="w-full h-8 text-xs gap-1.5"
                         onClick={() => openDeposit(goal.id)}
                       >
