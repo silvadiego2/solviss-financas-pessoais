@@ -1,34 +1,32 @@
 /**
  * useDashboardData
- * ────────────────────────────────────────────────────────────────────────────────
+ * ────────────────────────────────────────────────────────────────────────────
  * Busca TODOS os dados do dashboard em uma única query coordenada via
  * Promise.all — 4 tabelas em paralelo, um único roundtrip de rede.
  *
  * Benefícios vs. 7 hooks separados:
- *  • Elimina waterfall de loading (cada hook esperava o anterior terminar o render)
+ *  • Elimina waterfall de loading (cada hook esperava o anterior terminar)
  *  • staleTime 3 min: não re-busca ao trocar de aba ou navegar de volta
  *  • gcTime 10 min: mantém cache mesmo se o componente desmontar
  *  • recurringTransactions derivado das transactions (zero query extra)
- *  • Estatísticas calculadas aqui com useMemo — não re-calculam em cada render
+ *  • Estatísticas calculadas com useMemo — não re-calculam em cada render
  *
  * transactionLimitReached:
  *  Quando true, o Supabase retornou exatamente 500 registros — o limite
- *  da query. Significa que podem existir transações fora da janela de 90
- *  dias que não aparecem no dashboard. O componente deve exibir um aviso
- *  ao usuário (ex: banner discreto no topo do dashboard).
+ *  da query. O componente deve exibir um aviso ao usuário.
  */
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
 
-const STALE_TIME   = 3 * 60 * 1000;   // 3 min
-const GC_TIME      = 10 * 60 * 1000;  // 10 min
-const TX_LIMIT     = 500;              // limite da query de transações
+const STALE_TIME = 3 * 60 * 1000;   // 3 min
+const GC_TIME   = 10 * 60 * 1000;  // 10 min
+const TX_LIMIT  = 500;
 
 export const DASHBOARD_QUERY_KEY = (userId: string) => ['dashboard-data', userId];
 
-// ─── Tipos mínimos para o dashboard ──────────────────────────────────────────
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export interface DashAccount {
   id: string;
@@ -78,14 +76,13 @@ export interface DashCreditCard {
   current_balance: number;
 }
 
-/** Ponto do gráfico diário — receitas E despesas por dia */
 export interface ChartDayPoint {
   day: number;
   income: number;
   expense: number;
 }
 
-// ─── Fetcher ──────────────────────────────────────────────────────────────────
+// ─── Fetcher ─────────────────────────────────────────────────────────────────
 
 async function fetchDashboard(userId: string) {
   const now        = new Date();
@@ -105,11 +102,14 @@ async function fetchDashboard(userId: string) {
     budgetsRes,
     goalsRes,
   ] = await Promise.all([
-    // Todas as contas (regulares + cartões)
+    // ✅ Filtro is_active: true — alinhado com useAccounts
+    //    Sem esse filtro contas arquivadas/deletadas chegavam aqui
+    //    e podiam não ter type='credit_card', zerando o KPI
     supabase
       .from('accounts')
-      .select('id, name, type, balance, credit_limit, current_balance')
+      .select('id, name, type, balance, credit_limit, current_balance, is_active')
       .eq('user_id', userId)
+      .eq('is_active', true)
       .order('name'),
 
     // Transações dos últimos 90 dias — limite 500
@@ -149,9 +149,7 @@ async function fetchDashboard(userId: string) {
   );
   if (fatal?.error) throw fatal.error;
 
-  // ── Flag de limite ────────────────────────────────────────────────────────
-  // Se o Supabase retornou exatamente TX_LIMIT registros, o dashboard pode
-  // estar incompleto. O componente usa isso para mostrar um aviso ao usuário.
+  // Flag de limite de transações
   const transactionCount        = (transactionsRes.data ?? []).length;
   const transactionLimitReached = transactionCount === TX_LIMIT;
 
@@ -169,18 +167,25 @@ async function fetchDashboard(userId: string) {
     recurrence_frequency: t.recurrence_frequency ?? null,
   }));
 
-  // Separa contas regulares e cartões de crédito
+  // Normaliza contas — apenas ativas (já filtrado no Supabase)
   const allAccounts: DashAccount[] = (accountsRes.data ?? []).map((a: any) => ({
     id:              a.id,
     name:            a.name,
     type:            a.type,
     balance:         Number(a.balance ?? 0),
-    credit_limit:    a.credit_limit ? Number(a.credit_limit) : null,
+    credit_limit:    a.credit_limit  != null ? Number(a.credit_limit)  : null,
     current_balance: a.current_balance != null ? Number(a.current_balance) : null,
-    is_credit_card:  a.type === 'credit_card',
+    // ✅ Aceita 'credit_card' como único valor canônico de cartão
+    //    (alinhado com useAccounts e o schema do banco)
+    is_credit_card: a.type === 'credit_card',
   }));
 
   const regularAccounts = allAccounts.filter(a => !a.is_credit_card);
+
+  // ✅ Fallback de fatura: tenta current_balance primeiro, depois balance
+  //    Alguns cartões usam a coluna 'balance' para armazenar a fatura
+  //    quando current_balance não está preenchido — sem esse fallback
+  //    a fatura aparece R$ 0,00
   const creditCards: DashCreditCard[] = allAccounts
     .filter(a => a.is_credit_card)
     .map(a => ({
@@ -202,7 +207,7 @@ async function fetchDashboard(userId: string) {
     transactions,
     recurringTransactions,
     transactionCount,
-    transactionLimitReached,    // ← novo: componente usa para mostrar aviso
+    transactionLimitReached,
     budgets: (budgetsRes.data ?? []).map((b: any) => ({
       id:          b.id,
       category_id: b.category_id,
@@ -225,7 +230,7 @@ async function fetchDashboard(userId: string) {
   };
 }
 
-// ─── Hook público ─────────────────────────────────────────────────────────────
+// ─── Hook público ──────────────────────────────────────────────────────────────
 
 export function useDashboardData() {
   const { user } = useAuth();
@@ -239,7 +244,7 @@ export function useDashboardData() {
     retry: 2,
   });
 
-  // ── KPIs calculados com useMemo — só recalculam quando query.data muda ──
+  // KPIs — só recalculam quando query.data muda
   const stats = useMemo(() => {
     if (!query.data) return null;
     const { transactions, month, year } = query.data;
@@ -253,7 +258,6 @@ export function useDashboardData() {
     const monthlyExpenses = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     const available       = monthlyIncome - monthlyExpenses;
 
-    // Gráfico diário — receitas E despesas por dia (não acumulado)
     const incomeMap  = new Map<number, number>();
     const expenseMap = new Map<number, number>();
 
@@ -273,7 +277,6 @@ export function useDashboardData() {
       expense: expenseMap.get(i + 1) ?? 0,
     }));
 
-    // Despesas por categoria
     const catMap = new Map<string, number>();
     monthTx
       .filter(t => t.type === 'expense')
