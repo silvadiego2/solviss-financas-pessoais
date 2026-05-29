@@ -6,18 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Edit, Trash2, Tag } from 'lucide-react';
 import { useCategories } from '@/hooks/useCategories';
-import { useDependencyCheck } from '@/hooks/useDependencyCheck';
+import { supabase } from '@/integrations/supabase/client';
 import { defaultCategories } from '@/data/defaultCategories';
-import { toast } from 'sonner';
-import { BackHeader } from '@/components/layout/BackHeader';
 
-interface CategoryManagerProps {
-  onBack?: () => void;
-}
-
-export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
+export const CategoryManager: React.FC = () => {
   const { categories, loading, createCategory, updateCategory, deleteCategory } = useCategories();
-  const { checkCategoryDependencies } = useDependencyCheck();
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [newCategory, setNewCategory] = useState({
@@ -29,7 +22,6 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
 
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     try {
       if (editingCategory) {
         await updateCategory(editingCategory.id, newCategory);
@@ -37,17 +29,9 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
       } else {
         await createCategory(newCategory);
       }
-      
       setShowAddForm(false);
-      setNewCategory({
-        name: '',
-        icon: '📋',
-        color: '#6B7280',
-        transaction_type: 'expense',
-      });
-    } catch (error) {
-      // Error já tratado no hook
-    }
+      setNewCategory({ name: '', icon: '📋', color: '#6B7280', transaction_type: 'expense' });
+    } catch (_) {}
   };
 
   const handleEditCategory = (category: any) => {
@@ -62,84 +46,54 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
   };
 
   const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
-    const deps = await checkCategoryDependencies(categoryId);
-    
-    if (deps.hasTransactions) {
-      const confirmDelete = window.confirm(
-        `A categoria "${categoryName}" possui ${deps.transactionCount} transação(ões) vinculada(s).\n\n⚠️ ATENÇÃO: Ao excluir esta categoria, todas as transações vinculadas ficarão sem categoria.\n\nDeseja continuar?`
-      );
-      
-      if (!confirmDelete) return;
-    } else {
-      const confirmDelete = window.confirm(`Tem certeza que deseja excluir a categoria "${categoryName}"?`);
-      if (!confirmDelete) return;
-    }
-    
+    const { count } = await supabase
+      .from('transactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('category_id', categoryId);
+
+    const transactionCount = count ?? 0;
+    const message = transactionCount > 0
+      ? `A categoria "${categoryName}" possui ${transactionCount} transação(ões) vinculada(s).\n\n⚠️ ATENÇÃO: Ao excluir, todas as transações ficarão sem categoria.\n\nDeseja continuar?`
+      : `Tem certeza que deseja excluir a categoria "${categoryName}"?`;
+
+    if (!window.confirm(message)) return;
+
     try {
       await deleteCategory(categoryId);
-    } catch (error) {
-      // Error já tratado no hook
-    }
+    } catch (_) {}
   };
 
   const handleCancelForm = () => {
     setShowAddForm(false);
     setEditingCategory(null);
-    setNewCategory({
-      name: '',
-      icon: '📋',
-      color: '#6B7280',
-      transaction_type: 'expense',
-    });
+    setNewCategory({ name: '', icon: '📋', color: '#6B7280', transaction_type: 'expense' });
   };
 
-  const incomeCategories = categories.filter(cat => cat.transaction_type === 'income');
-  const expenseCategories = categories.filter(cat => cat.transaction_type === 'expense');
+  const incomeCategories = categories.filter(c => c.transaction_type === 'income');
+  const expenseCategories = categories.filter(c => c.transaction_type === 'expense');
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
-      {onBack && <BackHeader title="Gerenciar Categorias" onBack={onBack} />}
-      
-      {!onBack && (
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Gerenciar Categorias</h2>
-          <Button 
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center space-x-2"
-          >
-            <Plus size={16} />
-            <span>Nova Categoria</span>
-          </Button>
-        </div>
-      )}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Gerenciar Categorias</h2>
+        <Button onClick={() => setShowAddForm(!showAddForm)} className="flex items-center space-x-2">
+          <Plus size={16} />
+          <span>Nova Categoria</span>
+        </Button>
+      </div>
 
-      {onBack && (
-        <div className="flex justify-end">
-          <Button 
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="flex items-center space-x-2"
-          >
-            <Plus size={16} />
-            <span>Nova Categoria</span>
-          </Button>
-        </div>
-      )}
-
-      {/* Formulário de Nova Categoria */}
       {showAddForm && (
         <Card>
           <CardHeader>
-            <CardTitle>
-              {editingCategory ? 'Editar Categoria' : 'Adicionar Categoria Personalizada'}
-            </CardTitle>
+            <CardTitle>{editingCategory ? 'Editar Categoria' : 'Adicionar Categoria Personalizada'}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAddCategory} className="space-y-4">
@@ -154,7 +108,6 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                     required
                   />
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="icon">Ícone</Label>
                   <Input
@@ -165,26 +118,22 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="type">Tipo *</Label>
-                  <Select 
-                    value={newCategory.transaction_type} 
-                    onValueChange={(value: 'income' | 'expense') => 
+                  <Select
+                    value={newCategory.transaction_type}
+                    onValueChange={(value: 'income' | 'expense') =>
                       setNewCategory(prev => ({ ...prev, transaction_type: value }))
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="expense">Despesa</SelectItem>
                       <SelectItem value="income">Receita</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                
                 <div className="space-y-2">
                   <Label htmlFor="color">Cor</Label>
                   <Input
@@ -195,26 +144,19 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   />
                 </div>
               </div>
-
               <div className="flex space-x-2">
-                <Button type="button" variant="outline" onClick={handleCancelForm}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  {editingCategory ? 'Atualizar Categoria' : 'Adicionar Categoria'}
-                </Button>
+                <Button type="button" variant="outline" onClick={handleCancelForm}>Cancelar</Button>
+                <Button type="submit">{editingCategory ? 'Atualizar Categoria' : 'Adicionar Categoria'}</Button>
               </div>
             </form>
           </CardContent>
         </Card>
       )}
 
-      {/* Categorias de Receita */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2 text-green-600">
-            <Tag size={20} />
-            <span>Categorias de Receita</span>
+            <Tag size={20} /><span>Categorias de Receita</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -225,28 +167,12 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   <span className="text-lg">{category.icon}</span>
                   <div>
                     <span className="font-medium">{category.name}</span>
-                    <div 
-                      className="w-4 h-4 rounded-full inline-block ml-2"
-                      style={{ backgroundColor: category.color }}
-                    />
+                    <div className="w-4 h-4 rounded-full inline-block ml-2" style={{ backgroundColor: category.color }} />
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => handleEditCategory(category)}
-                  >
-                    <Edit size={16} />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-red-600"
-                    onClick={() => handleDeleteCategory(category.id, category.name)}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleEditCategory(category)}><Edit size={16} /></Button>
+                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDeleteCategory(category.id, category.name)}><Trash2 size={16} /></Button>
                 </div>
               </div>
             ))}
@@ -254,12 +180,10 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
         </CardContent>
       </Card>
 
-      {/* Categorias de Despesa */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2 text-red-600">
-            <Tag size={20} />
-            <span>Categorias de Despesa</span>
+            <Tag size={20} /><span>Categorias de Despesa</span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -270,28 +194,12 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   <span className="text-lg">{category.icon}</span>
                   <div>
                     <span className="font-medium">{category.name}</span>
-                    <div 
-                      className="w-4 h-4 rounded-full inline-block ml-2"
-                      style={{ backgroundColor: category.color }}
-                    />
+                    <div className="w-4 h-4 rounded-full inline-block ml-2" style={{ backgroundColor: category.color }} />
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => handleEditCategory(category)}
-                  >
-                    <Edit size={16} />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="text-red-600"
-                    onClick={() => handleDeleteCategory(category.id, category.name)}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleEditCategory(category)}><Edit size={16} /></Button>
+                  <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDeleteCategory(category.id, category.name)}><Trash2 size={16} /></Button>
                 </div>
               </div>
             ))}
@@ -299,24 +207,17 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
         </CardContent>
       </Card>
 
-      {/* Sugestões de Categorias */}
       <Card>
-        <CardHeader>
-          <CardTitle>Sugestões de Novas Categorias</CardTitle>
-        </CardHeader>
+        <CardHeader><CardTitle>Sugestões de Novas Categorias</CardTitle></CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-2">
             {defaultCategories
-              .filter(defaultCat => 
-                !categories.some(existingCat => 
-                  existingCat.name.toLowerCase() === defaultCat.name.toLowerCase()
-                )
-              )
+              .filter(d => !categories.some(e => e.name.toLowerCase() === d.name.toLowerCase()))
               .slice(0, 6)
               .map((suggestion, index) => (
-                <Button 
+                <Button
                   key={index}
-                  variant="outline" 
+                  variant="outline"
                   size="sm"
                   className="justify-start h-auto p-2"
                   onClick={() => {
@@ -332,8 +233,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
                   <span className="mr-2">{suggestion.icon}</span>
                   <span className="text-xs">{suggestion.name}</span>
                 </Button>
-              ))
-            }
+              ))}
           </div>
         </CardContent>
       </Card>
