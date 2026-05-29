@@ -1,36 +1,53 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.4cccb6e1dab0497a9dcfaab483502377',
-  appName: 'expense-pilot-go',
+  // Bundle ID no formato reverse-domain — deve bater com o App ID no Apple Developer Portal
+  appId: 'com.solviss.app',
+  appName: 'Solviss',
   webDir: 'dist',
-  server: {
-    url: 'https://4cccb6e1-dab0-497a-9dcf-aab483502377.lovableproject.com?forceHideBadge=true',
-    cleartext: true
+
+  // PRODUÇÃO: sem server.url (carrega os assets locais do bundle)
+  // Descomente o bloco abaixo APENAS para desenvolvimento com live-reload:
+  // server: {
+  //   url: 'http://SEU_IP_LOCAL:8080',
+  //   cleartext: true,
+  // },
+
+  ios: {
+    contentInset: 'automatic',      // respeita safe-area (notch, Dynamic Island)
+    scrollEnabled: true,
+    backgroundColor: '#ffffff',     // cor enquanto o splash carrega
+    preferredContentMode: 'mobile',
+    limitsNavigationsToAppBoundDomains: true, // segurança: bloqueia navegação para fora do app
   },
+
   plugins: {
     Camera: {
-      permissions: ['camera']
+      // Textos exibidos pelo iOS ao pedir permissão
+      // Não precisam ser configurados aqui — vão no Info.plist (ver docs/ios-setup.md)
     },
+
     LocalNotifications: {
-      smallIcon: "ic_stat_icon_config_sample",
-      iconColor: "#488AFF",
-      sound: "beep.wav",
+      smallIcon: 'ic_stat_icon_config_sample',
+      iconColor: '#01696f',       // verde Solviss
+      sound: 'default',
     },
+
     SplashScreen: {
-      launchShowDuration: 3000,
+      launchShowDuration: 2000,
       launchAutoHide: true,
-      backgroundColor: "#ffffffff",
-      androidSplashResourceName: "splash",
-      androidScaleType: "CENTER_CROP",
-      showSpinner: true,
-      androidSpinnerStyle: "large",
-      iosSpinnerStyle: "small",
-      spinnerColor: "#999999",
+      backgroundColor: '#f7f6f2',  // bege Nexus (igual ao --color-bg)
+      showSpinner: false,          // spinner off — usamos a splash image
       splashFullScreen: true,
       splashImmersive: true,
-      layoutName: "launch_screen",
-      useDialog: true,
+      iosSpinnerStyle: 'small',
+      spinnerColor: '#01696f',
+    },
+
+    StatusBar: {
+      style: 'Default',            // escuro no light mode, claro no dark mode
+      backgroundColor: '#f7f6f2',
+      overlaysWebView: false,
     },
   },
 };

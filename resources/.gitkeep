@@ -1,0 +1,4 @@
+# Coloque aqui:
+# - icon.png     (1024x1024px, sem transparência)
+# - splash.png   (2732x2732px, fundo #f7f6f2, logo centralizado)
+# Depois rode: npx @capacitor/assets generate --ios
