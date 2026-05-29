@@ -28,3 +28,14 @@ export const formatCurrencyCompact = (value: number): string => {
   if (Math.abs(value) >= 1_000) return `R$ ${(value / 1_000).toFixed(1)}k`;
   return BRL.format(value);
 };
+
+/**
+ * Formata uma string de data ISO (YYYY-MM-DD ou ISO 8601) para dd/mm/aaaa
+ * Trata o offset UTC para evitar o bug de exibir o dia anterior.
+ */
+export const formatDateBR = (dateStr: string | Date): string => {
+  const d = typeof dateStr === 'string'
+    ? new Date(dateStr.length === 10 ? dateStr + 'T12:00:00' : dateStr)
+    : dateStr;
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
