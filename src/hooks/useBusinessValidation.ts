@@ -4,21 +4,27 @@ import { toast } from 'sonner';
 /**
  * Validações de negócio + verificação de dependências antes de excluir registros.
  * Unifica o antigo useDependencyCheck (removido).
+ *
+ * Fixes aplicados:
+ *  - checkAccountDependencies / checkCategoryDependencies: trocados de
+ *    SELECT id (baixava todos os ids) para count:exact/head:true — zero data
+ *  - recalculateAccountBalance: tenta RPC server-side primeiro; fallback
+ *    client-side só se a função não existir no schema (PGRST202)
+ *  - validateAccountDeletion / validateCategoryDeletion: já estavam corretos
  */
 export const useBusinessValidation = () => {
+
   // ─── Dependências ──────────────────────────────────────────────────────────
 
   const checkAccountDependencies = async (accountId: string) => {
     try {
-      const { data, error } = await supabase
+      const { count, error } = await supabase
         .from('transactions')
-        .select('id')
+        .select('*', { count: 'exact', head: true })
         .eq('account_id', accountId);
+
       if (error) throw error;
-      return {
-        hasTransactions: (data?.length ?? 0) > 0,
-        transactionCount: data?.length ?? 0,
-      };
+      return { hasTransactions: (count ?? 0) > 0, transactionCount: count ?? 0 };
     } catch {
       return { hasTransactions: false, transactionCount: 0 };
     }
@@ -26,15 +32,13 @@ export const useBusinessValidation = () => {
 
   const checkCategoryDependencies = async (categoryId: string) => {
     try {
-      const { data, error } = await supabase
+      const { count, error } = await supabase
         .from('transactions')
-        .select('id')
+        .select('*', { count: 'exact', head: true })
         .eq('category_id', categoryId);
+
       if (error) throw error;
-      return {
-        hasTransactions: (data?.length ?? 0) > 0,
-        transactionCount: data?.length ?? 0,
-      };
+      return { hasTransactions: (count ?? 0) > 0, transactionCount: count ?? 0 };
     } catch {
       return { hasTransactions: false, transactionCount: 0 };
     }
@@ -48,6 +52,7 @@ export const useBusinessValidation = () => {
         .from('transactions')
         .select('*', { count: 'exact', head: true })
         .eq('account_id', accountId);
+
       if (error) throw error;
       if (count && count > 0) {
         toast.error('Não é possível excluir esta conta', {
@@ -69,6 +74,7 @@ export const useBusinessValidation = () => {
         .from('transactions')
         .select('*', { count: 'exact', head: true })
         .eq('category_id', categoryId);
+
       if (error) throw error;
       if (count && count > 0) {
         toast.error('Não é possível excluir esta categoria', {
@@ -89,7 +95,7 @@ export const useBusinessValidation = () => {
   const validateCreditLimit = async (
     accountId: string,
     newAmount: number,
-    isExpense: boolean
+    isExpense: boolean,
   ): Promise<boolean> => {
     if (!isExpense) return true;
     try {
@@ -98,10 +104,12 @@ export const useBusinessValidation = () => {
         .select('type, credit_limit, balance')
         .eq('id', accountId)
         .single();
+
       if (error) throw error;
+
       if ((account.type as string) === 'credit_card' && account.credit_limit) {
         const usedCredit = Math.abs(account.balance ?? 0);
-        const available = account.credit_limit - usedCredit;
+        const available  = account.credit_limit - usedCredit;
         if (newAmount > available) {
           toast.error('Limite de crédito insuficiente', {
             description: `Disponível: R$ ${available.toFixed(2)} · Necessário: R$ ${newAmount.toFixed(2)}`,
@@ -112,28 +120,49 @@ export const useBusinessValidation = () => {
       }
       return true;
     } catch {
-      return true; // não bloqueia em caso de falha
+      return true;
     }
   };
 
   // ─── Recalcular saldo ─────────────────────────────────────────────────────
 
+  /**
+   * Tenta RPC server-side (recalculate_account_balance) — zero data transfer.
+   * Fallback client-side só se a RPC não existir no schema (PGRST202).
+   */
   const recalculateAccountBalance = async (accountId: string): Promise<void> => {
     try {
+      const { error: rpcError } = await (supabase as any)
+        .rpc('recalculate_account_balance', { p_account_id: accountId });
+
+      if (!rpcError) return;
+
+      const isNotFound =
+        rpcError.message?.includes('PGRST202') ||
+        rpcError.message?.includes('does not exist') ||
+        rpcError.message?.includes('function');
+
+      if (!isNotFound) throw rpcError;
+
+      // Fallback: busca apenas amount + type (mínimo necessário)
       const { data: transactions, error } = await supabase
         .from('transactions')
         .select('amount, type')
         .eq('account_id', accountId);
+
       if (error) throw error;
+
       let balance = 0;
       (transactions ?? []).forEach((t: any) => {
-        if (t.type === 'income') balance += Number(t.amount);
+        if      (t.type === 'income')  balance += Number(t.amount);
         else if (t.type === 'expense') balance -= Number(t.amount);
       });
+
       const { error: updErr } = await supabase
         .from('accounts')
         .update({ balance })
         .eq('id', accountId);
+
       if (updErr) throw updErr;
     } catch {
       toast.error('Erro ao recalcular saldo da conta');
@@ -145,7 +174,7 @@ export const useBusinessValidation = () => {
   const checkBudgetExceeded = async (
     userId: string,
     categoryId: string,
-    amount: number
+    amount: number,
   ): Promise<void> => {
     try {
       const now = new Date();
@@ -157,7 +186,9 @@ export const useBusinessValidation = () => {
         .eq('month', now.getMonth() + 1)
         .eq('year', now.getFullYear())
         .maybeSingle();
+
       if (error) throw error;
+
       if (budget) {
         const newSpent = (budget.spent ?? 0) + amount;
         if (newSpent > budget.amount) {
@@ -178,10 +209,8 @@ export const useBusinessValidation = () => {
   };
 
   return {
-    // dependências
     checkAccountDependencies,
     checkCategoryDependencies,
-    // validações
     validateAccountDeletion,
     validateCategoryDeletion,
     validateCreditLimit,

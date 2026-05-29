@@ -22,10 +22,11 @@ export const useNotifications = () => {
     queryKey: ['notifications', user?.id],
     queryFn: async (): Promise<Notification[]> => {
       if (!user) return [];
-      
+
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
+        .eq('user_id', user.id)          // fix: filtrar pelo usuário logado
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -36,18 +37,17 @@ export const useNotifications = () => {
       return (data as Notification[]) || [];
     },
     enabled: !!user,
+    staleTime: 60 * 1000,
+    gcTime:    5 * 60 * 1000,
   });
 
   const createNotificationMutation = useMutation({
     mutationFn: async (notification: Omit<Notification, 'id' | 'user_id' | 'created_at'>) => {
       if (!user) throw new Error('User not authenticated');
-      
+
       const { data, error } = await supabase
         .from('notifications')
-        .insert([{
-          ...notification,
-          user_id: user.id,
-        }])
+        .insert([{ ...notification, user_id: user.id }])
         .select()
         .single();
 
@@ -66,10 +66,13 @@ export const useNotifications = () => {
 
   const markAsReadMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (!user) throw new Error('User not authenticated');
+
       const { error } = await supabase
         .from('notifications')
         .update({ is_read: true })
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);        // fix: garantia contra update cross-user
 
       if (error) throw error;
     },
@@ -82,19 +85,33 @@ export const useNotifications = () => {
     },
   });
 
-  const createNotification = (notification: Omit<Notification, 'id' | 'user_id' | 'created_at'>) => {
-    createNotificationMutation.mutate(notification);
-  };
+  const markAllAsReadMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('User not authenticated');
 
-  const markAsRead = (id: string) => {
-    markAsReadMutation.mutate(id);
-  };
+      const { error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', user?.id] });
+    },
+    onError: () => {
+      toast.error('Erro ao marcar todas como lidas');
+    },
+  });
 
   return {
     notifications,
     loading: isLoading,
-    createNotification,
-    markAsRead,
-    unreadCount: notifications.filter(n => !n.is_read).length,
+    createNotification: (n: Omit<Notification, 'id' | 'user_id' | 'created_at'>) =>
+      createNotificationMutation.mutate(n),
+    markAsRead:    (id: string) => markAsReadMutation.mutate(id),
+    markAllAsRead: () => markAllAsReadMutation.mutate(),
+    unreadCount:   notifications.filter(n => !n.is_read).length,
   };
 };
