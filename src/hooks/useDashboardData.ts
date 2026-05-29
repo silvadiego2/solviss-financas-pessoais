@@ -2,7 +2,7 @@
  * useDashboardData
  * ────────────────────────────────────────────────────────────────────────────────
  * Busca TODOS os dados do dashboard em uma única query coordenada via
- * Promise.all — 5 tabelas em paralelo, um único roundtrip de rede.
+ * Promise.all — 4 tabelas em paralelo, um único roundtrip de rede.
  *
  * Benefícios vs. 7 hooks separados:
  *  • Elimina waterfall de loading (cada hook esperava o anterior terminar o render)
@@ -10,18 +10,25 @@
  *  • gcTime 10 min: mantém cache mesmo se o componente desmontar
  *  • recurringTransactions derivado das transactions (zero query extra)
  *  • Estatísticas calculadas aqui com useMemo — não re-calculam em cada render
+ *
+ * transactionLimitReached:
+ *  Quando true, o Supabase retornou exatamente 500 registros — o limite
+ *  da query. Significa que podem existir transações fora da janela de 90
+ *  dias que não aparecem no dashboard. O componente deve exibir um aviso
+ *  ao usuário (ex: banner discreto no topo do dashboard).
  */
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
 
-const STALE_TIME = 3 * 60 * 1000;   // 3 min
-const GC_TIME   = 10 * 60 * 1000;  // 10 min
+const STALE_TIME   = 3 * 60 * 1000;   // 3 min
+const GC_TIME      = 10 * 60 * 1000;  // 10 min
+const TX_LIMIT     = 500;              // limite da query de transações
 
 export const DASHBOARD_QUERY_KEY = (userId: string) => ['dashboard-data', userId];
 
-// ─── Tipos mínimos para o dashboard ────────────────────────────────────────────────
+// ─── Tipos mínimos para o dashboard ──────────────────────────────────────────
 
 export interface DashAccount {
   id: string;
@@ -71,22 +78,26 @@ export interface DashCreditCard {
   current_balance: number;
 }
 
-/** Ponto do gráfico diário — agora contém receitas E despesas */
+/** Ponto do gráfico diário — receitas E despesas por dia */
 export interface ChartDayPoint {
   day: number;
   income: number;
   expense: number;
 }
 
-// ─── Fetcher ─────────────────────────────────────────────────────────────────────────
+// ─── Fetcher ──────────────────────────────────────────────────────────────────
 
 async function fetchDashboard(userId: string) {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year  = now.getFullYear();
-
-  // Primeiro dia do mês atual (ISO)
+  const now        = new Date();
+  const month      = now.getMonth() + 1;
+  const year       = now.getFullYear();
   const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+
+  const ninetyDaysAgo = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 90);
+    return d.toISOString().split('T')[0];
+  })();
 
   const [
     accountsRes,
@@ -101,7 +112,7 @@ async function fetchDashboard(userId: string) {
       .eq('user_id', userId)
       .order('name'),
 
-    // Transações dos últimos 90 dias (suficiente para chart + KPIs + recorrentes)
+    // Transações dos últimos 90 dias — limite 500
     supabase
       .from('transactions')
       .select(`
@@ -111,13 +122,9 @@ async function fetchDashboard(userId: string) {
         category:categories(name)
       `)
       .eq('user_id', userId)
-      .gte('date', (() => {
-        const d = new Date();
-        d.setDate(d.getDate() - 90);
-        return d.toISOString().split('T')[0];
-      })())
+      .gte('date', ninetyDaysAgo)
       .order('date', { ascending: false })
-      .limit(500),
+      .limit(TX_LIMIT),
 
     // Orçamentos do mês atual
     supabase
@@ -136,44 +143,50 @@ async function fetchDashboard(userId: string) {
       .order('created_at', { ascending: false }),
   ]);
 
-  // Erros fatais — lança apenas se não for schema error
+  // Erros fatais — ignora erros de schema (coluna/tabela ainda não existe)
   const fatal = [accountsRes, transactionsRes, budgetsRes, goalsRes].find(
     r => r.error && !r.error.message?.includes('does not exist') && r.error.code !== '42P01'
   );
   if (fatal?.error) throw fatal.error;
 
+  // ── Flag de limite ────────────────────────────────────────────────────────
+  // Se o Supabase retornou exatamente TX_LIMIT registros, o dashboard pode
+  // estar incompleto. O componente usa isso para mostrar um aviso ao usuário.
+  const transactionCount        = (transactionsRes.data ?? []).length;
+  const transactionLimitReached = transactionCount === TX_LIMIT;
+
   // Normaliza transações
   const transactions: DashTransaction[] = (transactionsRes.data ?? []).map((t: any) => ({
-    id: t.id,
-    description: t.description,
-    amount: Number(t.amount),
-    type: t.type as DashTransaction['type'],
-    date: t.date,
-    category_id: t.category_id,
-    account_id: t.account_id,
-    category_name: t.category?.name ?? null,
-    is_recurring: t.is_recurring ?? false,
+    id:                   t.id,
+    description:          t.description,
+    amount:               Number(t.amount),
+    type:                 t.type as DashTransaction['type'],
+    date:                 t.date,
+    category_id:          t.category_id,
+    account_id:           t.account_id,
+    category_name:        t.category?.name ?? null,
+    is_recurring:         t.is_recurring ?? false,
     recurrence_frequency: t.recurrence_frequency ?? null,
   }));
 
   // Separa contas regulares e cartões de crédito
   const allAccounts: DashAccount[] = (accountsRes.data ?? []).map((a: any) => ({
-    id: a.id,
-    name: a.name,
-    type: a.type,
-    balance: Number(a.balance ?? 0),
-    credit_limit: a.credit_limit ? Number(a.credit_limit) : null,
+    id:              a.id,
+    name:            a.name,
+    type:            a.type,
+    balance:         Number(a.balance ?? 0),
+    credit_limit:    a.credit_limit ? Number(a.credit_limit) : null,
     current_balance: a.current_balance != null ? Number(a.current_balance) : null,
-    is_credit_card: a.type === 'credit_card',
+    is_credit_card:  a.type === 'credit_card',
   }));
 
   const regularAccounts = allAccounts.filter(a => !a.is_credit_card);
   const creditCards: DashCreditCard[] = allAccounts
     .filter(a => a.is_credit_card)
     .map(a => ({
-      id: a.id,
-      name: a.name,
-      credit_limit: a.credit_limit ?? 0,
+      id:              a.id,
+      name:            a.name,
+      credit_limit:    a.credit_limit ?? 0,
       current_balance: a.current_balance ?? Math.abs(a.balance),
     }));
 
@@ -188,21 +201,23 @@ async function fetchDashboard(userId: string) {
     creditCards,
     transactions,
     recurringTransactions,
+    transactionCount,
+    transactionLimitReached,    // ← novo: componente usa para mostrar aviso
     budgets: (budgetsRes.data ?? []).map((b: any) => ({
-      id: b.id,
+      id:          b.id,
       category_id: b.category_id,
-      amount: Number(b.amount),
-      spent: Number(b.spent ?? 0),
-      month: b.month,
-      year: b.year,
+      amount:      Number(b.amount),
+      spent:       Number(b.spent ?? 0),
+      month:       b.month,
+      year:        b.year,
     })) as DashBudget[],
     goals: (goalsRes.data ?? []).map((g: any) => ({
-      id: g.id,
-      name: g.name,
-      target_amount: Number(g.target_amount),
-      current_amount: Number(g.current_amount ?? 0),
-      is_completed: Boolean(g.is_completed),
-      deadline: g.deadline ?? null,
+      id:              g.id,
+      name:            g.name,
+      target_amount:   Number(g.target_amount),
+      current_amount:  Number(g.current_amount ?? 0),
+      is_completed:    Boolean(g.is_completed),
+      deadline:        g.deadline ?? null,
     })) as DashGoal[],
     month,
     year,
@@ -210,21 +225,21 @@ async function fetchDashboard(userId: string) {
   };
 }
 
-// ─── Hook público ──────────────────────────────────────────────────────────────────────
+// ─── Hook público ─────────────────────────────────────────────────────────────
 
 export function useDashboardData() {
   const { user } = useAuth();
 
   const query = useQuery({
     queryKey: DASHBOARD_QUERY_KEY(user?.id ?? ''),
-    queryFn: () => fetchDashboard(user!.id),
-    enabled: !!user,
+    queryFn:  () => fetchDashboard(user!.id),
+    enabled:  !!user,
     staleTime: STALE_TIME,
     gcTime:    GC_TIME,
     retry: 2,
   });
 
-  // ── KPIs calculados com useMemo — só recalculam quando transactions muda ──
+  // ── KPIs calculados com useMemo — só recalculam quando query.data muda ──
   const stats = useMemo(() => {
     if (!query.data) return null;
     const { transactions, month, year } = query.data;
@@ -234,11 +249,11 @@ export function useDashboardData() {
       return d.getMonth() + 1 === month && d.getFullYear() === year;
     });
 
-    const monthlyIncome   = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const monthlyIncome   = monthTx.filter(t => t.type === 'income' ).reduce((s, t) => s + t.amount, 0);
     const monthlyExpenses = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
     const available       = monthlyIncome - monthlyExpenses;
 
-    // ── Gráfico diário — receitas E despesas por dia (não acumulado) ──
+    // Gráfico diário — receitas E despesas por dia (não acumulado)
     const incomeMap  = new Map<number, number>();
     const expenseMap = new Map<number, number>();
 
@@ -276,9 +291,9 @@ export function useDashboardData() {
   return {
     ...query.data,
     stats,
-    isLoading: query.isLoading,
+    isLoading:  query.isLoading,
     isFetching: query.isFetching,
-    error: query.error,
-    refetch: query.refetch,
+    error:      query.error,
+    refetch:    query.refetch,
   };
 }

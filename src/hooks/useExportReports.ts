@@ -3,16 +3,17 @@
  * ────────────────────────────────────────────────────────────────────────
  * Gera relatórios PDF / Excel / CSV sem depender do useTransactions.
  *
- * Problema anterior:
- *   - useTransactions() só carregava 50 registros (paginado)
- *   - filterDataByPeriod() filtrava esse subconjunto no frontend
- *   - Relatório "último ano" podia ter dados incompletos
+ * Download Capacitor-aware:
+ *  A função `downloadFile(filename, blob)` detecta a plataforma em runtime:
+ *   • Web (browser): URL.createObjectURL + <a>.click() — comportamento original
+ *   • Capacitor iOS/Android: grava em Documents via @capacitor/filesystem
+ *     e abre o share sheet via @capacitor/share
+ *   Se os plugins do Capacitor não estiverem instalados (build web puro),
+ *   o fallback para createObjectURL é usado automaticamente.
  *
- * Solução:
- *   - fetchAllForExport() busca TODOS os registros do período escolhido
- *     diretamente no Supabase, em lotes de 200 (loop até hasMore=false)
- *   - Accounts/categories/budgets vêm dos hooks cacheados (zero roundtrip extra)
- *   - Nenhum dado fora do período é baixado
+ * Fetch de dados:
+ *  fetchAllForExport() busca TODOS os registros do período em lotes de 200
+ *  (loop até hasMore=false) — nunca limita o relatório ao cache do dashboard.
  */
 import { useState } from 'react';
 import { useAccounts } from './useAccounts';
@@ -41,21 +42,89 @@ export interface ExportOptions {
   includeAccounts: boolean;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmt = (v: number) => BRL.format(v);
-const toISO = (d: Date) => d.toISOString().split('T')[0];
+const fmt   = (v: number) => BRL.format(v);
+const toISO = (d: Date)   => d.toISOString().split('T')[0];
 
 function getDateRange(period: ExportPeriod, customPeriod?: CustomPeriod) {
   const now = new Date();
   switch (period) {
-    case 'last_month':   return { start: startOfMonth(subMonths(now, 1)), end: endOfMonth(subMonths(now, 1)) };
-    case 'last_3_months':return { start: subMonths(now, 3), end: now };
-    case 'last_year':    return { start: subDays(now, 365), end: now };
-    case 'custom':       return customPeriod ? { start: customPeriod.startDate, end: customPeriod.endDate } : { start: now, end: now };
-    default:             return { start: now, end: now };
+    case 'last_month':    return { start: startOfMonth(subMonths(now, 1)), end: endOfMonth(subMonths(now, 1)) };
+    case 'last_3_months': return { start: subMonths(now, 3),              end: now };
+    case 'last_year':     return { start: subDays(now, 365),              end: now };
+    case 'custom':        return customPeriod
+      ? { start: customPeriod.startDate, end: customPeriod.endDate }
+      : { start: now, end: now };
+    default:              return { start: now, end: now };
   }
+}
+
+/**
+ * Baixa um arquivo detectando a plataforma em runtime.
+ *
+ * Web  → URL.createObjectURL + <a>.click()
+ * iOS/Android (Capacitor) → Filesystem.writeFile (base64) + Share.share()
+ *
+ * Se os plugins não estiverem disponíveis (ex: build web sem Capacitor),
+ * cai silenciosamente no fallback web.
+ */
+async function downloadFile(filename: string, blob: Blob): Promise<void> {
+  // Tenta detectar ambiente Capacitor via import dinâmico
+  // (não quebra em build web puro — o import retorna undefined se não instalado)
+  let isCapacitor = false;
+  try {
+    const { Capacitor } = await import('@capacitor/core');
+    isCapacitor = Capacitor?.isNativePlatform?.() ?? false;
+  } catch {
+    isCapacitor = false;
+  }
+
+  if (isCapacitor) {
+    try {
+      // Converte Blob para base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve((reader.result as string).split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+
+      // Grava no diretório Documents (visível no app Arquivos do iOS)
+      const { Filesystem, Directory } = await import('@capacitor/filesystem');
+      const { path } = await Filesystem.writeFile({
+        path:      filename,
+        data:      base64,
+        directory: Directory.Documents,
+        recursive: true,
+      });
+
+      // Abre o share sheet nativo para o usuário salvar/compartilhar
+      const { Share } = await import('@capacitor/share');
+      await Share.share({
+        title: filename,
+        url:   path,
+        dialogTitle: 'Compartilhar relatório',
+      });
+      return;
+    } catch (err) {
+      // Plugins não instalados ou permissão negada — fallback para web
+      console.warn('[useExportReports] Capacitor download falhou, usando fallback web:', err);
+    }
+  }
+
+  // Fallback web (também usado no Capacitor se os plugins falharem)
+  const url = URL.createObjectURL(blob);
+  const a   = Object.assign(document.createElement('a'), {
+    href:     url,
+    download: filename,
+    style:    'display:none',
+  });
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 /** Busca TODOS os registros do período em lotes de 200 — nunca limita o relatório */
@@ -87,22 +156,21 @@ async function fetchAllForExport(userId: string, dateFrom: string, dateTo: strin
 
   return all.map((t: any) => ({
     ...t,
-    amount: Number(t.amount),
+    amount:        Number(t.amount),
     category_name: t.category?.name ?? 'Sem categoria',
     account_name:  t.account?.name  ?? 'Conta não encontrada',
   }));
 }
 
-// ─── Hook ──────────────────────────────────────────────────────────────────
+// ─── Hook ─────────────────────────────────────────────────────────────────
 
 export const useExportReports = () => {
   const [isExporting, setIsExporting] = useState(false);
   const { user }       = useAuth();
-  const { accounts }   = useAccounts();    // já cacheados, zero roundtrip
+  const { accounts }   = useAccounts();
   const { categories } = useCategories();
   const { budgets }    = useBudgets();
 
-  /** Resolve período e busca transações completas do banco */
   async function resolveData(options: ExportOptions) {
     const { start, end } = getDateRange(options.period, options.customPeriod);
     const dateFrom = toISO(start);
@@ -140,8 +208,8 @@ export const useExportReports = () => {
 
         pdf.setFontSize(14); pdf.text('Resumo Geral:', 20, y); y += 15;
         pdf.setFontSize(10);
-        pdf.text(`Total de Receitas: ${fmt(totalIncome)}`,           20, y); y += 10;
-        pdf.text(`Total de Despesas: ${fmt(totalExpenses)}`,         20, y); y += 10;
+        pdf.text(`Total de Receitas: ${fmt(totalIncome)}`,             20, y); y += 10;
+        pdf.text(`Total de Despesas: ${fmt(totalExpenses)}`,           20, y); y += 10;
         pdf.text(`Saldo Líquido: ${fmt(totalIncome - totalExpenses)}`, 20, y); y += 20;
       }
 
@@ -198,7 +266,7 @@ export const useExportReports = () => {
       if (options.includeCategories && options.includeTransactions) {
         const rows = cats
           .map(cat => {
-            const catTxs = txs.filter(t => t.category_id === cat.id);
+            const catTxs   = txs.filter(t => t.category_id === cat.id);
             const income   = catTxs.filter(t => t.type === 'income' ).reduce((s, t) => s + t.amount, 0);
             const expenses = catTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
             return {
@@ -215,14 +283,15 @@ export const useExportReports = () => {
 
       if (options.includeAccounts) {
         const rows = accs.map((a: any) => ({
-          'Nome':            a.name,
-          'Tipo':            a.type === 'checking' ? 'Conta Corrente' :
-                             a.type === 'savings'  ? 'Poupança' :
-                             a.type === 'credit_card' ? 'Cartão de Crédito' : 'Investimento',
-          'Banco':           a.bank_name ?? 'Não informado',
-          'Saldo Atual':     Number(a.balance ?? 0),
-          'Limite Crédito':  a.credit_limit ? Number(a.credit_limit) : null,
-          'Status':          a.is_active ? 'Ativa' : 'Inativa',
+          'Nome':           a.name,
+          'Tipo':           a.type === 'checking'    ? 'Conta Corrente'
+                          : a.type === 'savings'     ? 'Poupança'
+                          : a.type === 'credit_card' ? 'Cartão de Crédito'
+                          : 'Investimento',
+          'Banco':          a.bank_name ?? 'Não informado',
+          'Saldo Atual':    Number(a.balance ?? 0),
+          'Limite Crédito': a.credit_limit ? Number(a.credit_limit) : null,
+          'Status':         a.is_active ? 'Ativa' : 'Inativa',
         }));
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Contas');
       }
@@ -231,18 +300,22 @@ export const useExportReports = () => {
         const rows = buds.map((b: any) => {
           const cat = cats.find(c => c.id === b.category_id);
           return {
-            'Categoria':          cat?.name ?? 'Não encontrada',
-            'Mês':                `${String(b.month).padStart(2, '0')}/${b.year}`,
-            'Orçamento Planejado':Number(b.amount),
-            'Valor Gasto':        Number(b.spent ?? 0),
-            'Diferença':          Number(b.amount) - Number(b.spent ?? 0),
-            'Percentual Usado':   Math.round((Number(b.spent ?? 0) / Number(b.amount)) * 100),
+            'Categoria':           cat?.name ?? 'Não encontrada',
+            'Mês':                 `${String(b.month).padStart(2, '0')}/${b.year}`,
+            'Orçamento Planejado': Number(b.amount),
+            'Valor Gasto':         Number(b.spent ?? 0),
+            'Diferença':           Number(b.amount) - Number(b.spent ?? 0),
+            'Percentual Usado':    Math.round((Number(b.spent ?? 0) / Number(b.amount)) * 100),
           };
         });
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Orçamentos');
       }
 
-      XLSX.writeFile(wb, `relatorio-financeiro-${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+      const xlsxBlob = new Blob(
+        [XLSX.write(wb, { bookType: 'xlsx', type: 'array' })],
+        { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+      );
+      await downloadFile(`relatorio-financeiro-${format(new Date(), 'yyyy-MM-dd')}.xlsx`, xlsxBlob);
       toast.success('Relatório Excel exportado com sucesso!');
     } catch (e) {
       console.error(e);
@@ -274,19 +347,9 @@ export const useExportReports = () => {
         'Observações': t.notes ?? '',
       }));
 
-      const csv  = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows));
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url  = URL.createObjectURL(blob);
-      const a    = Object.assign(document.createElement('a'), {
-        href: url,
-        download: `transacoes-${format(new Date(), 'yyyy-MM-dd')}.csv`,
-        style: 'display:none',
-      });
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
+      const csv     = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows));
+      const csvBlob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      await downloadFile(`transacoes-${format(new Date(), 'yyyy-MM-dd')}.csv`, csvBlob);
       toast.success('Relatório CSV exportado com sucesso!');
     } catch (e) {
       console.error(e);
