@@ -3,13 +3,14 @@
  * ────────────────────────────────────────────────────────────────────────
  * Gera relatórios PDF / Excel / CSV sem depender do useTransactions.
  *
- * Download Capacitor-aware:
- *  A função `downloadFile(filename, blob)` detecta a plataforma em runtime:
- *   • Web (browser): URL.createObjectURL + <a>.click() — comportamento original
- *   • Capacitor iOS/Android: grava em Documents via @capacitor/filesystem
- *     e abre o share sheet via @capacitor/share
- *   Se os plugins do Capacitor não estiverem instalados (build web puro),
- *   o fallback para createObjectURL é usado automaticamente.
+ * Download Capacitor-aware (sem imports dinâmicos de @capacitor/*):
+ *  Rollup/Vite não resolve imports dinâmicos de pacotes não instalados,
+ *  mesmo dentro de try/catch — o build falharia em análise estática.
+ *
+ *  Solução: detectar Capacitor via window.Capacitor (objeto global
+ *  injetado pelo runtime nativo). Os plugins são acessados via
+ *  (window as any).Capacitor.Plugins — existem em runtime no app iOS/
+ *  Android e são undefined no browser. Zero impacto no build web.
  *
  * Fetch de dados:
  *  fetchAllForExport() busca TODOS os registros do período em lotes de 200
@@ -62,59 +63,71 @@ function getDateRange(period: ExportPeriod, customPeriod?: CustomPeriod) {
 }
 
 /**
+ * Detecta se está rodando dentro de um app Capacitor nativo (iOS/Android).
+ * Usa window.Capacitor — objeto global injetado pelo bridge nativo.
+ * Retorna false no browser web, sem causar erros de build.
+ */
+function isCapacitorNative(): boolean {
+  try {
+    return (window as any)?.Capacitor?.isNativePlatform?.() === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Converte um Blob para string base64 (sem o prefixo data:...).
+ */
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
  * Baixa um arquivo detectando a plataforma em runtime.
  *
  * Web  → URL.createObjectURL + <a>.click()
- * iOS/Android (Capacitor) → Filesystem.writeFile (base64) + Share.share()
+ * iOS/Android (Capacitor) → Filesystem.writeFile (Documents) + Share.share()
  *
- * Se os plugins não estiverem disponíveis (ex: build web sem Capacitor),
- * cai silenciosamente no fallback web.
+ * Os plugins Capacitor são acessados via window.Capacitor.Plugins para
+ * evitar imports estáticos/dinâmicos que quebram o build Rollup quando
+ * os pacotes @capacitor/* não estão instalados.
  */
 async function downloadFile(filename: string, blob: Blob): Promise<void> {
-  // Tenta detectar ambiente Capacitor via import dinâmico
-  // (não quebra em build web puro — o import retorna undefined se não instalado)
-  let isCapacitor = false;
-  try {
-    const { Capacitor } = await import('@capacitor/core');
-    isCapacitor = Capacitor?.isNativePlatform?.() ?? false;
-  } catch {
-    isCapacitor = false;
-  }
-
-  if (isCapacitor) {
+  if (isCapacitorNative()) {
     try {
-      // Converte Blob para base64
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = () => resolve((reader.result as string).split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+      const plugins   = (window as any).Capacitor?.Plugins;
+      const Filesystem = plugins?.Filesystem;
+      const Share      = plugins?.Share;
 
-      // Grava no diretório Documents (visível no app Arquivos do iOS)
-      const { Filesystem, Directory } = await import('@capacitor/filesystem');
-      const { path } = await Filesystem.writeFile({
-        path:      filename,
-        data:      base64,
-        directory: Directory.Documents,
-        recursive: true,
-      });
+      if (Filesystem && Share) {
+        const base64 = await blobToBase64(blob);
 
-      // Abre o share sheet nativo para o usuário salvar/compartilhar
-      const { Share } = await import('@capacitor/share');
-      await Share.share({
-        title: filename,
-        url:   path,
-        dialogTitle: 'Compartilhar relatório',
-      });
-      return;
+        const { path } = await Filesystem.writeFile({
+          path:      filename,
+          data:      base64,
+          directory: 'DOCUMENTS',  // Directory.Documents
+          recursive: true,
+        });
+
+        await Share.share({
+          title:       filename,
+          url:         path,
+          dialogTitle: 'Compartilhar relatório',
+        });
+        return;
+      }
     } catch (err) {
-      // Plugins não instalados ou permissão negada — fallback para web
+      // Permissão negada ou plugin indisponível — fallback para web
       console.warn('[useExportReports] Capacitor download falhou, usando fallback web:', err);
     }
   }
 
-  // Fallback web (também usado no Capacitor se os plugins falharem)
+  // Fallback web (browser ou Capacitor sem plugins)
   const url = URL.createObjectURL(blob);
   const a   = Object.assign(document.createElement('a'), {
     href:     url,
@@ -127,7 +140,7 @@ async function downloadFile(filename: string, blob: Blob): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
-/** Busca TODOS os registros do período em lotes de 200 — nunca limita o relatório */
+/** Busca TODOS os registros do período em lotes de 200 */
 async function fetchAllForExport(userId: string, dateFrom: string, dateTo: string) {
   const BATCH = 200;
   let page    = 0;
@@ -162,7 +175,7 @@ async function fetchAllForExport(userId: string, dateFrom: string, dateTo: strin
   }));
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────
+// ─── Hook ──────────────────────────────────────────────────────────────────
 
 export const useExportReports = () => {
   const [isExporting, setIsExporting] = useState(false);
