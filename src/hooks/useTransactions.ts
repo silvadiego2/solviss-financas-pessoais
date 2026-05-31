@@ -59,12 +59,19 @@ export interface CreateTransactionInput {
 }
 
 // Campos virtuais/joined que NÃO existem como colunas na tabela transactions
-// e devem ser removidos antes de qualquer INSERT/UPDATE no Supabase.
 const VIRTUAL_FIELDS = ['category', 'account', 'category_name'] as const;
+
+// Campos UUID — string vazia deve virar null para o Supabase não rejeitar
+const UUID_FIELDS = ['category_id', 'account_id', 'transfer_account_id', 'user_id'] as const;
 
 function sanitizeForDB(obj: Record<string, any>): Record<string, any> {
   const clean = { ...obj };
+  // Remove campos virtuais
   for (const field of VIRTUAL_FIELDS) delete clean[field];
+  // Converte string vazia em null para campos UUID
+  for (const field of UUID_FIELDS) {
+    if (field in clean && clean[field] === '') clean[field] = null;
+  }
   return clean;
 }
 
@@ -143,7 +150,6 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
     filters.search,
   ];
 
-  // Infinite query (paginação acumulativa)
   const infiniteQuery = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam = 0 }) =>
@@ -196,7 +202,6 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
       const receipt_image_url = receiptFile
         ? await uploadReceipt(user.id, receiptFile)
         : updates.receipt_image_url;
-      // Remove campos virtuais (category, account, category_name) que o Supabase rejeita
       const payload = sanitizeForDB({ ...updates, receipt_image_url });
       const { data, error } = await supabase
         .from('transactions')
@@ -243,15 +248,12 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
 
   return {
     transactions,
-    // paginação
     hasNextPage:        infiniteQuery.hasNextPage,
     fetchNextPage:      infiniteQuery.fetchNextPage,
     isFetchingNextPage: infiniteQuery.isFetchingNextPage,
-    // estados
     loading:    infiniteQuery.isLoading,
     isFetching: infiniteQuery.isFetching,
     error:      infiniteQuery.error,
-    // mutations
     createTransaction: createTransactionMutation.mutate,
     updateTransaction: updateTransactionMutation.mutate,
     deleteTransaction: deleteTransactionMutation.mutate,
