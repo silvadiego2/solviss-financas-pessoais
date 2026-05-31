@@ -4,23 +4,20 @@
  * Busca TODOS os dados do dashboard em uma única query coordenada via
  * Promise.all — 4 tabelas em paralelo, um único roundtrip de rede.
  *
- * Benefícios vs. 7 hooks separados:
- *  • Elimina waterfall de loading (cada hook esperava o anterior terminar)
- *  • staleTime 3 min: não re-busca ao trocar de aba ou navegar de volta
- *  • gcTime 10 min: mantém cache mesmo se o componente desmontar
- *  • recurringTransactions derivado das transactions (zero query extra)
- *  • Estatísticas calculadas com useMemo — não re-calculam em cada render
+ * Schema real da tabela accounts (confirmado em types.ts):
+ *   id, name, type, balance, credit_limit, is_active,
+ *   bank_name, closing_day, due_day, user_id, created_at, updated_at
  *
- * transactionLimitReached:
- *  Quando true, o Supabase retornou exatamente 500 registros — o limite
- *  da query. O componente deve exibir um aviso ao usuário.
+ * NOTA: a coluna `current_balance` NÃO existe no banco —
+ *   a fatura do cartão é representada pelo campo `balance` (negativo
+ *   quando há dívida). Usar Math.abs(balance) como fatura.
  */
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
 
-const STALE_TIME = 3 * 60 * 1000;   // 3 min
+const STALE_TIME = 60 * 1000;       // 1 min — garante re-fetch após navegação
 const GC_TIME   = 10 * 60 * 1000;  // 10 min
 const TX_LIMIT  = 500;
 
@@ -34,7 +31,6 @@ export interface DashAccount {
   type: string;
   balance: number;
   credit_limit?: number | null;
-  current_balance?: number | null;
   is_credit_card?: boolean;
 }
 
@@ -66,14 +62,14 @@ export interface DashGoal {
   target_amount: number;
   current_amount: number;
   is_completed: boolean;
-  deadline?: string | null;
+  target_date?: string | null;  // nome correto no schema (era deadline antes)
 }
 
 export interface DashCreditCard {
   id: string;
   name: string;
   credit_limit: number;
-  current_balance: number;
+  current_balance: number;  // derivado de Math.abs(balance) — não vem do banco
 }
 
 export interface ChartDayPoint {
@@ -102,12 +98,11 @@ async function fetchDashboard(userId: string) {
     budgetsRes,
     goalsRes,
   ] = await Promise.all([
-    // ✅ Filtro is_active: true — alinhado com useAccounts
-    //    Sem esse filtro contas arquivadas/deletadas chegavam aqui
-    //    e podiam não ter type='credit_card', zerando o KPI
+    // Seleciona apenas colunas que existem no schema (types.ts)
+    // IMPORTANTE: current_balance NAO existe — nao incluir no SELECT
     supabase
       .from('accounts')
-      .select('id, name, type, balance, credit_limit, current_balance, is_active')
+      .select('id, name, type, balance, credit_limit, is_active')
       .eq('user_id', userId)
       .eq('is_active', true)
       .order('name'),
@@ -134,20 +129,24 @@ async function fetchDashboard(userId: string) {
       .eq('month', month)
       .eq('year', year),
 
-    // Metas ativas
+    // Metas ativas — usa target_date (nome correto no schema)
     supabase
       .from('goals')
-      .select('id, name, target_amount, current_amount, is_completed, deadline')
+      .select('id, name, target_amount, current_amount, is_completed, target_date')
       .eq('user_id', userId)
       .eq('is_completed', false)
       .order('created_at', { ascending: false }),
   ]);
 
-  // Erros fatais — ignora erros de schema (coluna/tabela ainda não existe)
-  const fatal = [accountsRes, transactionsRes, budgetsRes, goalsRes].find(
-    r => r.error && !r.error.message?.includes('does not exist') && r.error.code !== '42P01'
-  );
-  if (fatal?.error) throw fatal.error;
+  // Loga erros para diagnóstico sem engolir silenciosamente
+  if (accountsRes.error)     console.error('[dashboard] accounts error:',     accountsRes.error);
+  if (transactionsRes.error) console.error('[dashboard] transactions error:', transactionsRes.error);
+  if (budgetsRes.error)      console.error('[dashboard] budgets error:',      budgetsRes.error);
+  if (goalsRes.error)        console.error('[dashboard] goals error:',        goalsRes.error);
+
+  // Erro fatal apenas em contas e transações (críticas para o dashboard)
+  if (accountsRes.error)     throw accountsRes.error;
+  if (transactionsRes.error) throw transactionsRes.error;
 
   // Flag de limite de transações
   const transactionCount        = (transactionsRes.data ?? []).length;
@@ -167,32 +166,28 @@ async function fetchDashboard(userId: string) {
     recurrence_frequency: t.recurrence_frequency ?? null,
   }));
 
-  // Normaliza contas — apenas ativas (já filtrado no Supabase)
+  // Normaliza contas — apenas colunas reais do schema
   const allAccounts: DashAccount[] = (accountsRes.data ?? []).map((a: any) => ({
-    id:              a.id,
-    name:            a.name,
-    type:            a.type,
-    balance:         Number(a.balance ?? 0),
-    credit_limit:    a.credit_limit  != null ? Number(a.credit_limit)  : null,
-    current_balance: a.current_balance != null ? Number(a.current_balance) : null,
-    // ✅ Aceita 'credit_card' como único valor canônico de cartão
-    //    (alinhado com useAccounts e o schema do banco)
+    id:           a.id,
+    name:         a.name,
+    type:         a.type,
+    balance:      Number(a.balance ?? 0),
+    credit_limit: a.credit_limit != null ? Number(a.credit_limit) : null,
     is_credit_card: a.type === 'credit_card',
   }));
 
   const regularAccounts = allAccounts.filter(a => !a.is_credit_card);
 
-  // ✅ Fallback de fatura: tenta current_balance primeiro, depois balance
-  //    Alguns cartões usam a coluna 'balance' para armazenar a fatura
-  //    quando current_balance não está preenchido — sem esse fallback
-  //    a fatura aparece R$ 0,00
+  // Fatura = Math.abs(balance)
+  // Cartões com saldo devedor têm balance negativo no banco
+  // ex: balance = -850.00 → fatura = R$ 850,00
   const creditCards: DashCreditCard[] = allAccounts
     .filter(a => a.is_credit_card)
     .map(a => ({
       id:              a.id,
       name:            a.name,
       credit_limit:    a.credit_limit ?? 0,
-      current_balance: a.current_balance ?? Math.abs(a.balance),
+      current_balance: Math.abs(a.balance),
     }));
 
   // Recorrentes derivados (zero query extra)
@@ -217,12 +212,12 @@ async function fetchDashboard(userId: string) {
       year:        b.year,
     })) as DashBudget[],
     goals: (goalsRes.data ?? []).map((g: any) => ({
-      id:              g.id,
-      name:            g.name,
-      target_amount:   Number(g.target_amount),
-      current_amount:  Number(g.current_amount ?? 0),
-      is_completed:    Boolean(g.is_completed),
-      deadline:        g.deadline ?? null,
+      id:             g.id,
+      name:           g.name,
+      target_amount:  Number(g.target_amount),
+      current_amount: Number(g.current_amount ?? 0),
+      is_completed:   Boolean(g.is_completed),
+      target_date:    g.target_date ?? null,
     })) as DashGoal[],
     month,
     year,
@@ -241,7 +236,7 @@ export function useDashboardData() {
     enabled:  !!user,
     staleTime: STALE_TIME,
     gcTime:    GC_TIME,
-    retry: 2,
+    retry: 1,
   });
 
   // KPIs — só recalculam quando query.data muda
