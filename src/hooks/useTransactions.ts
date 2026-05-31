@@ -58,6 +58,16 @@ export interface CreateTransactionInput {
   receiptFile?: File;
 }
 
+// Campos virtuais/joined que NÃO existem como colunas na tabela transactions
+// e devem ser removidos antes de qualquer INSERT/UPDATE no Supabase.
+const VIRTUAL_FIELDS = ['category', 'account', 'category_name'] as const;
+
+function sanitizeForDB(obj: Record<string, any>): Record<string, any> {
+  const clean = { ...obj };
+  for (const field of VIRTUAL_FIELDS) delete clean[field];
+  return clean;
+}
+
 // ─── Fetcher com filtros server-side ──────────────────────────────────────────
 
 async function fetchPage(
@@ -158,9 +168,10 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
       const receipt_image_url = receiptFile
         ? await uploadReceipt(user.id, receiptFile)
         : undefined;
+      const payload = sanitizeForDB({ ...input, user_id: user.id, receipt_image_url });
       const { data, error } = await supabase
         .from('transactions')
-        .insert([{ ...input, user_id: user.id, receipt_image_url } as any])
+        .insert([payload as any])
         .select().single();
       if (error) throw error;
       return data;
@@ -170,24 +181,28 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+      queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
       if (variables.is_recurring)
         queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
       toast.success('Transação adicionada com sucesso!');
     },
-    onError: () => toast.error('Erro ao adicionar transação'),
+    onError: (err: any) => toast.error('Erro ao adicionar transação', { description: err?.message }),
   });
 
   // ── Update ─────────────────────────────────────────────────────────────────────
   const updateTransactionMutation = useMutation({
     mutationFn: async ({ id, receiptFile, ...updates }: Partial<Transaction> & { id: string; receiptFile?: File }) => {
+      if (!user) throw new Error('Usuário não autenticado');
       const receipt_image_url = receiptFile
-        ? await uploadReceipt(user!.id, receiptFile)
+        ? await uploadReceipt(user.id, receiptFile)
         : updates.receipt_image_url;
+      // Remove campos virtuais (category, account, category_name) que o Supabase rejeita
+      const payload = sanitizeForDB({ ...updates, receipt_image_url });
       const { data, error } = await supabase
         .from('transactions')
-        .update({ ...updates, receipt_image_url } as any)
+        .update(payload as any)
         .eq('id', id)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .select().single();
       if (error) throw error;
       return data;
@@ -197,10 +212,11 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+      queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
       queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
       toast.success('Transação atualizada com sucesso!');
     },
-    onError: () => toast.error('Erro ao atualizar transação'),
+    onError: (err: any) => toast.error('Erro ao atualizar transação', { description: err?.message }),
   });
 
   // ── Delete ─────────────────────────────────────────────────────────────────────
@@ -218,10 +234,11 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
+      queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
       queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
       toast.success('Transação excluída com sucesso!');
     },
-    onError: () => toast.error('Erro ao deletar transação'),
+    onError: (err: any) => toast.error('Erro ao deletar transação', { description: err?.message }),
   });
 
   return {

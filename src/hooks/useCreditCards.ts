@@ -17,46 +17,47 @@ export interface CreditCard {
 }
 
 /**
+ * Formata uma Date para "YYYY-MM-DD" usando a data LOCAL do browser
+ * (evita o bug de timezone onde toISOString() pode retornar o dia seguinte
+ * quando o horário local está atrás do UTC, ex: Brasília UTC-3).
+ */
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
  * Retorna o intervalo de datas da fatura ATUAL em aberto.
  *
- * Lógica:
- *   - A fatura aberta cobre do dia (closingDay + 1) do mês anterior
- *     até o dia closingDay do mês corrente.
- *   - Se hoje ainda não chegou ao closingDay deste mês, o ciclo é:
- *       início = closingDay+1 do mês passado  →  fim = closingDay deste mês
- *   - Se hoje já passou do closingDay (fatura fechada mas ainda não paga),
- *     ainda exibimos esse ciclo como "fatura atual" até o vencimento (due_day).
- *     Só avançamos para o PRÓXIMO ciclo quando o pagamento já tiver sido feito,
- *     o que controlamos deixando sempre visível o ciclo mais recente fechado.
+ * O ciclo sempre é:
+ *   início = closing_day + 1  do mês M-1
+ *   fim    = closing_day      do mês M  (mês corrente, sem avançar)
  *
- * Na prática: o ciclo exibido é sempre
- *   início = closingDay+1  do mês M-1
- *   fim    = closingDay    do mês M
- * onde M é o mês corrente, independentemente de o fechamento já ter ocorrido.
- * Isso garante que no dia 31/Mai com fechamento no dia 10, as transações de
- * 11/Abr – 10/Mai (fatura fechada, ainda a pagar) continuam visíveis.
+ * Usar o mês corrente fixo garante que, mesmo depois do fechamento
+ * (fatura fechada mas ainda não paga), os valores continuam visíveis.
+ * Ex com fechamento dia 10 e hoje = 31/Mai:
+ *   início = 11/Abr, fim = 10/Mai  ← fatura de Maio, já fechada, a pagar
  */
 function getInvoiceCycle(closingDay: number): { start: string; end: string } {
   const today = new Date();
   const year  = today.getFullYear();
   const month = today.getMonth(); // 0-based
 
-  // Fim do ciclo = closing_day do mês corrente
-  // Se closing_day > dias do mês (ex: dia 31 em Fevereiro), usa o último dia do mês
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const effectiveClosingDay = Math.min(closingDay, daysInMonth);
-  const endDate = new Date(year, month, effectiveClosingDay);
+  // fim = closing_day do mês corrente (ajustado para últim dia se necessário)
+  const daysInCurMonth = new Date(year, month + 1, 0).getDate();
+  const endDay = Math.min(closingDay, daysInCurMonth);
+  const endDate = new Date(year, month, endDay);
 
-  // Início do ciclo = closing_day + 1 do mês anterior
-  const prevMonth = month - 1;
-  const prevYear  = prevMonth < 0 ? year - 1 : year;
-  const prevMonthIndex = ((month - 1) + 12) % 12;
-  const daysInPrevMonth = new Date(prevYear, prevMonthIndex + 1, 0).getDate();
+  // início = closing_day + 1 do mês anterior
+  const prevYear  = month === 0 ? year - 1 : year;
+  const prevMonth = month === 0 ? 11 : month - 1;
+  const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
   const startDay = Math.min(closingDay + 1, daysInPrevMonth);
-  const startDate = new Date(prevYear, prevMonthIndex, startDay);
+  const startDate = new Date(prevYear, prevMonth, startDay);
 
-  const fmt = (d: Date) => d.toISOString().split('T')[0];
-  return { start: fmt(startDate), end: fmt(endDate) };
+  return { start: localDateStr(startDate), end: localDateStr(endDate) };
 }
 
 export const useCreditCards = () => {
@@ -77,7 +78,6 @@ export const useCreditCards = () => {
     if (accErr) throw accErr;
     if (!accounts || accounts.length === 0) return [];
 
-    // Para cada cartão, soma transações no ciclo real da fatura
     const results = await Promise.all(
       accounts.map(async (account) => {
         const closingDay = account.closing_day || 1;
@@ -124,6 +124,7 @@ export const useCreditCards = () => {
     queryKey: ['credit_cards', user?.id],
     queryFn: fetchCreditCards,
     enabled: !!user,
+    staleTime: 60 * 1000, // 1 min — evita refetch excessivo mas mantém dados frescos
   });
 
   const createCreditCardMutation = useMutation({
