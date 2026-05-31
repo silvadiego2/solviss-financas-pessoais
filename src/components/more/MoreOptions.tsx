@@ -1,9 +1,9 @@
 import React from 'react';
 import {
   Download, Upload, Tags, User, Building, ChevronRight,
-  Shield, Cloud, TrendingUp, Zap, Database, Trash2, BarChart3,
+  Shield, Cloud, Zap, Database, Trash2, BarChart3,
   Settings, Copy, Sparkles, CalendarClock, Bell, CalendarRange,
-  ScanLine, Brain, CreditCard, Target, Repeat, TrendingDown,
+  ScanLine, Brain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -74,6 +74,11 @@ const Section: React.FC<{ title: string; items: MenuItem[] }> = ({ title, items 
 );
 
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
+  // Seção Finanças — apenas itens SEM equivalente na sidebar principal
+  // Removidos (já são tabs de primeiro nível):
+  //   Cartões de Crédito (cards), Metas Financeiras (goals),
+  //   Transações Recorrentes (recurring-transactions),
+  //   Fluxo de Caixa (cash-flow), Inteligência Financeira (intelligence)
   const financeItems: MenuItem[] = [
     {
       title: 'Agenda Financeira',
@@ -88,40 +93,9 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       icon: CalendarRange,
       action: () => onNavigate('budgets-list'),
     },
-    {
-      title: 'Cartões de Crédito',
-      description: 'Faturas e limites',
-      icon: CreditCard,
-      action: () => onNavigate('cards'),
-    },
-    {
-      title: 'Metas Financeiras',
-      description: 'Acompanhar objetivos de poupança',
-      icon: Target,
-      action: () => onNavigate('goals'),
-    },
-    {
-      title: 'Transações Recorrentes',
-      description: 'Assinaturas e cobranças fixas',
-      icon: Repeat,
-      action: () => onNavigate('recurring-transactions'),
-    },
-    {
-      title: 'Fluxo de Caixa',
-      description: 'Projeção de entradas e saídas',
-      icon: TrendingUp,
-      action: () => onNavigate('cash-flow'),
-    },
   ];
 
   const analyticItems: MenuItem[] = [
-    {
-      title: 'Inteligência Financeira',
-      description: 'Insights e previsões por IA',
-      icon: Brain,
-      action: () => onNavigate('intelligence'),
-      badge: 'IA',
-    },
     {
       title: 'Central de Analytics',
       description: 'Analytics avançados',
@@ -216,7 +190,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     {
       title: 'Planos e Assinatura',
       description: 'Ver planos premium disponíveis',
-      icon: TrendingDown,
+      icon: Brain,
       action: () => onNavigate('plans'),
     },
     {
