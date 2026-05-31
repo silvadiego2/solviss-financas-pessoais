@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Upload, Download, CheckCircle, XCircle, AlertCircle, ArrowLeft, FileText, CreditCard } from 'lucide-react';
+import { Upload, Download, CheckCircle, XCircle, AlertCircle, ArrowLeft, FileText, CreditCard, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseSpreadsheet, generateExampleFile, convertRowToTransaction, ColumnMapping, ParsedTransaction, SpreadsheetRow } from '@/utils/spreadsheetParser';
 import { parsePdfInvoice } from '@/utils/pdfInvoiceParser';
@@ -42,17 +42,17 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
   const [totalAmount, setTotalAmount]       = useState<number | undefined>();
   const [invoiceMonth, setInvoiceMonth]     = useState<string | undefined>();
   const [errors, setErrors]                 = useState<string[]>([]);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [importing, setImporting]           = useState(false);
   const [progress, setProgress]             = useState(0);
   const [showConfirm, setShowConfirm]       = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
   const { createTransaction } = useTransactions();
   const { accounts } = useAccounts();
   const { categories } = useCategories();
 
-  // Apenas cartões de crédito
   const creditCardAccounts = accounts.filter(a => a.type === 'credit_card');
+  const otherAccounts = accounts.filter(a => a.type !== 'credit_card');
 
   const handlePdfSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,6 +72,12 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
       setTotalAmount(result.totalAmount);
       setInvoiceMonth(result.invoiceMonth);
       setErrors(result.errors);
+      // Pré-seleciona o primeiro cartão de crédito, se houver
+      if (creditCardAccounts.length > 0) {
+        setSelectedAccountId(creditCardAccounts[0].id);
+      } else if (accounts.length > 0) {
+        setSelectedAccountId(accounts[0].id);
+      }
       if (result.transactions.length > 0) {
         toast.success(`${result.transactions.length} transações encontradas (${result.detectedBank})`);
       }
@@ -83,6 +89,10 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
   };
 
   const handleImport = async () => {
+    if (!selectedAccountId) {
+      toast.error('Selecione uma conta para lançar as transações.');
+      return;
+    }
     setShowConfirm(false);
     setImporting(true);
     setProgress(0);
@@ -102,7 +112,7 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
           amount:      t.amount,
           date:        t.date,
           type:        t.type,
-          account_id:  selectedAccountId || accounts[0]?.id,
+          account_id:  selectedAccountId,
           category_id: categoryId,
           notes:       t.notes,
           status:      'completed',
@@ -120,6 +130,7 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
   };
 
   const totalImportAmount = transactions.reduce((s, t) => s + t.amount, 0);
+  const selectedAccountName = accounts.find(a => a.id === selectedAccountId)?.name;
 
   return (
     <div className="space-y-4">
@@ -226,35 +237,8 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
             </CardContent>
           </Card>
 
-          {/* Seleção de conta */}
           <Card>
-            <CardContent className="pt-5 space-y-4">
-              <div className="space-y-2">
-                <Label className="flex items-center gap-1.5">
-                  <CreditCard className="w-4 h-4" />
-                  Lançar na conta
-                </Label>
-                {creditCardAccounts.length > 0 ? (
-                  <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o cartão de crédito" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {creditCardAccounts.map(a => (
-                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                      ))}
-                      {accounts.filter(a => a.type !== 'credit_card').map(a => (
-                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Nenhum cartão de crédito cadastrado. As transações serão importadas sem conta vinculada.
-                  </p>
-                )}
-              </div>
-
+            <CardContent className="pt-5">
               {importing ? (
                 <div className="space-y-2">
                   <Progress value={progress} />
@@ -279,7 +263,7 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar importação</AlertDialogTitle>
             <AlertDialogDescription asChild>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <p>Você está prestes a importar:</p>
                 <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
                   <div className="text-center">
@@ -293,13 +277,61 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
                     <p className="text-xs text-muted-foreground">Total</p>
                   </div>
                 </div>
+
+                {/* Seleção de conta */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm font-medium">
+                    <Wallet className="w-4 h-4" />
+                    Em qual conta lançar?
+                  </Label>
+                  {accounts.length > 0 ? (
+                    <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a conta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {creditCardAccounts.length > 0 && (
+                          <>
+                            <div className="px-2 py-1 text-xs text-muted-foreground font-medium">Cartões de Crédito</div>
+                            {creditCardAccounts.map(a => (
+                              <SelectItem key={a.id} value={a.id}>
+                                <span className="flex items-center gap-2">
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                  {a.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                        {otherAccounts.length > 0 && (
+                          <>
+                            <div className="px-2 py-1 text-xs text-muted-foreground font-medium">Contas</div>
+                            {otherAccounts.map(a => (
+                              <SelectItem key={a.id} value={a.id}>
+                                <span className="flex items-center gap-2">
+                                  <Wallet className="w-3.5 h-3.5" />
+                                  {a.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhuma conta cadastrada. Cadastre uma conta antes de importar.</p>
+                  )}
+                </div>
+
                 <p className="text-sm text-muted-foreground">Esta ação não pode ser desfeita facilmente.</p>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleImport}>Confirmar</AlertDialogAction>
+            <AlertDialogAction onClick={handleImport} disabled={!selectedAccountId}>
+              Confirmar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -319,10 +351,14 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
   const [importProgress, setImportProgress] = useState(0);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [detectedBank, setDetectedBank] = useState<string | undefined>();
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
   const { createTransaction, transactions } = useTransactions();
   const { accounts } = useAccounts();
   const { categories } = useCategories();
+
+  const creditCardAccounts = accounts.filter(a => a.type === 'credit_card');
+  const otherAccounts = accounts.filter(a => a.type !== 'credit_card');
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -396,7 +432,21 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
     setValidationResults(results);
   };
 
+  // Abre o dialog e pré-seleciona a primeira conta disponível
+  const handleOpenConfirm = () => {
+    if (!selectedAccountId && accounts.length > 0) {
+      // Prioriza cartão de crédito, depois qualquer conta
+      const defaultAccount = creditCardAccounts[0] ?? accounts[0];
+      setSelectedAccountId(defaultAccount.id);
+    }
+    setShowConfirmDialog(true);
+  };
+
   const handleImport = async () => {
+    if (!selectedAccountId) {
+      toast.error('Selecione uma conta para lançar as transações.');
+      return;
+    }
     setShowConfirmDialog(false);
     setStep('importing');
     setImportProgress(0);
@@ -406,11 +456,6 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
       const result = validTransactions[i];
       const transaction = result.transaction!;
       try {
-        let accountId = accounts[0]?.id;
-        if (transaction.account) {
-          const account = accounts.find(a => a.name.toLowerCase().includes(transaction.account!.toLowerCase()));
-          if (account) accountId = account.id;
-        }
         let categoryId: string | undefined;
         if (transaction.category) {
           const category = categories.find(c => c.name.toLowerCase() === transaction.category!.toLowerCase());
@@ -421,7 +466,7 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
           amount: transaction.amount,
           date: transaction.date,
           type: transaction.type,
-          account_id: accountId,
+          account_id: selectedAccountId,
           category_id: categoryId,
           notes: transaction.notes,
           tags: transaction.tags,
@@ -494,9 +539,9 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
             </div>
           ))}
           <Separator />
-          {(['category','account'] as const).map(field => (
+          {(['category'] as const).map(field => (
             <div key={field} className="space-y-2">
-              <Label>{field === 'category' ? 'Categoria (Opcional)' : 'Conta (Opcional)'}</Label>
+              <Label>Categoria (Opcional)</Label>
               <Select value={mapping[field] || 'none'} onValueChange={v => setMapping({ ...mapping, [field]: v === 'none' ? undefined : v })}>
                 <SelectTrigger><SelectValue placeholder="Selecione a coluna" /></SelectTrigger>
                 <SelectContent>
@@ -548,14 +593,13 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
           </ScrollArea>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => setStep('mapping')}>Voltar</Button>
-            <Button onClick={() => setShowConfirmDialog(true)} disabled={errorCount === validationResults.length} className="flex-1">
+            <Button onClick={handleOpenConfirm} disabled={errorCount === validationResults.length} className="flex-1">
               Importar {successCount + warningCount} Transações
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* AlertDialog renderizado junto com o step 'preview' */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -570,7 +614,7 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
                   </div>
                   <div className="text-center">
                     <p className={`text-2xl font-bold ${totalAmount >= 0 ? 'text-green-500' : 'text-destructive'}`}>
-                      {totalAmount >= 0 ? '+' : ''}R$ {totalAmount.toFixed(2)}
+                      {totalAmount >= 0 ? '+' : ''}R$ {Math.abs(totalAmount).toFixed(2)}
                     </p>
                     <p className="text-xs text-muted-foreground">Saldo Líquido</p>
                   </div>
@@ -579,6 +623,52 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
                   <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /><span>Receitas: R$ {incomeTotal.toFixed(2)}</span></div>
                   <div className="flex items-center gap-2"><XCircle className="w-4 h-4 text-destructive" /><span>Despesas: R$ {expenseTotal.toFixed(2)}</span></div>
                 </div>
+
+                {/* Seleção de conta */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-1.5 text-sm font-medium">
+                    <Wallet className="w-4 h-4" />
+                    Em qual conta lançar?
+                  </Label>
+                  {accounts.length > 0 ? (
+                    <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a conta" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {creditCardAccounts.length > 0 && (
+                          <>
+                            <div className="px-2 py-1 text-xs text-muted-foreground font-medium">Cartões de Crédito</div>
+                            {creditCardAccounts.map(a => (
+                              <SelectItem key={a.id} value={a.id}>
+                                <span className="flex items-center gap-2">
+                                  <CreditCard className="w-3.5 h-3.5" />
+                                  {a.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                        {otherAccounts.length > 0 && (
+                          <>
+                            <div className="px-2 py-1 text-xs text-muted-foreground font-medium">Contas</div>
+                            {otherAccounts.map(a => (
+                              <SelectItem key={a.id} value={a.id}>
+                                <span className="flex items-center gap-2">
+                                  <Wallet className="w-3.5 h-3.5" />
+                                  {a.name}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Nenhuma conta cadastrada. Cadastre uma conta antes de importar.</p>
+                  )}
+                </div>
+
                 {warningCount > 0 && <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>{warningCount} transação(ões) com avisos serão importadas.</AlertDescription></Alert>}
                 <p className="text-sm text-muted-foreground">Esta ação não pode ser desfeita facilmente.</p>
               </div>
@@ -586,7 +676,9 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleImport}>Confirmar Importação</AlertDialogAction>
+            <AlertDialogAction onClick={handleImport} disabled={!selectedAccountId}>
+              Confirmar Importação
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
