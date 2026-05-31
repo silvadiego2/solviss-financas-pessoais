@@ -17,24 +17,43 @@ export interface CreditCard {
 }
 
 /**
- * Calcula o início e fim do ciclo de fatura aberta de um cartão.
- * O ciclo vai do dia (closing_day + 1) do mês anterior até closing_day do mês atual.
- * Ex: fechamento dia 10 → ciclo: 11/Abr até 10/Mai
+ * Retorna o intervalo de datas da fatura ATUAL em aberto.
+ *
+ * Lógica:
+ *   - A fatura aberta cobre do dia (closingDay + 1) do mês anterior
+ *     até o dia closingDay do mês corrente.
+ *   - Se hoje ainda não chegou ao closingDay deste mês, o ciclo é:
+ *       início = closingDay+1 do mês passado  →  fim = closingDay deste mês
+ *   - Se hoje já passou do closingDay (fatura fechada mas ainda não paga),
+ *     ainda exibimos esse ciclo como "fatura atual" até o vencimento (due_day).
+ *     Só avançamos para o PRÓXIMO ciclo quando o pagamento já tiver sido feito,
+ *     o que controlamos deixando sempre visível o ciclo mais recente fechado.
+ *
+ * Na prática: o ciclo exibido é sempre
+ *   início = closingDay+1  do mês M-1
+ *   fim    = closingDay    do mês M
+ * onde M é o mês corrente, independentemente de o fechamento já ter ocorrido.
+ * Isso garante que no dia 31/Mai com fechamento no dia 10, as transações de
+ * 11/Abr – 10/Mai (fatura fechada, ainda a pagar) continuam visíveis.
  */
 function getInvoiceCycle(closingDay: number): { start: string; end: string } {
   const today = new Date();
   const year  = today.getFullYear();
   const month = today.getMonth(); // 0-based
 
-  // Fim do ciclo = closing_day do mês corrente (ou do próximo, se já passou)
-  let endDate = new Date(year, month, closingDay);
-  if (today > endDate) {
-    // Fechamento já ocorreu este mês — o ciclo aberto é para o próximo
-    endDate = new Date(year, month + 1, closingDay);
-  }
+  // Fim do ciclo = closing_day do mês corrente
+  // Se closing_day > dias do mês (ex: dia 31 em Fevereiro), usa o último dia do mês
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const effectiveClosingDay = Math.min(closingDay, daysInMonth);
+  const endDate = new Date(year, month, effectiveClosingDay);
 
-  // Início do ciclo = closing_day + 1 do mês anterior ao endDate
-  const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 1, closingDay + 1);
+  // Início do ciclo = closing_day + 1 do mês anterior
+  const prevMonth = month - 1;
+  const prevYear  = prevMonth < 0 ? year - 1 : year;
+  const prevMonthIndex = ((month - 1) + 12) % 12;
+  const daysInPrevMonth = new Date(prevYear, prevMonthIndex + 1, 0).getDate();
+  const startDay = Math.min(closingDay + 1, daysInPrevMonth);
+  const startDate = new Date(prevYear, prevMonthIndex, startDay);
 
   const fmt = (d: Date) => d.toISOString().split('T')[0];
   return { start: fmt(startDate), end: fmt(endDate) };
@@ -77,7 +96,7 @@ export const useCreditCards = () => {
 
         const used_amount = (txRows || []).reduce((sum, tx) => {
           if (tx.type === 'expense') return sum + Number(tx.amount);
-          if (tx.type === 'income')  return sum - Number(tx.amount); // pagamentos/estornos
+          if (tx.type === 'income')  return sum - Number(tx.amount);
           return sum;
         }, 0);
 
