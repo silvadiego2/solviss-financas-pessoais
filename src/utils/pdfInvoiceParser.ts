@@ -27,33 +27,28 @@ const MONTH_MAP: Record<string, string> = {
   jul: '07', ago: '08', set: '09', out: '10', nov: '11', dez: '12',
 };
 
-/** Converte "26/mai" ou "26/mai/2026" ou "26/05/2026" em ISO date */
+/** Converte "26/mai" / "26/mai/2026" / "26/05/2026" em ISO date */
 function parseDateBR(raw: string): string | null {
-  const rawClean = raw.trim();
+  const s = raw.trim();
 
-  // Formato com mês por extenso: DD/mmm ou DD/mmm/YYYY
-  const mExt = rawClean.match(/^(\d{1,2})\/(\w{3})(?:\/(\d{2,4}))?$/);
+  // Mês por extenso: DD/mmm ou DD/mmm/YYYY
+  const mExt = s.match(/^(\d{1,2})\/(\w{3})(?:\/(\d{2,4}))?$/);
   if (mExt) {
-    const day   = mExt[1].padStart(2, '0');
     const month = MONTH_MAP[mExt[2].toLowerCase()];
     if (!month) return null;
     let year = mExt[3] ? parseInt(mExt[3]) : new Date().getFullYear();
     if (year < 100) year += 2000;
-    const d = new Date(year, parseInt(month) - 1, parseInt(day));
-    if (isNaN(d.getTime())) return null;
-    return d.toISOString().split('T')[0];
+    const d = new Date(year, parseInt(month) - 1, parseInt(mExt[1]));
+    return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
   }
 
-  // Formato numérico: DD/MM/YYYY ou DD/MM/YY ou DD/MM
-  const mNum = rawClean.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+  // Formato numérico: DD/MM ou DD/MM/YYYY
+  const mNum = s.match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
   if (mNum) {
-    const day   = mNum[1].padStart(2, '0');
-    const month = mNum[2].padStart(2, '0');
     let year = mNum[3] ? parseInt(mNum[3]) : new Date().getFullYear();
     if (year < 100) year += 2000;
-    const d = new Date(year, parseInt(month) - 1, parseInt(day));
-    if (isNaN(d.getTime())) return null;
-    return d.toISOString().split('T')[0];
+    const d = new Date(year, parseInt(mNum[2]) - 1, parseInt(mNum[1]));
+    return isNaN(d.getTime()) ? null : d.toISOString().split('T')[0];
   }
 
   return null;
@@ -70,67 +65,57 @@ function parseAmountBR(raw: string): number | null {
 }
 
 // ---------------------------------------------------------------------------
-// Parsers por banco
+// Parser Sicredi
 // ---------------------------------------------------------------------------
-
-type BankParser = (lines: string[]) => ParsedTransaction[];
-
-interface BankDef {
-  name: string;
-  detect: (text: string) => boolean;
-  parse: BankParser;
-  // Se true, o texto bruto é passado como uma única string (sem split em linhas)
-  rawMode?: boolean;
-}
-
-const SKIP_DEFAULT = /^pagamento|^saldo anterior|^total|vencimento|encargo|multa|juros/i;
-
-// ---------------------------------------------------------------------------
-// Sicredi
-// ---------------------------------------------------------------------------
-// Texto extraído pelo pdf.js do Sicredi vem concatenado, sem quebras reais entre
-// transações. Exemplo:
-//   "26/mai  22:16Anuidade Diferenc 01/12 4115                 R$ 20,00"
-//   "09/mai  13:00Salvador     PresencialArezzo Regueira 09                      01/04R$ 99,99"
-//
-// Estratégia: dividir o texto bruto usando como separador a data DD/mmm seguida
-// de HH:MM, depois parsear cada segmento.
+// O pdf.js extrai o texto das células da tabela colado sem separadores reais.
+// Estratégia: dividir pelo padrão de início de linha (DD/mmm  HH:MM) e
+// parsear cada segmento individualmente.
 
 function parseSicrediRaw(rawText: string): ParsedTransaction[] {
   const txs: ParsedTransaction[] = [];
   const year = new Date().getFullYear();
 
-  // Divide nos pontos onde começa uma nova data: DD/mmm  HH:MM
-  // Ex: "26/mai  22:16"  "09/mai  13:00"
+  // Divide no início de cada transação: DD/mmm  HH:MM
   const DATE_SPLIT_RE = /(?=\d{2}\/(?:jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\s+\d{2}:\d{2})/gi;
   const segments = rawText.split(DATE_SPLIT_RE).filter(s => s.trim().length > 5);
 
-  for (const seg of segments) {
-    // Captura: DD/mmm  HH:MM  [Cidade]  [Presencial|Online]  Descrição  [Parcela]  R$ valor
-    //
-    // Regex flexível: pós data+hora vem "cidade" opcional, depois "presencial/online" opcional,
-    // depois descrição (qualquer coisa), depois opcional parcela NN/NN, depois R$ valor
-    const m = seg.match(
-      /^(\d{2}\/\w{3})\s+(\d{2}:\d{2})\s*(?:[A-Za-zÀ-ÿ\s]{2,20}?\s*)?(?:Presencial|Online)?\s*(.+?)\s*(\d{2}\/\d{2})?\s*(?:-?R\$\s?([\d.,]+))\s*$/i
-    );
-    if (!m) continue;
+  for (const rawSeg of segments) {
+    const seg = rawSeg.trim();
 
-    const dateStr = m[1];          // "26/mai"
-    const descRaw = m[3].trim();   // descrição
-    const amountStr = m[5];        // "20,00"
+    // Extrai data e hora do início
+    const mDate = seg.match(/^(\d{2}\/\w{3})\s+(\d{2}:\d{2})/);
+    if (!mDate) continue;
 
-    const date = parseDateBR(dateStr + '/' + year);
-    if (!date) continue;
+    // Trunca em "Total cartão" para não capturar rodapé
+    let rest = seg.slice(mDate[0].length).replace(/Total cart[a\u00e3]o.*/i, '').trim();
 
+    // Extrai o valor no final: R$ X,XX ou -R$ X,XX
+    const mVal = rest.match(/-?R\$\s*([\d.,]+)\s*$/);
+    if (!mVal) continue;
+
+    const amountStr = mVal[1];
+    let middle = rest.slice(0, mVal.index).trim();
+
+    // Remove cidade (palavras antes de Presencial/Online) + Presencial/Online
+    // Funciona tanto com cidade ("Salvador     Presencial") quanto sem ("Presencial")
+    middle = middle.replace(/^(?:[A-Za-z\u00c0-\u00ff\s]{2,20}?\s*)?(?:Presencial|Online)\s*/i, '').trim();
+
+    // Remove parcela colada no final: NN/NN
+    let parcela: string | undefined;
+    const mParcela = middle.match(/\s*(\d{2}\/\d{2})\s*$/);
+    if (mParcela) {
+      parcela = mParcela[1];
+      middle = middle.slice(0, mParcela.index).trim();
+    }
+
+    const desc = middle.replace(/\s{2,}/g, ' ').trim();
+    if (!desc) continue;
+
+    const date = parseDateBR(`${mDate[1]}/${year}`);
     const amount = parseAmountBR(amountStr);
-    if (!amount || amount <= 0) continue;
 
-    // Ignora pagamentos e anuidades? Não — anuidade é uma despesa válida
-    // Ignora apenas pagamentos (crédito negativo)
-    if (/^pagamento/i.test(descRaw)) continue;
-
-    // Limpar descrição: remover sufixo de parcela se ficou colado
-    const desc = descRaw.replace(/\s+\d{2}\/\d{2}\s*$/, '').trim();
+    if (!date || !amount || amount <= 0) continue;
+    if (/^pagamento/i.test(desc)) continue;
 
     txs.push({
       date,
@@ -138,7 +123,7 @@ function parseSicrediRaw(rawText: string): ParsedTransaction[] {
       amount,
       type: 'expense',
       account: 'Sicredi',
-      notes: m[4] ? `Parcela ${m[4]}` : undefined,
+      notes: parcela ? `Parcela ${parcela}` : undefined,
     });
   }
 
@@ -146,12 +131,13 @@ function parseSicrediRaw(rawText: string): ParsedTransaction[] {
 }
 
 // ---------------------------------------------------------------------------
-// Fallback genérico para outros bancos (linha a linha)
+// Parsers genéricos (linha a linha)
 // ---------------------------------------------------------------------------
+
+const SKIP_DEFAULT = /^pagamento|^saldo anterior|^total|vencimento|encargo|multa|juros/i;
 
 function genericLineParser(lines: string[], account?: string): ParsedTransaction[] {
   const txs: ParsedTransaction[] = [];
-  // Aceita data numérica OU mês por extenso
   const re = /(\d{2}\/(?:\d{2}|\w{3})(?:\/\d{2,4})?)\s+(.+?)\s+([\d.,]+)\s*$/;
   for (const line of lines) {
     const m = line.match(re);
@@ -170,12 +156,17 @@ function genericLineParser(lines: string[], account?: string): ParsedTransaction
 // Lista de bancos
 // ---------------------------------------------------------------------------
 
+interface BankDef {
+  name: string;
+  detect: (text: string) => boolean;
+  parse: (lines: string[], rawText: string) => ParsedTransaction[];
+}
+
 const BANK_DEFS: BankDef[] = [
   {
     name: 'Sicredi',
     detect: (t) => /sicredi/i.test(t),
-    rawMode: true,
-    parse: (lines) => parseSicrediRaw(lines.join(' ')),
+    parse: (_lines, rawText) => parseSicrediRaw(rawText),
   },
   {
     name: 'Nubank',
@@ -217,7 +208,6 @@ const BANK_DEFS: BankDef[] = [
     parse: (lines) => genericLineParser(lines, 'Inter'),
   },
   {
-    // Fallback genérico
     name: 'Genérico',
     detect: () => true,
     parse: (lines) => {
@@ -267,7 +257,7 @@ async function extractTextFromPdf(file: File): Promise<string> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page    = await pdf.getPage(i);
     const content = await page.getTextContent();
-    parts.push((content.items as any[]).map((item) => item.str).join(' '));
+    parts.push((content.items as any[]).map((item: any) => item.str).join(' '));
   }
   return parts.join('\n');
 }
@@ -299,35 +289,27 @@ export async function parsePdfInvoice(file: File): Promise<PdfParseResult> {
 
   // Mês da fatura
   let invoiceMonth: string | undefined;
-  const dmMatch = rawText.match(/vencimento\s+(\d{2})\/(\d{2})\/(\d{4})/i)
-    ?? rawText.match(/fatura de (\w+)/i);
-  if (dmMatch) {
-    if (dmMatch[3]) {
-      // DD/MM/YYYY
-      invoiceMonth = `${dmMatch[3]}-${dmMatch[2]}`;
-    } else if (dmMatch[1]) {
-      // "fatura de junho" etc
-      const mo = MONTH_MAP[dmMatch[1].toLowerCase().slice(0, 3)];
+  const mVenc = rawText.match(/vencimento\s+(\d{2})\/(\d{2})\/(\d{4})/i);
+  if (mVenc) {
+    invoiceMonth = `${mVenc[3]}-${mVenc[2]}`;
+  } else {
+    const mFat = rawText.match(/fatura de (\w+)/i);
+    if (mFat) {
+      const mo = MONTH_MAP[mFat[1].toLowerCase().slice(0, 3)];
       if (mo) invoiceMonth = `${new Date().getFullYear()}-${mo}`;
     }
   }
 
   // Total da fatura
   let totalAmount: number | undefined;
-  const totalMatch = rawText.match(/total\s+fatura\s+de\s+\w+\s+R\$\s?([\d.,]+)/i)
+  const mTotal = rawText.match(/total\s+fatura\s+de\s+\w+\s+R\$\s?([\d.,]+)/i)
     ?? rawText.match(/total\s+(?:da\s+)?fatura[:\s]+R?\$?\s?([\d.,]+)/i)
     ?? rawText.match(/valor\s+total[:\s]+R?\$?\s?([\d.,]+)/i);
-  if (totalMatch) totalAmount = parseAmountBR(totalMatch[1]) ?? undefined;
+  if (mTotal) totalAmount = parseAmountBR(mTotal[1]) ?? undefined;
 
-  // Linhas para parsers não-raw
-  const lines = rawText
-    .split(/\n/)
-    .map((l) => l.trim())
-    .filter((l) => l.length > 5);
+  const lines = rawText.split(/\n/).map(l => l.trim()).filter(l => l.length > 5);
 
-  const transactions = bankDef.rawMode
-    ? bankDef.parse(lines) // parseSicrediRaw une as linhas internamente
-    : bankDef.parse(lines);
+  const transactions = bankDef.parse(lines, rawText);
 
   if (transactions.length === 0) {
     errors.push(
