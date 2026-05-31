@@ -29,32 +29,49 @@ function localDateStr(d: Date): string {
 }
 
 /**
- * Retorna o intervalo de datas da fatura ATUAL em aberto.
+ * Retorna a fatura "atual" — mesma lógica usada em CreditCardInvoices.invoicePeriod():
  *
- * O ciclo sempre é:
- *   início = closing_day + 1  do mês M-1
- *   fim    = closing_day      do mês M  (mês corrente, sem avançar)
+ *   Se today.getDate() > closingDay  → fatura do próximo mês (ainda em aberto)
+ *   Se today.getDate() <= closingDay → fatura do mês corrente (ainda em aberto ou recém-fechada)
  *
- * Usar o mês corrente fixo garante que, mesmo depois do fechamento
- * (fatura fechada mas ainda não paga), os valores continuam visíveis.
- * Ex com fechamento dia 10 e hoje = 31/Mai:
- *   início = 11/Abr, fim = 10/Mai  ← fatura de Maio, já fechada, a pagar
+ * Período da fatura [year/month]:
+ *   início = closingDay + 1  do mês anterior a [year/month]
+ *   fim    = closingDay      do mês [year/month]  (ou último dia se closingDay > dias do mês)
+ *
+ * Exemplos com closingDay = 24:
+ *   Hoje = 31/Mai → fatura Junho  → 25/Mai … 24/Jun
+ *   Hoje = 15/Mai → fatura Maio   → 25/Abr … 24/Mai
+ *   Hoje = 24/Mai → fatura Maio   → 25/Abr … 24/Mai
  */
 function getInvoiceCycle(closingDay: number): { start: string; end: string } {
-  const today = new Date();
-  const year  = today.getFullYear();
-  const month = today.getMonth(); // 0-based
+  const today     = new Date();
+  const todayDay  = today.getDate();
+  const todayYear = today.getFullYear();
+  const todayMonth = today.getMonth(); // 0-based
 
-  // fim = closing_day do mês corrente (ajustado para últim dia se necessário)
-  const daysInCurMonth = new Date(year, month + 1, 0).getDate();
-  const endDay = Math.min(closingDay, daysInCurMonth);
-  const endDate = new Date(year, month, endDay);
+  // Determina o mês da fatura atual (0-based)
+  let invYear: number;
+  let invMonth: number;
+  if (todayDay > closingDay) {
+    // Já passou do fechamento → fatura do próximo mês
+    if (todayMonth === 11) { invYear = todayYear + 1; invMonth = 0; }
+    else                   { invYear = todayYear;     invMonth = todayMonth + 1; }
+  } else {
+    // Ainda não fechou → fatura do mês corrente
+    invYear  = todayYear;
+    invMonth = todayMonth;
+  }
 
-  // início = closing_day + 1 do mês anterior
-  const prevYear  = month === 0 ? year - 1 : year;
-  const prevMonth = month === 0 ? 11 : month - 1;
+  // fim = closingDay do mês da fatura (ajustado ao último dia do mês se necessário)
+  const daysInInvMonth = new Date(invYear, invMonth + 1, 0).getDate();
+  const endDay  = Math.min(closingDay, daysInInvMonth);
+  const endDate = new Date(invYear, invMonth, endDay);
+
+  // início = closingDay + 1 do mês anterior ao mês da fatura
+  const prevYear  = invMonth === 0 ? invYear - 1 : invYear;
+  const prevMonth = invMonth === 0 ? 11 : invMonth - 1;
   const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
-  const startDay = Math.min(closingDay + 1, daysInPrevMonth);
+  const startDay  = Math.min(closingDay + 1, daysInPrevMonth);
   const startDate = new Date(prevYear, prevMonth, startDay);
 
   return { start: localDateStr(startDate), end: localDateStr(endDate) };
@@ -124,13 +141,12 @@ export const useCreditCards = () => {
     queryKey: ['credit_cards', user?.id],
     queryFn: fetchCreditCards,
     enabled: !!user,
-    staleTime: 60 * 1000, // 1 min — evita refetch excessivo mas mantém dados frescos
+    staleTime: 60 * 1000,
   });
 
   const createCreditCardMutation = useMutation({
     mutationFn: async (cardData: Omit<CreditCard, 'id' | 'created_at' | 'updated_at'>) => {
       if (!user) throw new Error('Usuário não autenticado');
-
       const { data, error } = await supabase
         .from('accounts')
         .insert([{
@@ -146,7 +162,6 @@ export const useCreditCards = () => {
         }])
         .select()
         .single();
-
       if (error) throw error;
       return data;
     },
@@ -163,17 +178,15 @@ export const useCreditCards = () => {
   const updateCreditCardMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CreditCard> & { id: string }) => {
       const updateData: any = {};
-
-      if (updates.name) updateData.name = updates.name;
-      if (updates.bank_name !== undefined) updateData.bank_name = updates.bank_name;
-      if (updates.closing_day) updateData.closing_day = updates.closing_day;
-      if (updates.due_day) updateData.due_day = updates.due_day;
-      if (updates.is_active !== undefined) updateData.is_active = updates.is_active;
+      if (updates.name)                       updateData.name        = updates.name;
+      if (updates.bank_name !== undefined)     updateData.bank_name   = updates.bank_name;
+      if (updates.closing_day)                 updateData.closing_day = updates.closing_day;
+      if (updates.due_day)                     updateData.due_day     = updates.due_day;
+      if (updates.is_active !== undefined)     updateData.is_active   = updates.is_active;
 
       if (updates.limit !== undefined || updates.used_amount !== undefined) {
-        let used = updates.used_amount;
+        let used  = updates.used_amount;
         let limit = updates.limit;
-
         if (used === undefined || limit === undefined) {
           const { data: current, error: fetchErr } = await supabase
             .from('accounts')
@@ -182,14 +195,13 @@ export const useCreditCards = () => {
             .eq('user_id', user?.id)
             .single();
           if (fetchErr) throw fetchErr;
-          const currentLimit = Number(current?.credit_limit || 0);
+          const currentLimit   = Number(current?.credit_limit || 0);
           const currentBalance = Number(current?.balance || 0);
-          if (used === undefined) used = currentLimit - currentBalance;
+          if (used  === undefined) used  = currentLimit - currentBalance;
           if (limit === undefined) limit = currentLimit;
         }
-
         updateData.credit_limit = limit;
-        updateData.balance = (limit as number) - (used as number);
+        updateData.balance      = (limit as number) - (used as number);
       }
 
       const { data, error } = await supabase
@@ -199,7 +211,6 @@ export const useCreditCards = () => {
         .eq('user_id', user?.id)
         .select()
         .single();
-
       if (error) throw error;
       return data;
     },
