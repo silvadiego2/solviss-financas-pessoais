@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 const PAGE_SIZE  = 50;
 const STALE_TIME = 2 * 60 * 1000; // 2 min
 
-// ─── Tipos ─────────────────────────────────────────────────────────────────
+// ─── Tipos ───────────────────────────────────────────────────────────────────
 
 export interface Transaction {
   id: string;
@@ -29,7 +29,6 @@ export interface Transaction {
   updated_at: string;
   category?: { id: string; name: string; icon?: string; color?: string };
   account?:  { id: string; name: string };
-  // campos derivados do join
   category_name?: string | null;
 }
 
@@ -59,7 +58,7 @@ export interface CreateTransactionInput {
   receiptFile?: File;
 }
 
-// ─── Fetcher com filtros server-side ────────────────────────────────────────
+// ─── Fetcher com filtros server-side ──────────────────────────────────────────
 
 async function fetchPage(
   userId: string,
@@ -107,7 +106,7 @@ function normalizeRow(t: any): Transaction {
   };
 }
 
-// ─── Upload de comprovante ───────────────────────────────────────────────────
+// ─── Upload de comprovante ───────────────────────────────────────────────
 
 async function uploadReceipt(userId: string, file: File): Promise<string> {
   const ext      = file.name.split('.').pop();
@@ -118,13 +117,12 @@ async function uploadReceipt(userId: string, file: File): Promise<string> {
   return urlData.publicUrl;
 }
 
-// ─── Hook principal ──────────────────────────────────────────────────────────
+// ─── Hook principal ──────────────────────────────────────────────────────────────────
 
 export const useTransactions = (filters: TransactionFilters = {}) => {
-  const { user }       = useAuth();
-  const queryClient    = useQueryClient();
+  const { user }    = useAuth();
+  const queryClient = useQueryClient();
 
-  // Chave inclui todos os filtros — React Query refaz a query automaticamente
   const queryKey = [
     'transactions', user?.id,
     filters.type,
@@ -135,7 +133,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
     filters.search,
   ];
 
-  // ── Infinite query (paginação acumulativa) ───────────────────────────────
+  // Infinite query (paginação acumulativa)
   const infiniteQuery = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam = 0 }) =>
@@ -147,32 +145,13 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
     staleTime: STALE_TIME,
   });
 
-  // Flatten de todas as páginas em um único array
   const transactions: Transaction[] =
     infiniteQuery.data?.pages.flatMap(p => p.data) ?? [];
 
-  // ── Synced transactions (Open Finance) — mantido separado ───────────────
-  const { data: syncedTransactions = [] } = useQuery({
-    queryKey: ['synced_transactions', user?.id],
-    queryFn: async () => {
-      if (!user) return [];
-      const { data, error } = await supabase
-        .from('synced_transactions')
-        .select('*, bank_connection:bank_connections(bank_name, provider)')
-        .eq('user_id', user.id)
-        .order('date', { ascending: false });
-      if (error) return [];
-      return data ?? [];
-    },
-    enabled:   !!user,
-    staleTime: STALE_TIME,
-  });
-
-  // ── Invalidação unificada ────────────────────────────────────────────────
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
 
-  // ── Create ───────────────────────────────────────────────────────────────
+  // ── Create ─────────────────────────────────────────────────────────────────────
   const createTransactionMutation = useMutation({
     mutationFn: async ({ receiptFile, ...input }: CreateTransactionInput) => {
       if (!user) throw new Error('Usuário não autenticado');
@@ -190,6 +169,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
       invalidate();
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
       if (variables.is_recurring)
         queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
       toast.success('Transação adicionada com sucesso!');
@@ -197,7 +177,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
     onError: () => toast.error('Erro ao adicionar transação'),
   });
 
-  // ── Update ───────────────────────────────────────────────────────────────
+  // ── Update ─────────────────────────────────────────────────────────────────────
   const updateTransactionMutation = useMutation({
     mutationFn: async ({ id, receiptFile, ...updates }: Partial<Transaction> & { id: string; receiptFile?: File }) => {
       const receipt_image_url = receiptFile
@@ -216,13 +196,14 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
       invalidate();
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
       queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
       toast.success('Transação atualizada com sucesso!');
     },
     onError: () => toast.error('Erro ao atualizar transação'),
   });
 
-  // ── Delete ───────────────────────────────────────────────────────────────
+  // ── Delete ─────────────────────────────────────────────────────────────────────
   const deleteTransactionMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -236,6 +217,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
       invalidate();
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['budgets'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
       queryClient.invalidateQueries({ queryKey: ['recurring-transactions'] });
       toast.success('Transação excluída com sucesso!');
     },
@@ -244,7 +226,6 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
 
   return {
     transactions,
-    syncedTransactions,
     // paginação
     hasNextPage:        infiniteQuery.hasNextPage,
     fetchNextPage:      infiniteQuery.fetchNextPage,
