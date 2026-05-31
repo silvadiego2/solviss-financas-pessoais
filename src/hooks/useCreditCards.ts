@@ -16,6 +16,30 @@ export interface CreditCard {
   updated_at: string;
 }
 
+/**
+ * Calcula o início e fim do ciclo de fatura aberta de um cartão.
+ * O ciclo vai do dia (closing_day + 1) do mês anterior até closing_day do mês atual.
+ * Ex: fechamento dia 10 → ciclo: 11/Abr até 10/Mai
+ */
+function getInvoiceCycle(closingDay: number): { start: string; end: string } {
+  const today = new Date();
+  const year  = today.getFullYear();
+  const month = today.getMonth(); // 0-based
+
+  // Fim do ciclo = closing_day do mês corrente (ou do próximo, se já passou)
+  let endDate = new Date(year, month, closingDay);
+  if (today > endDate) {
+    // Fechamento já ocorreu este mês — o ciclo aberto é para o próximo
+    endDate = new Date(year, month + 1, closingDay);
+  }
+
+  // Início do ciclo = closing_day + 1 do mês anterior ao endDate
+  const startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 1, closingDay + 1);
+
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+  return { start: fmt(startDate), end: fmt(endDate) };
+}
+
 export const useCreditCards = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -23,7 +47,6 @@ export const useCreditCards = () => {
   const fetchCreditCards = async (): Promise<CreditCard[]> => {
     if (!user) return [];
 
-    // Busca cartões + total gasto via transações do mês corrente
     const { data: accounts, error: accErr } = await supabase
       .from('accounts')
       .select('*')
@@ -35,52 +58,47 @@ export const useCreditCards = () => {
     if (accErr) throw accErr;
     if (!accounts || accounts.length === 0) return [];
 
-    const cardIds = accounts.map(a => a.id);
+    // Para cada cartão, soma transações no ciclo real da fatura
+    const results = await Promise.all(
+      accounts.map(async (account) => {
+        const closingDay = account.closing_day || 1;
+        const { start, end } = getInvoiceCycle(closingDay);
 
-    // Soma das despesas do mês atual por cartão (status != cancelled)
-    const now = new Date();
-    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const lastDay  = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+        const { data: txRows, error: txErr } = await supabase
+          .from('transactions')
+          .select('amount, type')
+          .eq('user_id', user.id)
+          .eq('account_id', account.id)
+          .neq('status', 'cancelled')
+          .gte('date', start)
+          .lte('date', end);
 
-    const { data: txRows, error: txErr } = await supabase
-      .from('transactions')
-      .select('account_id, amount, type')
-      .eq('user_id', user.id)
-      .in('account_id', cardIds)
-      .neq('status', 'cancelled')
-      .gte('date', firstDay)
-      .lte('date', lastDay);
+        if (txErr) throw txErr;
 
-    if (txErr) throw txErr;
+        const used_amount = (txRows || []).reduce((sum, tx) => {
+          if (tx.type === 'expense') return sum + Number(tx.amount);
+          if (tx.type === 'income')  return sum - Number(tx.amount); // pagamentos/estornos
+          return sum;
+        }, 0);
 
-    // Agrupa por account_id — só conta despesas (type === 'expense')
-    const usedByCard: Record<string, number> = {};
-    for (const tx of txRows || []) {
-      if (tx.type === 'expense') {
-        usedByCard[tx.account_id] = (usedByCard[tx.account_id] || 0) + Number(tx.amount);
-      }
-    }
+        const limit = Number(account.credit_limit) || 0;
 
-    return accounts.map(account => {
-      const limit = Number(account.credit_limit) || 0;
-      // Prioridade: soma real de transações do mês; fallback: balance stored
-      const usedFromTx = usedByCard[account.id] ?? null;
-      const usedFromBalance = limit - Number(account.balance || 0);
-      const used_amount = usedFromTx !== null ? usedFromTx : Math.max(0, usedFromBalance);
+        return {
+          id: account.id,
+          name: account.name,
+          bank_name: account.bank_name || '',
+          limit,
+          used_amount: Math.max(0, used_amount),
+          closing_day: closingDay,
+          due_day: account.due_day || 10,
+          is_active: account.is_active ?? true,
+          created_at: account.created_at || '',
+          updated_at: account.updated_at || '',
+        };
+      })
+    );
 
-      return {
-        id: account.id,
-        name: account.name,
-        bank_name: account.bank_name || '',
-        limit,
-        used_amount,
-        closing_day: account.closing_day || 1,
-        due_day: account.due_day || 10,
-        is_active: account.is_active ?? true,
-        created_at: account.created_at || '',
-        updated_at: account.updated_at || '',
-      };
-    });
+    return results;
   };
 
   const { data: creditCards = [], isLoading } = useQuery({

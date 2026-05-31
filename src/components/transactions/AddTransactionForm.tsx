@@ -82,11 +82,13 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const allAccounts = [
     ...accounts.map(a => ({
       id: a.id, name: a.name, type: 'account' as const,
-      icon: <Building size={15} className="text-muted-foreground" />,
+      icon: <Building size={15} className="text-muted-foreground flex-shrink-0" />,
+      label: '(Conta)',
     })),
     ...creditCards.map(c => ({
       id: c.id, name: c.name, type: 'credit_card' as const,
-      icon: <CreditCard size={15} className="text-muted-foreground" />,
+      icon: <CreditCard size={15} className="text-muted-foreground flex-shrink-0" />,
+      label: '(Cartão)',
     })),
   ];
 
@@ -304,7 +306,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               <div className="space-y-2">
                 <Label>Conta / Cartão *</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
@@ -313,11 +315,11 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                     ) : (
                       allAccounts.map((a) => (
                         <SelectItem key={a.id} value={a.id}>
-                          <span className="flex items-center gap-2">
-                            {a.icon} {a.name}
-                            <span className="text-xs text-muted-foreground">
-                              {a.type === 'credit_card' ? '(Cartão)' : '(Conta)'}
-                            </span>
+                          {/* min-w-0 + truncate garantem que o nome não estoure o espaço */}
+                          <span className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
+                            {a.icon}
+                            <span className="truncate min-w-0 flex-1">{a.name}</span>
+                            <span className="text-xs text-muted-foreground flex-shrink-0">{a.label}</span>
                           </span>
                         </SelectItem>
                       ))
