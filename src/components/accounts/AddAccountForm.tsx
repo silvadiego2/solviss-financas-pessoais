@@ -21,8 +21,8 @@ const accountTypes = [
 ];
 
 const banks = [
-  'Nubank', 'Itaú', 'Bradesco', 'Banco do Brasil', 'Santander', 
-  'Caixa', 'BTG Pactual', 'Inter', 'C6 Bank', 'Original',
+  'Nubank', 'Itaú', 'Bradesco', 'Banco do Brasil', 'Santander',
+  'Caixa', 'Sicredi', 'BTG Pactual', 'Inter', 'C6 Bank', 'Original',
   'Safra', 'Votorantim', 'PicPay', 'Mercado Pago', 'Outros'
 ];
 
