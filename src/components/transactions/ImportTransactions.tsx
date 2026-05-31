@@ -307,7 +307,7 @@ function PdfImportTab({ onBack }: { onBack: () => void }) {
   );
 }
 
-// ─── Aba Planilha (código original preservado integralmente) ─────────────────
+// ─── Aba Planilha ─────────────────────────────────────────────────────────────
 
 function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
   const [file, setFile] = useState<File | null>(null);
@@ -397,6 +397,7 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
   };
 
   const handleImport = async () => {
+    setShowConfirmDialog(false);
     setStep('importing');
     setImportProgress(0);
     const validTransactions = validationResults.filter(r => r.transaction && r.status !== 'error');
@@ -515,43 +516,81 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
   );
 
   if (step === 'preview') return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Prévia da Importação</CardTitle>
-        <CardDescription>Revise as transações antes de importar</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex gap-2">
-          <Badge variant="default" className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" />{successCount} OK</Badge>
-          <Badge variant="default" className="bg-yellow-500"><AlertCircle className="w-3 h-3 mr-1" />{warningCount} Avisos</Badge>
-          <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />{errorCount} Erros</Badge>
-        </div>
-        <ScrollArea className="h-96 border rounded-lg">
-          <div className="p-4 space-y-2">
-            {validationResults.map(result => (
-              <div key={result.row} className="flex items-center justify-between p-2 rounded border">
-                <div className="flex items-center gap-2">
-                  {result.status === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
-                  {result.status === 'warning' && <AlertCircle className="w-4 h-4 text-yellow-500" />}
-                  {result.status === 'error'   && <XCircle className="w-4 h-4 text-destructive" />}
-                  <div>
-                    <p className="text-sm font-medium">Linha {result.row}</p>
-                    {result.transaction && <p className="text-xs text-muted-foreground">{result.transaction.description} - R$ {result.transaction.amount.toFixed(2)}</p>}
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Prévia da Importação</CardTitle>
+          <CardDescription>Revise as transações antes de importar</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-2">
+            <Badge variant="default" className="bg-green-500"><CheckCircle className="w-3 h-3 mr-1" />{successCount} OK</Badge>
+            <Badge variant="default" className="bg-yellow-500"><AlertCircle className="w-3 h-3 mr-1" />{warningCount} Avisos</Badge>
+            <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />{errorCount} Erros</Badge>
+          </div>
+          <ScrollArea className="h-96 border rounded-lg">
+            <div className="p-4 space-y-2">
+              {validationResults.map(result => (
+                <div key={result.row} className="flex items-center justify-between p-2 rounded border">
+                  <div className="flex items-center gap-2">
+                    {result.status === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
+                    {result.status === 'warning' && <AlertCircle className="w-4 h-4 text-yellow-500" />}
+                    {result.status === 'error'   && <XCircle className="w-4 h-4 text-destructive" />}
+                    <div>
+                      <p className="text-sm font-medium">Linha {result.row}</p>
+                      {result.transaction && <p className="text-xs text-muted-foreground">{result.transaction.description} - R$ {result.transaction.amount.toFixed(2)}</p>}
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{result.message}</span>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setStep('mapping')}>Voltar</Button>
+            <Button onClick={() => setShowConfirmDialog(true)} disabled={errorCount === validationResults.length} className="flex-1">
+              Importar {successCount + warningCount} Transações
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AlertDialog renderizado junto com o step 'preview' */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Importação</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-4">
+                <p>Você está prestes a importar as seguintes transações:</p>
+                <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-primary">{successCount + warningCount}</p>
+                    <p className="text-xs text-muted-foreground">Transações</p>
+                  </div>
+                  <div className="text-center">
+                    <p className={`text-2xl font-bold ${totalAmount >= 0 ? 'text-green-500' : 'text-destructive'}`}>
+                      {totalAmount >= 0 ? '+' : ''}R$ {totalAmount.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Saldo Líquido</p>
                   </div>
                 </div>
-                <span className="text-xs text-muted-foreground">{result.message}</span>
+                <div className="flex justify-between text-sm">
+                  <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /><span>Receitas: R$ {incomeTotal.toFixed(2)}</span></div>
+                  <div className="flex items-center gap-2"><XCircle className="w-4 h-4 text-destructive" /><span>Despesas: R$ {expenseTotal.toFixed(2)}</span></div>
+                </div>
+                {warningCount > 0 && <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>{warningCount} transação(ões) com avisos serão importadas.</AlertDescription></Alert>}
+                <p className="text-sm text-muted-foreground">Esta ação não pode ser desfeita facilmente.</p>
               </div>
-            ))}
-          </div>
-        </ScrollArea>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setStep('mapping')}>Voltar</Button>
-          <Button onClick={() => setShowConfirmDialog(true)} disabled={errorCount === validationResults.length} className="flex-1">
-            Importar {successCount + warningCount} Transações
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImport}>Confirmar Importação</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 
   if (step === 'importing') return (
@@ -567,42 +606,7 @@ function SpreadsheetImportTab({ onBack }: { onBack: () => void }) {
     </Card>
   );
 
-  return (
-    <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Confirmar Importação</AlertDialogTitle>
-          <AlertDialogDescription asChild>
-            <div className="space-y-4">
-              <p>Você está prestes a importar as seguintes transações:</p>
-              <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-primary">{successCount + warningCount}</p>
-                  <p className="text-xs text-muted-foreground">Transações</p>
-                </div>
-                <div className="text-center">
-                  <p className={`text-2xl font-bold ${totalAmount >= 0 ? 'text-green-500' : 'text-destructive'}`}>
-                    {totalAmount >= 0 ? '+' : ''}R$ {totalAmount.toFixed(2)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Saldo Líquido</p>
-                </div>
-              </div>
-              <div className="flex justify-between text-sm">
-                <div className="flex items-center gap-2"><CheckCircle className="w-4 h-4 text-green-500" /><span>Receitas: R$ {incomeTotal.toFixed(2)}</span></div>
-                <div className="flex items-center gap-2"><XCircle className="w-4 h-4 text-destructive" /><span>Despesas: R$ {expenseTotal.toFixed(2)}</span></div>
-              </div>
-              {warningCount > 0 && <Alert><AlertCircle className="h-4 w-4" /><AlertDescription>{warningCount} transação(ões) com avisos serão importadas.</AlertDescription></Alert>}
-              <p className="text-sm text-muted-foreground">Esta ação não pode ser desfeita facilmente.</p>
-            </div>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-          <AlertDialogAction onClick={() => { setShowConfirmDialog(false); handleImport(); }}>Confirmar Importação</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
+  return null;
 }
 
 // ─── Componente raiz ─────────────────────────────────────────────────────────
