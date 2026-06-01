@@ -1,18 +1,16 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { AdvancedAnalyticsDashboard } from './AdvancedAnalyticsDashboard';
 import { InteractiveAnalytics } from './InteractiveAnalytics';
 import { IntelligentGoals } from './IntelligentGoals';
-import { AdvancedReports } from './AdvancedReports';
-import { BarChart3, TrendingUp, Target, FileText, ChevronRight } from 'lucide-react';
+import { BarChart3, TrendingUp, Target, ChevronRight } from 'lucide-react';
 
 interface AnalyticsHubProps {
   onBack?: () => void;
 }
 
-type AnalyticsView = 'hub' | 'dashboard' | 'interactive' | 'goals' | 'reports';
+type AnalyticsView = 'hub' | 'dashboard' | 'interactive' | 'goals';
 
 export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({ onBack }) => {
   const [currentView, setCurrentView] = useState<AnalyticsView>('hub');
@@ -22,7 +20,6 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({ onBack }) => {
   if (currentView === 'dashboard') return <AdvancedAnalyticsDashboard onBack={handleBackToHub} />;
   if (currentView === 'interactive') return <InteractiveAnalytics onBack={handleBackToHub} />;
   if (currentView === 'goals') return <IntelligentGoals onBack={handleBackToHub} />;
-  if (currentView === 'reports') return <AdvancedReports />;
 
   const items = [
     {
@@ -42,12 +39,6 @@ export const AnalyticsHub: React.FC<AnalyticsHubProps> = ({ onBack }) => {
       icon: <Target className="h-5 w-5 text-purple-600" />,
       title: 'Metas Inteligentes',
       description: 'Acompanhe e projete suas metas financeiras',
-    },
-    {
-      id: 'reports' as const,
-      icon: <FileText className="h-5 w-5 text-orange-600" />,
-      title: 'Relatórios Avançados',
-      description: 'Gere relatórios detalhados e personalizados',
     },
   ];
 
