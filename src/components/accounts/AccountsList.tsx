@@ -3,7 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useAccounts } from '@/hooks/useAccounts';
-import { AccountForm } from './AccountForm';
+import { AddAccountForm } from './AddAccountForm';
+import { EditAccountForm } from './EditAccountForm';
 import { Wallet, Plus, Edit, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface AccountsListProps {
@@ -23,16 +24,15 @@ const accountTypeLabels: Record<string, string> = {
 
 export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
   const { accounts, deleteAccount, isDeleting } = useAccounts();
-  const [showForm, setShowForm] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
 
-  if (showForm || editingAccount) {
-    return (
-      <AccountForm
-        account={editingAccount}
-        onBack={() => { setShowForm(false); setEditingAccount(null); }}
-      />
-    );
+  if (showAddForm) {
+    return <AddAccountForm onBack={() => setShowAddForm(false)} />;
+  }
+
+  if (editingAccount) {
+    return <EditAccountForm account={editingAccount} onBack={() => setEditingAccount(null)} />;
   }
 
   const totalBalance = accounts.reduce((sum, a) => sum + (a.current_balance ?? a.initial_balance ?? 0), 0);
@@ -45,7 +45,7 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
         icon={<Wallet className="h-6 w-6" />}
         onBack={onBack}
         action={
-          <Button size="sm" onClick={() => setShowForm(true)}>
+          <Button size="sm" onClick={() => setShowAddForm(true)}>
             <Plus className="h-4 w-4 mr-1" />
             Nova Conta
           </Button>
@@ -69,7 +69,7 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
             <p className="text-sm text-muted-foreground mb-4">
               Adicione suas contas bancárias para começar a controlar suas finanças
             </p>
-            <Button onClick={() => setShowForm(true)}>
+            <Button onClick={() => setShowAddForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Adicionar Conta
             </Button>
