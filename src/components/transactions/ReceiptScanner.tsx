@@ -7,10 +7,12 @@
  *  3. Upload galeria   — mesmo pipeline de compressão
  *  4. OCR fallback     — Tesseract.js quando não há QR Code detectável
  *
- * Fixes aplicados:
- *  - jsQR importado uma única vez no mount (não dentro do tick) — sem falha silenciosa
- *  - handleQrDetected movido para fora do useCallback — sem problema de escopo/stale closure
- *  - Parser NF-e revisado para cobrir todos os formatos de URL SEFAZ (NFCe/NFe)
+ * Fixes:
+ *  - jsQR importado UMA VEZ no mount (jsQRRef) — sem falha silenciosa no primeiro tick
+ *  - Loop usa setInterval (200 ms) em vez de requestAnimationFrame para funcionar
+ *    dentro de Dialog no iOS Safari (rAF é throttled em backgrounds/overlays)
+ *  - handleQrDetected é useCallback com deps corretas — sem stale closure
+ *  - Parser NF-e cobre todos os formatos SEFAZ (chave 44 dígitos, nfv/vNF, dhEmi)
  */
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -73,70 +75,59 @@ async function compressImage(
 
 // ─── parser URL NF-e SEFAZ ───────────────────────────────────────────────────
 // Formatos cobertos:
-//   NFCe SP/RS/MG: https://www.nfce.fazenda.sp.gov.br/...?chNFe=...&nfv=10.50&...
-//   NFCe RJ/BA:    URL com campos vNF, vTotTrib
+//   NFCe SP/RS/MG: https://www.nfce.fazenda.sp.gov.br/...?chNFe=...&nfv=10.50
+//   NFCe RJ/BA:    ...?vNF=10.50&vTotTrib=...
 //   NFe genérica:  chave de 44 dígitos no path ou query
-//   Sefaz virtual: https://nfe.fazenda.gov.br/portal/...
 function parseNFeUrl(url: string): Partial<ScannedData> | null {
   try {
     const u      = new URL(url);
     const params = u.searchParams;
-    const full   = url;
 
-    // ── chave de acesso (44 dígitos) ─────────────────────────────────────────
-    const chaveMatch = full.match(/\b(\d{44})\b/);
+    // chave de acesso (44 dígitos consecutivos)
+    const chaveMatch = url.match(/\b(\d{44})\b/);
     const chave      = chaveMatch?.[1];
 
-    // CNPJ do emitente está nos dígitos 7..20 da chave de acesso
+    // CNPJ emitente: dígitos 7..20 da chave
     const cnpj = chave
       ? chave.slice(6, 20).replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
       : (params.get('cNPJ') ?? params.get('CNPJ') ?? undefined);
 
-    // ── valor total ───────────────────────────────────────────────────────────
-    // Tenta todos os nomes conhecidos de campo de valor
+    // valor total
     const rawVal =
-      params.get('nfv')      ??   // SP, RS, PR
-      params.get('vNF')      ??   // padrão SEFAZ nacional
-      params.get('vTotTrib') ??   // alguns estados
+      params.get('nfv')      ??
+      params.get('vNF')      ??
+      params.get('vTotTrib') ??
       params.get('valor')    ??
       null;
     const amount = rawVal ? parseFloat(rawVal.replace(',', '.')) : undefined;
 
-    // ── data de emissão ───────────────────────────────────────────────────────
+    // data de emissão
     const dhRaw =
-      params.get('dhEmi') ??
-      params.get('dEmi')  ??
+      params.get('dhEmi')  ??
+      params.get('dEmi')   ??
       params.get('dhCont') ??
       null;
     let date: string | undefined;
     if (dhRaw) {
-      // formatos: 20260601T120000-0300 | 2026-06-01T12:00:00-03:00 | 20260601
       const m = dhRaw.match(/(\d{4})-?(\d{2})-?(\d{2})/);
       if (m) date = `${m[1]}-${m[2]}-${m[3]}`;
     }
 
-    // ── nome / razão social ───────────────────────────────────────────────────
+    // nome estabelecimento
     const merchant =
       params.get('xFant') ??
       params.get('xNome') ??
       (cnpj ? `CNPJ ${cnpj}` : 'NF-e');
 
-    // Descarta URLs que não parecem NF-e (sem valor nem chave)
     if (!amount && !chave) return null;
 
-    return {
-      amount,
-      date,
-      merchant,
-      cnpj,
-      description: merchant ?? 'Nota Fiscal',
-    };
+    return { amount, date, merchant, cnpj, description: merchant ?? 'Nota Fiscal' };
   } catch {
     return null;
   }
 }
 
-// ─── extrai dados por OCR (fallback) ─────────────────────────────────────────
+// ─── extrai dados por OCR ─────────────────────────────────────────────────────
 function extractByOcr(text: string): Partial<ScannedData> {
   const amounts = [...text.matchAll(/(?:R\$\s*)?(\d{1,3}(?:[\.,]\d{3})*[\.,]\d{2})/g)]
     .map(m => parseFloat(m[1].replace(/\./g, '').replace(',', '.')))
@@ -170,30 +161,31 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
   const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [camError,  setCamError]  = useState<string | null>(null);
 
-  const videoRef  = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const rafRef    = useRef<number>(0);
-  const fileRef   = useRef<HTMLInputElement>(null);
-  const photoRef  = useRef<HTMLInputElement>(null);
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const canvasRef   = useRef<HTMLCanvasElement>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
+  // Usamos setInterval em vez de rAF para funcionar dentro de Dialog no iOS Safari
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileRef     = useRef<HTMLInputElement>(null);
+  const photoRef    = useRef<HTMLInputElement>(null);
+  const doneRef     = useRef(false); // evita chamar handleQrDetected mais de uma vez
 
-  // jsQR importado UMA VEZ no mount para evitar falha silenciosa no primeiro tick
-  const jsQRRef   = useRef<((data: Uint8ClampedArray, w: number, h: number) => { data: string } | null) | null>(null);
-
+  // jsQR importado UMA VEZ no mount
+  const jsQRRef = useRef<((data: Uint8ClampedArray, w: number, h: number) => { data: string } | null) | null>(null);
   useEffect(() => {
     import('jsqr').then(m => { jsQRRef.current = m.default; }).catch(() => {});
   }, []);
 
   // ── para câmera ─────────────────────────────────────────────────────────────
   const stopStream = useCallback(() => {
-    cancelAnimationFrame(rafRef.current);
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
   }, []);
 
   useEffect(() => () => stopStream(), [stopStream]);
 
-  // ── OCR via Tesseract ───────────────────────────────────────────────────────
+  // ── OCR ─────────────────────────────────────────────────────────────────────
   const runOcr = useCallback(async (dataUrl: string, qrFallback?: string) => {
     setMode('processing');
     try {
@@ -209,7 +201,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     setMode('review');
   }, []);
 
-  // ── QR detectado — FORA do useCallback para não criar stale closure ─────────
+  // ── QR detectado ─────────────────────────────────────────────────────────────
   const handleQrDetected = useCallback(async (qrText: string, frameDataUrl: string) => {
     setMode('processing');
     setSubMode('qr');
@@ -226,53 +218,44 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
       toast.success('Nota Fiscal lida com sucesso!');
       setMode('review');
     } else {
-      // QR genérico (não NF-e): roda OCR no frame capturado
       toast.info('QR genérico — rodando OCR...');
       await runOcr(dataUrl, qrText);
     }
   }, [runOcr]);
 
-  // ── loop de leitura QR ──────────────────────────────────────────────────────
-  // handleQrDetected fica nas deps para nunca usar versão stale
-  const scanQrLoop = useCallback(() => {
-    let running = true;
+  // ── loop QR com setInterval (200 ms) ─────────────────────────────────────────
+  // setInterval é mais confiável que rAF dentro de modais no iOS Safari
+  const startQrLoop = useCallback(() => {
+    doneRef.current = false;
 
-    const tick = async () => {
-      if (!running) return;
+    intervalRef.current = setInterval(async () => {
+      if (doneRef.current) return;
 
       const video  = videoRef.current;
       const canvas = canvasRef.current;
       const jsQR   = jsQRRef.current;
 
-      if (!video || !canvas || !jsQR || video.readyState < 2) {
-        rafRef.current = requestAnimationFrame(() => { tick(); });
-        return;
-      }
+      // Aguarda vídeo e jsQR prontos
+      if (!video || !canvas || !jsQR) return;
+      if (video.readyState < 2 || video.videoWidth === 0) return;
 
       canvas.width  = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(video, 0, 0);
+
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
 
       if (code?.data) {
-        running = false;
+        doneRef.current = true;
         stopStream();
         await handleQrDetected(code.data, canvas.toDataURL('image/jpeg', 0.72));
-        return;
       }
-
-      rafRef.current = requestAnimationFrame(() => { tick(); });
-    };
-
-    rafRef.current = requestAnimationFrame(() => { tick(); });
-
-    // retorna cleanup para parar o loop se necessário
-    return () => { running = false; };
+    }, 200);
   }, [handleQrDetected, stopStream]);
 
-  // ── inicia câmera QR ────────────────────────────────────────────────────────
+  // ── inicia câmera QR ─────────────────────────────────────────────────────────
   const startQrCamera = async () => {
     setCamError(null);
     setMode('qr-live');
@@ -282,11 +265,13 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true'); // iOS obrigatório
+        await video.play();
       }
-      scanQrLoop();
+      startQrLoop();
     } catch {
       setCamError('Câmera não autorizada. Use "Upload" ou "Foto" como alternativa.');
       setMode('choose');
@@ -329,6 +314,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
 
   const reset = () => {
     stopStream();
+    doneRef.current = false;
     setMode('choose');
     setSubMode(null);
     setPreview(null);
@@ -337,11 +323,11 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     setCamError(null);
   };
 
-  // ─────────────────────────────── RENDER ──────────────────────────────────
+  // ──────────────────────────────── RENDER ────────────────────────────────────
   return (
     <div className="space-y-4">
 
-      {/* ── Seleção de modo ─────────────────────────────────────────────── */}
+      {/* ── Seleção de modo ──────────────────────────────────────────────────── */}
       {mode === 'choose' && (
         <>
           {camError && (
@@ -422,7 +408,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
         </>
       )}
 
-      {/* ── Câmera QR ao vivo ────────────────────────────────────────────── */}
+      {/* ── Câmera QR ao vivo ─────────────────────────────────────────────────── */}
       {mode === 'qr-live' && (
         <div className="space-y-3">
           <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3]">
@@ -434,7 +420,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
               autoPlay
             />
             <canvas ref={canvasRef} className="hidden" />
-            {/* mira de escaneamento */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-52 h-52 border-2 border-white/60 rounded-xl relative">
                 <span className="absolute -top-px -left-px w-7 h-7 border-t-4 border-l-4 border-primary rounded-tl-lg" />
@@ -454,7 +439,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
         </div>
       )}
 
-      {/* ── Processando ──────────────────────────────────────────────────── */}
+      {/* ── Processando ───────────────────────────────────────────────────────── */}
       {mode === 'processing' && (
         <div className="flex flex-col items-center gap-4 py-8">
           {preview && (
@@ -470,7 +455,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
         </div>
       )}
 
-      {/* ── Revisão dos dados ────────────────────────────────────────────── */}
+      {/* ── Revisão dos dados ─────────────────────────────────────────────────── */}
       {mode === 'review' && extracted && (
         <div className="space-y-4">
           {preview && (

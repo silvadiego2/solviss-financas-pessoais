@@ -52,9 +52,9 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { accounts }        = useAccounts();
-  const { creditCards }     = useCreditCards();
-  const { categories }      = useCategories();
+  const { accounts }          = useAccounts();
+  const { creditCards }       = useCreditCards();
+  const { categories }        = useCategories();
   const { createTransaction } = useTransactions();
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
@@ -209,34 +209,34 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               </button>
             </div>
 
-            {/* Valor + Data */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 min-w-0">
-                <Label htmlFor="amount">Valor *</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
-                  <Input
-                    id="amount"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0,00"
-                    value={amount}
-                    onChange={handleAmountChange}
-                    className="pl-9 w-full"
-                  />
-                </div>
-                {validationErrors.amount && <p className="text-xs text-destructive">{validationErrors.amount}</p>}
-              </div>
-              <div className="space-y-2 min-w-0">
-                <Label htmlFor="date">Data</Label>
+            {/* Valor — linha própria para não competir com Date */}
+            <div className="space-y-2">
+              <Label htmlFor="amount">Valor *</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
                 <Input
-                  id="date"
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  className="w-full min-w-0"
+                  id="amount"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0,00"
+                  value={amount}
+                  onChange={handleAmountChange}
+                  className="pl-9 w-full"
                 />
               </div>
+              {validationErrors.amount && <p className="text-xs text-destructive">{validationErrors.amount}</p>}
+            </div>
+
+            {/* Data — linha própria, mesma altura dos demais campos */}
+            <div className="space-y-2">
+              <Label htmlFor="date">Data</Label>
+              <Input
+                id="date"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full"
+              />
             </div>
 
             {/* Descrição */}
@@ -324,7 +324,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                       value={recurrenceEndDate}
                       onChange={(e) => setRecurrenceEndDate(e.target.value)}
                       min={date}
-                      className="w-full min-w-0"
+                      className="w-full"
                     />
                   </div>
                 </div>
