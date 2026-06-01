@@ -1,9 +1,9 @@
 import React from 'react';
 import {
-  Download, Upload, Tags, User, Building, ChevronRight,
-  Shield, Cloud, Zap, Database, Trash2, BarChart3,
-  Settings, Copy, Sparkles, Bell,
-  ScanLine, LogOut, Crown,
+  Download, Upload, Tags, Building, ChevronRight,
+  Shield, Cloud, Zap, Database, Trash2,
+  Copy, Sparkles, Bell,
+  ScanLine, LogOut, Crown, Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -96,13 +96,8 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   const displayEmail = user?.email || '';
   const initial      = displayName.charAt(0).toUpperCase();
 
+  // Analytics Avançado removido — conteúdo migrado para Relatórios > aba Detalhado
   const toolsItems: MenuItem[] = [
-    {
-      title: 'Analytics Avançado',
-      description: 'Gráficos e indicadores detalhados',
-      icon: BarChart3,
-      action: () => onNavigate('analytics'),
-    },
     {
       title: 'Categorização por IA',
       description: 'Classificação automática de gastos',
