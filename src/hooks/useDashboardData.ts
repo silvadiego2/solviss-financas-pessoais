@@ -5,8 +5,12 @@
  * Promise.all — 4 tabelas em paralelo, um único roundtrip de rede.
  *
  * Schema real da tabela accounts (confirmado em types.ts):
- *   id, name, type, balance, credit_limit, is_active,
+ *   id, name, type, balance, credit_limit, is_active (boolean | null),
  *   bank_name, closing_day, due_day, user_id, created_at, updated_at
+ *
+ * IMPORTANTE: is_active pode ser NULL em contas antigas.
+ * PostgreSQL NÃO retorna linhas com NULL ao usar .eq('is_active', true).
+ * Por isso usamos .neq('is_active', false) — retorna TRUE e NULL.
  *
  * NOTA: a coluna `current_balance` NÃO existe no banco —
  *   a fatura do cartão é representada pelo campo `balance` (negativo
@@ -62,7 +66,7 @@ export interface DashGoal {
   target_amount: number;
   current_amount: number;
   is_completed: boolean;
-  target_date?: string | null;  // nome correto no schema (era deadline antes)
+  target_date?: string | null;
 }
 
 export interface DashCreditCard {
@@ -98,13 +102,14 @@ async function fetchDashboard(userId: string) {
     budgetsRes,
     goalsRes,
   ] = await Promise.all([
-    // Seleciona apenas colunas que existem no schema (types.ts)
-    // IMPORTANTE: current_balance NAO existe — nao incluir no SELECT
+    // FIX: is_active pode ser NULL em contas antigas.
+    // .eq('is_active', true) exclui NULLs no PostgreSQL.
+    // .neq('is_active', false) retorna TRUE e NULL — comportamento correto.
     supabase
       .from('accounts')
       .select('id, name, type, balance, credit_limit, is_active')
       .eq('user_id', userId)
-      .eq('is_active', true)
+      .neq('is_active', false)
       .order('name'),
 
     // Transações dos últimos 90 dias — limite 500
@@ -143,6 +148,9 @@ async function fetchDashboard(userId: string) {
   if (transactionsRes.error) console.error('[dashboard] transactions error:', transactionsRes.error);
   if (budgetsRes.error)      console.error('[dashboard] budgets error:',      budgetsRes.error);
   if (goalsRes.error)        console.error('[dashboard] goals error:',        goalsRes.error);
+
+  // Log de diagnóstico — visível no DevTools durante depuração
+  console.log('[dashboard] accounts fetched:', accountsRes.data?.length ?? 0, accountsRes.data);
 
   // Erro fatal apenas em contas e transações (críticas para o dashboard)
   if (accountsRes.error)     throw accountsRes.error;
