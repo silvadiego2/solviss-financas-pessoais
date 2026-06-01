@@ -16,8 +16,8 @@ export interface CreditCard {
   updated_at: string;
 }
 
-/** Retorna "YYYY-MM-DD" usando data LOCAL (sem conversão UTC). */
-function localDateStr(d: Date): string {
+/** Retorna "YYYY-MM-DD" usando data LOCAL — sem conversão UTC. */
+function toLocalDateStr(d: Date): string {
   const y   = d.getFullYear();
   const m   = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
@@ -25,62 +25,59 @@ function localDateStr(d: Date): string {
 }
 
 function todayStr(): string {
-  return localDateStr(new Date());
+  return toLocalDateStr(new Date());
 }
 
 /**
- * Ciclo da fatura ATUAL.
+ * Calcula o ciclo da fatura ATUAL para um dado closing_day.
  *
- * Usa datas reais (não comparação numérica) para evitar bug do último
- * dia do mês. Ex: 31/Mai com closingDay=30 → closing=30/Mai,
- * hoje(31)>30/Mai → fatura de Junho. ✓
+ * Regra:
+ *   - Se hoje > fechamento deste mês  → ciclo é [fechamento_deste_mês + 1 dia → fechamento_próximo_mês]
+ *   - Se hoje <= fechamento deste mês → ciclo é [fechamento_mês_anterior + 1 dia → fechamento_deste_mês]
  *
- * Retorna também `endISO` com T23:59:59 para que o `.lte()` no Supabase
- * capture transações salvas como timestamptz em UTC:
- *   2026-06-01T03:00:00Z = 01/Jun 00:00 BRT → sem o T23:59:59 ficaria fora.
+ * Retorna start e end como strings "YYYY-MM-DD" para comparação correta
+ * com o campo DATE do Postgres (sem misturar com timestamps).
  */
-function getInvoiceCycle(closingDay: number): {
-  start: string;
-  end: string;
-  endISO: string;
-} {
+function getInvoiceCycle(closingDay: number): { start: string; end: string } {
   const today      = new Date();
   const todayYear  = today.getFullYear();
-  const todayMonth = today.getMonth();
+  const todayMonth = today.getMonth(); // 0-based
 
-  const daysInCurrent    = new Date(todayYear, todayMonth + 1, 0).getDate();
-  const closingThisMonth = new Date(
-    todayYear,
-    todayMonth,
-    Math.min(closingDay, daysInCurrent)
-  );
+  // Dia de fechamento deste mês (limitado ao último dia do mês)
+  const daysInThisMonth   = new Date(todayYear, todayMonth + 1, 0).getDate();
+  const closingThisMonth  = new Date(todayYear, todayMonth, Math.min(closingDay, daysInThisMonth));
 
+  // Passou do fechamento deste mês?
   const pastClosing = today > closingThisMonth;
 
-  let invYear: number;
-  let invMonth: number;
+  let endYear: number;
+  let endMonth: number; // 0-based
   if (pastClosing) {
-    invYear  = todayMonth === 11 ? todayYear + 1 : todayYear;
-    invMonth = todayMonth === 11 ? 0 : todayMonth + 1;
+    // Fatura do mês que vem
+    endYear  = todayMonth === 11 ? todayYear + 1 : todayYear;
+    endMonth = todayMonth === 11 ? 0 : todayMonth + 1;
   } else {
-    invYear  = todayYear;
-    invMonth = todayMonth;
+    // Fatura deste mês
+    endYear  = todayYear;
+    endMonth = todayMonth;
   }
 
-  const daysInInvMonth = new Date(invYear, invMonth + 1, 0).getDate();
-  const endDay         = Math.min(closingDay, daysInInvMonth);
-  const endDate        = new Date(invYear, invMonth, endDay);
+  // end = dia de fechamento do mês de vencimento
+  const daysInEndMonth = new Date(endYear, endMonth + 1, 0).getDate();
+  const endDate        = new Date(endYear, endMonth, Math.min(closingDay, daysInEndMonth));
 
-  const prevYear  = invMonth === 0 ? invYear - 1 : invYear;
-  const prevMonth = invMonth === 0 ? 11 : invMonth - 1;
-  const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
-  const startDay  = Math.min(closingDay + 1, daysInPrevMonth);
-  const startDate = new Date(prevYear, prevMonth, startDay);
+  // start = dia seguinte ao fechamento do mês anterior ao end
+  const prevYear  = endMonth === 0 ? endYear - 1 : endYear;
+  const prevMonth = endMonth === 0 ? 11 : endMonth - 1;
+  const daysInPrevMonth    = new Date(prevYear, prevMonth + 1, 0).getDate();
+  const closingPrevMonth   = Math.min(closingDay, daysInPrevMonth);
+  // start = fechamento anterior + 1 dia (Date lida com overflow de mês automaticamente)
+  const startDate = new Date(prevYear, prevMonth, closingPrevMonth + 1);
 
-  const end    = localDateStr(endDate);
-  const endISO = `${end}T23:59:59`;   // cobre timestamps UTC do mesmo dia
-
-  return { start: localDateStr(startDate), end, endISO };
+  return {
+    start: toLocalDateStr(startDate),
+    end:   toLocalDateStr(endDate),
+  };
 }
 
 export const useCreditCards = () => {
@@ -90,6 +87,7 @@ export const useCreditCards = () => {
   const fetchCreditCards = async (): Promise<CreditCard[]> => {
     if (!user) return [];
 
+    // 1. Busca todas as contas do tipo credit_card ativas
     const { data: accounts, error: accErr } = await supabase
       .from('accounts')
       .select('*')
@@ -103,26 +101,33 @@ export const useCreditCards = () => {
 
     const results = await Promise.all(
       accounts.map(async (account) => {
-        // closing_day nullable → usa 10 como padrão (padrão de mercado)
-        const closingDay = account.closing_day ?? 10;
-        const { start, endISO } = getInvoiceCycle(closingDay);
+        const closingDay        = account.closing_day ?? 10;
+        const { start, end }   = getInvoiceCycle(closingDay);
 
-        // Busca todas as transações do ciclo (pending + completed).
-        // Só exclui cancelled para não inflar o valor.
+        /**
+         * FIX 1: Compara date (DATE) com strings DATE puras — sem ISO timestamp.
+         *        Evita comparação lexicográfica incorreta entre DATE e DATETIME.
+         *
+         * FIX 2: Usa .or('status.is.null,status.neq.cancelled') em vez de
+         *        .neq('status','cancelled').
+         *        No Postgres, NULL != 'cancelled' retorna NULL (falsy), removendo
+         *        todas as transações sem status. A cláusula OR inclui os NULLs.
+         */
         const { data: txRows, error: txErr } = await supabase
           .from('transactions')
           .select('amount, type')
           .eq('user_id', user.id)
           .eq('account_id', account.id)
-          .neq('status', 'cancelled')
           .gte('date', start)
-          .lte('date', endISO);
+          .lte('date', end)
+          .or('status.is.null,status.neq.cancelled');
 
         if (txErr) throw txErr;
 
-        const used_amount = (txRows || []).reduce((sum, tx) => {
-          if (tx.type === 'expense')  return sum + Number(tx.amount);
-          if (tx.type === 'income')   return sum - Number(tx.amount); // estorno/crédito
+        // Soma despesas, subtrai estornos/créditos no cartão
+        const used_amount = (txRows ?? []).reduce((sum, tx) => {
+          if (tx.type === 'expense') return sum + Number(tx.amount);
+          if (tx.type === 'income')  return sum - Number(tx.amount);
           return sum;
         }, 0);
 
@@ -131,14 +136,14 @@ export const useCreditCards = () => {
         return {
           id:          account.id,
           name:        account.name,
-          bank_name:   account.bank_name || '',
+          bank_name:   account.bank_name  ?? '',
           limit,
           used_amount: Math.max(0, used_amount),
           closing_day: closingDay,
-          due_day:     account.due_day ?? 10,
-          is_active:   account.is_active ?? true,
-          created_at:  account.created_at || '',
-          updated_at:  account.updated_at || '',
+          due_day:     account.due_day    ?? 10,
+          is_active:   account.is_active  ?? true,
+          created_at:  account.created_at ?? '',
+          updated_at:  account.updated_at ?? '',
         };
       })
     );
@@ -146,13 +151,16 @@ export const useCreditCards = () => {
     return results;
   };
 
+  // queryKey inclui todayStr() para que o ciclo recalcule à meia-noite
   const { data: creditCards = [], isLoading } = useQuery({
-    queryKey: ['credit_cards', user?.id, todayStr()],
-    queryFn:  fetchCreditCards,
-    enabled:  !!user,
+    queryKey:  ['credit_cards', user?.id, todayStr()],
+    queryFn:   fetchCreditCards,
+    enabled:   !!user,
     staleTime: 0,
-    gcTime:   5 * 60 * 1000,
+    gcTime:    5 * 60 * 1000,
   });
+
+  // ── Mutations ────────────────────────────────────────────────────────────
 
   const createCreditCardMutation = useMutation({
     mutationFn: async (cardData: Omit<CreditCard, 'id' | 'created_at' | 'updated_at'>) => {
@@ -165,7 +173,8 @@ export const useCreditCards = () => {
           bank_name:    cardData.bank_name,
           type:         'credit_card' as const,
           credit_limit: cardData.limit,
-          balance:      cardData.limit - cardData.used_amount,
+          // balance não é mais derivado de used_amount manual; será recalculado pelo hook
+          balance:      cardData.limit,
           closing_day:  cardData.closing_day,
           due_day:      cardData.due_day,
           is_active:    cardData.is_active,
@@ -185,32 +194,14 @@ export const useCreditCards = () => {
 
   const updateCreditCardMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CreditCard> & { id: string }) => {
-      const updateData: any = {};
-      if (updates.name)                    updateData.name        = updates.name;
-      if (updates.bank_name !== undefined)  updateData.bank_name   = updates.bank_name;
-      if (updates.closing_day)              updateData.closing_day = updates.closing_day;
-      if (updates.due_day)                  updateData.due_day     = updates.due_day;
-      if (updates.is_active !== undefined)  updateData.is_active   = updates.is_active;
-
-      if (updates.limit !== undefined || updates.used_amount !== undefined) {
-        let used  = updates.used_amount;
-        let limit = updates.limit;
-        if (used === undefined || limit === undefined) {
-          const { data: cur, error: fetchErr } = await supabase
-            .from('accounts')
-            .select('credit_limit, balance')
-            .eq('id', id)
-            .eq('user_id', user?.id)
-            .single();
-          if (fetchErr) throw fetchErr;
-          const cl = Number(cur?.credit_limit || 0);
-          const cb = Number(cur?.balance      || 0);
-          if (used  === undefined) used  = cl - cb;
-          if (limit === undefined) limit = cl;
-        }
-        updateData.credit_limit = limit;
-        updateData.balance      = (limit as number) - (used as number);
-      }
+      const updateData: Record<string, unknown> = {};
+      if (updates.name        !== undefined) updateData.name        = updates.name;
+      if (updates.bank_name   !== undefined) updateData.bank_name   = updates.bank_name;
+      if (updates.closing_day !== undefined) updateData.closing_day = updates.closing_day;
+      if (updates.due_day     !== undefined) updateData.due_day     = updates.due_day;
+      if (updates.is_active   !== undefined) updateData.is_active   = updates.is_active;
+      // Atualiza credit_limit sem tocar em balance (balance é derivado via hook, não mais campo mestre)
+      if (updates.limit       !== undefined) updateData.credit_limit = updates.limit;
 
       const { data, error } = await supabase
         .from('accounts')
