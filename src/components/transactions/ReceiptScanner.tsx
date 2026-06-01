@@ -7,8 +7,10 @@
  *  3. Upload galeria   — mesmo pipeline de compressão
  *  4. OCR fallback     — Tesseract.js quando não há QR Code detectável
  *
- * Compressão: toda imagem é reduzida para ≤ 900px e JPEG 72% (~80KB)
- * NF-e: decodifica URL da SEFAZ e extrai nfv (valor), dhEmi (data), emit (CNPJ/nome)
+ * Fixes aplicados:
+ *  - jsQR importado uma única vez no mount (não dentro do tick) — sem falha silenciosa
+ *  - handleQrDetected movido para fora do useCallback — sem problema de escopo/stale closure
+ *  - Parser NF-e revisado para cobrir todos os formatos de URL SEFAZ (NFCe/NFe)
  */
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -28,7 +30,7 @@ export interface ScannedData {
   date?:        string;    // YYYY-MM-DD
   merchant?:    string;
   cnpj?:        string;
-  thumbnail?:   File;      // imagem comprimida (≤ ~100KB)
+  thumbnail?:   File;
   source:       'qrcode' | 'ocr' | 'manual';
 }
 
@@ -40,7 +42,7 @@ interface Props {
 // ─── compressão Canvas ────────────────────────────────────────────────────────
 async function compressImage(
   src: string,
-  maxPx  = 900,
+  maxPx   = 900,
   quality = 0.72,
 ): Promise<{ dataUrl: string; file: File }> {
   return new Promise((resolve, reject) => {
@@ -70,32 +72,65 @@ async function compressImage(
 }
 
 // ─── parser URL NF-e SEFAZ ───────────────────────────────────────────────────
+// Formatos cobertos:
+//   NFCe SP/RS/MG: https://www.nfce.fazenda.sp.gov.br/...?chNFe=...&nfv=10.50&...
+//   NFCe RJ/BA:    URL com campos vNF, vTotTrib
+//   NFe genérica:  chave de 44 dígitos no path ou query
+//   Sefaz virtual: https://nfe.fazenda.gov.br/portal/...
 function parseNFeUrl(url: string): Partial<ScannedData> | null {
   try {
-    // Ex: https://www.sefaz.rs.gov.br/NFCE/NFCE-COM.aspx?chNFe=...&nfv=123.45&dhEmi=20260601...
     const u      = new URL(url);
     const params = u.searchParams;
+    const full   = url;
 
-    // valor total
-    const nfv    = params.get('nfv') || params.get('vNF') || params.get('vTotTrib');
-    const amount = nfv ? parseFloat(nfv.replace(',', '.')) : undefined;
+    // ── chave de acesso (44 dígitos) ─────────────────────────────────────────
+    const chaveMatch = full.match(/\b(\d{44})\b/);
+    const chave      = chaveMatch?.[1];
 
-    // data de emissão
-    const dhEmi = params.get('dhEmi') || params.get('dEmi');
+    // CNPJ do emitente está nos dígitos 7..20 da chave de acesso
+    const cnpj = chave
+      ? chave.slice(6, 20).replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+      : (params.get('cNPJ') ?? params.get('CNPJ') ?? undefined);
+
+    // ── valor total ───────────────────────────────────────────────────────────
+    // Tenta todos os nomes conhecidos de campo de valor
+    const rawVal =
+      params.get('nfv')      ??   // SP, RS, PR
+      params.get('vNF')      ??   // padrão SEFAZ nacional
+      params.get('vTotTrib') ??   // alguns estados
+      params.get('valor')    ??
+      null;
+    const amount = rawVal ? parseFloat(rawVal.replace(',', '.')) : undefined;
+
+    // ── data de emissão ───────────────────────────────────────────────────────
+    const dhRaw =
+      params.get('dhEmi') ??
+      params.get('dEmi')  ??
+      params.get('dhCont') ??
+      null;
     let date: string | undefined;
-    if (dhEmi) {
-      // pode vir como 20260601T120000-03:00 ou 2026-06-01
-      const m = dhEmi.match(/(\d{4})(\d{2})(\d{2})/) || dhEmi.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (dhRaw) {
+      // formatos: 20260601T120000-0300 | 2026-06-01T12:00:00-03:00 | 20260601
+      const m = dhRaw.match(/(\d{4})-?(\d{2})-?(\d{2})/);
       if (m) date = `${m[1]}-${m[2]}-${m[3]}`;
     }
 
-    // CNPJ emitente (aparece como cEAN, cNPJ ou xFant)
-    const cnpj = params.get('cNPJ') || params.get('CNPJ') || undefined;
-    const merchant = params.get('xFant') || params.get('xNome') || cnpj || 'NF-e';
+    // ── nome / razão social ───────────────────────────────────────────────────
+    const merchant =
+      params.get('xFant') ??
+      params.get('xNome') ??
+      (cnpj ? `CNPJ ${cnpj}` : 'NF-e');
 
-    if (!amount && !date) return null; // URL não reconhecida
+    // Descarta URLs que não parecem NF-e (sem valor nem chave)
+    if (!amount && !chave) return null;
 
-    return { amount, date, merchant, cnpj, description: merchant || 'Nota Fiscal' };
+    return {
+      amount,
+      date,
+      merchant,
+      cnpj,
+      description: merchant ?? 'Nota Fiscal',
+    };
   } catch {
     return null;
   }
@@ -103,22 +138,19 @@ function parseNFeUrl(url: string): Partial<ScannedData> | null {
 
 // ─── extrai dados por OCR (fallback) ─────────────────────────────────────────
 function extractByOcr(text: string): Partial<ScannedData> {
-  // maior valor numérico encontrado (total da nota)
   const amounts = [...text.matchAll(/(?:R\$\s*)?(\d{1,3}(?:[\.,]\d{3})*[\.,]\d{2})/g)]
     .map(m => parseFloat(m[1].replace(/\./g, '').replace(',', '.')))
     .filter(n => !isNaN(n) && n > 0);
   const amount = amounts.length ? Math.max(...amounts) : undefined;
 
-  // data
   const dm = text.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/);
   let date: string | undefined;
   if (dm) {
     const [, d, mo, y] = dm;
     const year = y.length === 2 ? '20' + y : y;
-    date = `${year}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    date = `${year}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
   }
 
-  // estabelecimento: primeira linha não numérica com 4-50 chars
   const merchant = text.split('\n')
     .map(l => l.trim())
     .find(l => l.length >= 4 && l.length <= 50 && !/^[\d\s]+$/.test(l));
@@ -131,30 +163,114 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
   type Mode    = 'choose' | 'qr-live' | 'processing' | 'review';
   type SubMode = 'qr' | 'photo' | 'upload';
 
-  const [mode,       setMode]       = useState<Mode>('choose');
-  const [subMode,    setSubMode]    = useState<SubMode | null>(null);
-  const [preview,    setPreview]    = useState<string | null>(null);
-  const [extracted,  setExtracted]  = useState<Partial<ScannedData> | null>(null);
-  const [thumbFile,  setThumbFile]  = useState<File | null>(null);
-  const [qrActive,   setQrActive]   = useState(false);
-  const [camError,   setCamError]   = useState<string | null>(null);
+  const [mode,      setMode]      = useState<Mode>('choose');
+  const [subMode,   setSubMode]   = useState<SubMode | null>(null);
+  const [preview,   setPreview]   = useState<string | null>(null);
+  const [extracted, setExtracted] = useState<Partial<ScannedData> | null>(null);
+  const [thumbFile, setThumbFile] = useState<File | null>(null);
+  const [camError,  setCamError]  = useState<string | null>(null);
 
-  const videoRef   = useRef<HTMLVideoElement>(null);
-  const canvasRef  = useRef<HTMLCanvasElement>(null);
-  const streamRef  = useRef<MediaStream | null>(null);
-  const rafRef     = useRef<number>(0);
-  const fileRef    = useRef<HTMLInputElement>(null);
-  const photoRef   = useRef<HTMLInputElement>(null);
+  const videoRef  = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const rafRef    = useRef<number>(0);
+  const fileRef   = useRef<HTMLInputElement>(null);
+  const photoRef  = useRef<HTMLInputElement>(null);
 
-  // ── para câmera ao encerrar ─────────────────────────────────────────────────
+  // jsQR importado UMA VEZ no mount para evitar falha silenciosa no primeiro tick
+  const jsQRRef   = useRef<((data: Uint8ClampedArray, w: number, h: number) => { data: string } | null) | null>(null);
+
+  useEffect(() => {
+    import('jsqr').then(m => { jsQRRef.current = m.default; }).catch(() => {});
+  }, []);
+
+  // ── para câmera ─────────────────────────────────────────────────────────────
   const stopStream = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
-    setQrActive(false);
   }, []);
 
   useEffect(() => () => stopStream(), [stopStream]);
+
+  // ── OCR via Tesseract ───────────────────────────────────────────────────────
+  const runOcr = useCallback(async (dataUrl: string, qrFallback?: string) => {
+    setMode('processing');
+    try {
+      const { data: { text } } = await Tesseract.recognize(dataUrl, 'por', { logger: () => {} });
+      const result = extractByOcr(text);
+      if (qrFallback && !result.description) result.description = qrFallback.slice(0, 60);
+      setExtracted({ ...result, source: 'ocr' });
+      toast.success('Recibo processado por OCR.');
+    } catch {
+      toast.error('Não foi possível ler o recibo automaticamente.');
+      setExtracted({ source: 'ocr' });
+    }
+    setMode('review');
+  }, []);
+
+  // ── QR detectado — FORA do useCallback para não criar stale closure ─────────
+  const handleQrDetected = useCallback(async (qrText: string, frameDataUrl: string) => {
+    setMode('processing');
+    setSubMode('qr');
+    toast.info('QR Code detectado! Extraindo dados...');
+
+    const fromUrl = qrText.startsWith('http') ? parseNFeUrl(qrText) : null;
+
+    const { dataUrl, file } = await compressImage(frameDataUrl, 900, 0.72);
+    setPreview(dataUrl);
+    setThumbFile(file);
+
+    if (fromUrl) {
+      setExtracted({ ...fromUrl, source: 'qrcode' });
+      toast.success('Nota Fiscal lida com sucesso!');
+      setMode('review');
+    } else {
+      // QR genérico (não NF-e): roda OCR no frame capturado
+      toast.info('QR genérico — rodando OCR...');
+      await runOcr(dataUrl, qrText);
+    }
+  }, [runOcr]);
+
+  // ── loop de leitura QR ──────────────────────────────────────────────────────
+  // handleQrDetected fica nas deps para nunca usar versão stale
+  const scanQrLoop = useCallback(() => {
+    let running = true;
+
+    const tick = async () => {
+      if (!running) return;
+
+      const video  = videoRef.current;
+      const canvas = canvasRef.current;
+      const jsQR   = jsQRRef.current;
+
+      if (!video || !canvas || !jsQR || video.readyState < 2) {
+        rafRef.current = requestAnimationFrame(() => { tick(); });
+        return;
+      }
+
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(video, 0, 0);
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const code = jsQR(imageData.data, imageData.width, imageData.height);
+
+      if (code?.data) {
+        running = false;
+        stopStream();
+        await handleQrDetected(code.data, canvas.toDataURL('image/jpeg', 0.72));
+        return;
+      }
+
+      rafRef.current = requestAnimationFrame(() => { tick(); });
+    };
+
+    rafRef.current = requestAnimationFrame(() => { tick(); });
+
+    // retorna cleanup para parar o loop se necessário
+    return () => { running = false; };
+  }, [handleQrDetected, stopStream]);
 
   // ── inicia câmera QR ────────────────────────────────────────────────────────
   const startQrCamera = async () => {
@@ -170,94 +286,17 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
       }
-      setQrActive(true);
       scanQrLoop();
-    } catch (err: any) {
+    } catch {
       setCamError('Câmera não autorizada. Use "Upload" ou "Foto" como alternativa.');
       setMode('choose');
     }
-  };
-
-  // ── loop de leitura QR ──────────────────────────────────────────────────────
-  const scanQrLoop = useCallback(() => {
-    const tick = async () => {
-      const video  = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!video || !canvas || video.readyState < 2) {
-        rafRef.current = requestAnimationFrame(tick);
-        return;
-      }
-      canvas.width  = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(video, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-
-      // importação dinâmica do jsQR para não aumentar o bundle inicial
-      try {
-        const jsQR = (await import('jsqr')).default;
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        if (code?.data) {
-          stopStream();
-          handleQrDetected(code.data, canvas.toDataURL('image/jpeg', 0.72));
-          return;
-        }
-      } catch { /* jsQR ainda não carregou */ }
-
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopStream]);
-
-  // ── QR detectado ────────────────────────────────────────────────────────────
-  const handleQrDetected = async (qrText: string, frameDataUrl: string) => {
-    setMode('processing');
-    toast.info('QR Code detectado! Extraindo dados...');
-
-    // tenta interpretar como URL de NF-e
-    const fromUrl = qrText.startsWith('http') ? parseNFeUrl(qrText) : null;
-
-    // comprime o frame capturado
-    const { dataUrl, file } = await compressImage(frameDataUrl, 900, 0.72);
-    setPreview(dataUrl);
-    setThumbFile(file);
-
-    if (fromUrl) {
-      setExtracted({ ...fromUrl, source: 'qrcode' });
-      toast.success('Nota Fiscal lida com sucesso!');
-    } else {
-      // QR não-NF-e: usa o texto como descrição e tenta OCR
-      toast.info('QR genérico — rodando OCR...');
-      runOcr(dataUrl, qrText);
-      return;
-    }
-    setMode('review');
-  };
-
-  // ── OCR via Tesseract ────────────────────────────────────────────────────────
-  const runOcr = async (dataUrl: string, qrFallback?: string) => {
-    setMode('processing');
-    try {
-      const { data: { text } } = await Tesseract.recognize(dataUrl, 'por', {
-        logger: () => {},
-      });
-      const result = extractByOcr(text);
-      if (qrFallback && !result.description) result.description = qrFallback.slice(0, 60);
-      setExtracted({ ...result, source: 'ocr' });
-      toast.success('Recibo processado por OCR.');
-    } catch {
-      toast.error('Não foi possível ler o recibo automaticamente.');
-      setExtracted({ source: 'ocr' });
-    }
-    setMode('review');
   };
 
   // ── foto / upload ─────────────────────────────────────────────────────────
   const handleImageFile = async (file: File) => {
     setMode('processing');
     setSubMode('photo');
-    const raw = await file.text().catch(() => '');
     const reader = new FileReader();
     reader.onload = async (e) => {
       const src = e.target?.result as string;
@@ -274,7 +313,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     reader.readAsDataURL(file);
   };
 
-  // ── confirma uso dos dados ────────────────────────────────────────────────
+  // ── confirma dados ────────────────────────────────────────────────────────
   const handleConfirm = () => {
     if (!extracted) return;
     onResult({
@@ -397,12 +436,12 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
             <canvas ref={canvasRef} className="hidden" />
             {/* mira de escaneamento */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-48 h-48 border-2 border-white/80 rounded-xl relative">
-                <span className="absolute -top-px -left-px w-6 h-6 border-t-4 border-l-4 border-primary rounded-tl-lg" />
-                <span className="absolute -top-px -right-px w-6 h-6 border-t-4 border-r-4 border-primary rounded-tr-lg" />
-                <span className="absolute -bottom-px -left-px w-6 h-6 border-b-4 border-l-4 border-primary rounded-bl-lg" />
-                <span className="absolute -bottom-px -right-px w-6 h-6 border-b-4 border-r-4 border-primary rounded-br-lg" />
-                <ScanLine size={20} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/60 animate-pulse" />
+              <div className="w-52 h-52 border-2 border-white/60 rounded-xl relative">
+                <span className="absolute -top-px -left-px w-7 h-7 border-t-4 border-l-4 border-primary rounded-tl-lg" />
+                <span className="absolute -top-px -right-px w-7 h-7 border-t-4 border-r-4 border-primary rounded-tr-lg" />
+                <span className="absolute -bottom-px -left-px w-7 h-7 border-b-4 border-l-4 border-primary rounded-bl-lg" />
+                <span className="absolute -bottom-px -right-px w-7 h-7 border-b-4 border-r-4 border-primary rounded-br-lg" />
+                <ScanLine size={22} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/50 animate-pulse" />
               </div>
             </div>
           </div>
@@ -438,7 +477,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
             <img src={preview} alt="Recibo" className="w-full max-h-44 rounded-xl border object-contain" />
           )}
 
-          {/* badge da fonte */}
           <div className="flex items-center gap-2">
             <span className={cn(
               'text-[10px] font-semibold px-2 py-0.5 rounded-full',
@@ -455,12 +493,11 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
             )}
           </div>
 
-          {/* dados extraídos */}
           <div className="rounded-xl border border-border divide-y divide-border">
             {extracted.amount && (
               <div className="flex items-center justify-between px-4 py-3">
                 <span className="text-xs text-muted-foreground">Valor total</span>
-                <span className="text-sm font-semibold text-success">
+                <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
                   {formatCurrency(extracted.amount)}
                 </span>
               </div>
