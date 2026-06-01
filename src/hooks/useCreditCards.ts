@@ -16,58 +16,50 @@ export interface CreditCard {
   updated_at: string;
 }
 
-/**
- * Formata uma Date para "YYYY-MM-DD" usando a data LOCAL do browser
- * (evita o bug de timezone onde toISOString() pode retornar o dia seguinte
- * quando o horário local está atrás do UTC, ex: Brasília UTC-3).
- */
+/** Retorna "YYYY-MM-DD" usando data LOCAL (sem conversão UTC). */
 function localDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const y   = d.getFullYear();
+  const m   = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
+/** Retorna "YYYY-MM-DD" de hoje no horário local. */
+function todayStr(): string {
+  return localDateStr(new Date());
+}
+
 /**
- * Retorna a fatura "atual" — mesma lógica usada em CreditCardInvoices.invoicePeriod():
+ * Ciclo da fatura ATUAL — mesma lógica de invoicePeriod() em CreditCardInvoices:
  *
- *   Se today.getDate() > closingDay  → fatura do próximo mês (ainda em aberto)
- *   Se today.getDate() <= closingDay → fatura do mês corrente (ainda em aberto ou recém-fechada)
+ *   today > closingDay  → fatura do próximo mês
+ *   today <= closingDay → fatura do mês corrente
  *
- * Período da fatura [year/month]:
- *   início = closingDay + 1  do mês anterior a [year/month]
- *   fim    = closingDay      do mês [year/month]  (ou último dia se closingDay > dias do mês)
- *
- * Exemplos com closingDay = 24:
- *   Hoje = 31/Mai → fatura Junho  → 25/Mai … 24/Jun
- *   Hoje = 15/Mai → fatura Maio   → 25/Abr … 24/Mai
- *   Hoje = 24/Mai → fatura Maio   → 25/Abr … 24/Mai
+ * Exemplos (closingDay = 24):
+ *   31/Mai → 25/Mai .. 24/Jun
+ *   15/Mai → 25/Abr .. 24/Mai
+ *   24/Mai → 25/Abr .. 24/Mai
  */
 function getInvoiceCycle(closingDay: number): { start: string; end: string } {
-  const today     = new Date();
-  const todayDay  = today.getDate();
-  const todayYear = today.getFullYear();
+  const today      = new Date();
+  const todayDay   = today.getDate();
+  const todayYear  = today.getFullYear();
   const todayMonth = today.getMonth(); // 0-based
 
-  // Determina o mês da fatura atual (0-based)
   let invYear: number;
   let invMonth: number;
   if (todayDay > closingDay) {
-    // Já passou do fechamento → fatura do próximo mês
     if (todayMonth === 11) { invYear = todayYear + 1; invMonth = 0; }
     else                   { invYear = todayYear;     invMonth = todayMonth + 1; }
   } else {
-    // Ainda não fechou → fatura do mês corrente
     invYear  = todayYear;
     invMonth = todayMonth;
   }
 
-  // fim = closingDay do mês da fatura (ajustado ao último dia do mês se necessário)
-  const daysInInvMonth = new Date(invYear, invMonth + 1, 0).getDate();
-  const endDay  = Math.min(closingDay, daysInInvMonth);
-  const endDate = new Date(invYear, invMonth, endDay);
+  const daysInInvMonth  = new Date(invYear,  invMonth + 1, 0).getDate();
+  const endDay          = Math.min(closingDay, daysInInvMonth);
+  const endDate         = new Date(invYear, invMonth, endDay);
 
-  // início = closingDay + 1 do mês anterior ao mês da fatura
   const prevYear  = invMonth === 0 ? invYear - 1 : invYear;
   const prevMonth = invMonth === 0 ? 11 : invMonth - 1;
   const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
@@ -120,16 +112,16 @@ export const useCreditCards = () => {
         const limit = Number(account.credit_limit) || 0;
 
         return {
-          id: account.id,
-          name: account.name,
-          bank_name: account.bank_name || '',
+          id:          account.id,
+          name:        account.name,
+          bank_name:   account.bank_name || '',
           limit,
           used_amount: Math.max(0, used_amount),
           closing_day: closingDay,
-          due_day: account.due_day || 10,
-          is_active: account.is_active ?? true,
-          created_at: account.created_at || '',
-          updated_at: account.updated_at || '',
+          due_day:     account.due_day || 10,
+          is_active:   account.is_active ?? true,
+          created_at:  account.created_at || '',
+          updated_at:  account.updated_at || '',
         };
       })
     );
@@ -137,11 +129,14 @@ export const useCreditCards = () => {
     return results;
   };
 
+  // queryKey inclui a data local — muda automaticamente a cada novo dia,
+  // descartando o cache quando o ciclo de fatura vira.
   const { data: creditCards = [], isLoading } = useQuery({
-    queryKey: ['credit_cards', user?.id],
-    queryFn: fetchCreditCards,
-    enabled: !!user,
-    staleTime: 60 * 1000,
+    queryKey: ['credit_cards', user?.id, todayStr()],
+    queryFn:  fetchCreditCards,
+    enabled:  !!user,
+    staleTime: 0,          // sem cache: sempre busca dados frescos ao montar/volcar à aba
+    gcTime:   5 * 60 * 1000, // mantém em memória por 5 min para navegação fluida
   });
 
   const createCreditCardMutation = useMutation({
@@ -150,15 +145,15 @@ export const useCreditCards = () => {
       const { data, error } = await supabase
         .from('accounts')
         .insert([{
-          user_id: user.id,
-          name: cardData.name,
-          bank_name: cardData.bank_name,
-          type: 'credit_card' as const,
+          user_id:      user.id,
+          name:         cardData.name,
+          bank_name:    cardData.bank_name,
+          type:         'credit_card' as const,
           credit_limit: cardData.limit,
-          balance: cardData.limit - cardData.used_amount,
-          closing_day: cardData.closing_day,
-          due_day: cardData.due_day,
-          is_active: cardData.is_active,
+          balance:      cardData.limit - cardData.used_amount,
+          closing_day:  cardData.closing_day,
+          due_day:      cardData.due_day,
+          is_active:    cardData.is_active,
         }])
         .select()
         .single();
@@ -170,19 +165,17 @@ export const useCreditCards = () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Cartão adicionado com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error('Erro ao adicionar cartão', { description: error?.message });
-    },
+    onError: (error: any) => toast.error('Erro ao adicionar cartão', { description: error?.message }),
   });
 
   const updateCreditCardMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CreditCard> & { id: string }) => {
       const updateData: any = {};
-      if (updates.name)                       updateData.name        = updates.name;
-      if (updates.bank_name !== undefined)     updateData.bank_name   = updates.bank_name;
-      if (updates.closing_day)                 updateData.closing_day = updates.closing_day;
-      if (updates.due_day)                     updateData.due_day     = updates.due_day;
-      if (updates.is_active !== undefined)     updateData.is_active   = updates.is_active;
+      if (updates.name)                   updateData.name        = updates.name;
+      if (updates.bank_name !== undefined) updateData.bank_name   = updates.bank_name;
+      if (updates.closing_day)             updateData.closing_day = updates.closing_day;
+      if (updates.due_day)                 updateData.due_day     = updates.due_day;
+      if (updates.is_active !== undefined) updateData.is_active   = updates.is_active;
 
       if (updates.limit !== undefined || updates.used_amount !== undefined) {
         let used  = updates.used_amount;
@@ -195,10 +188,10 @@ export const useCreditCards = () => {
             .eq('user_id', user?.id)
             .single();
           if (fetchErr) throw fetchErr;
-          const currentLimit   = Number(current?.credit_limit || 0);
-          const currentBalance = Number(current?.balance || 0);
-          if (used  === undefined) used  = currentLimit - currentBalance;
-          if (limit === undefined) limit = currentLimit;
+          const cl = Number(current?.credit_limit || 0);
+          const cb = Number(current?.balance      || 0);
+          if (used  === undefined) used  = cl - cb;
+          if (limit === undefined) limit = cl;
         }
         updateData.credit_limit = limit;
         updateData.balance      = (limit as number) - (used as number);
@@ -220,9 +213,7 @@ export const useCreditCards = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       toast.success('Cartão atualizado com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error('Erro ao atualizar cartão', { description: error?.message });
-    },
+    onError: (error: any) => toast.error('Erro ao atualizar cartão', { description: error?.message }),
   });
 
   const deleteCreditCardMutation = useMutation({
@@ -239,9 +230,7 @@ export const useCreditCards = () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Cartão excluído com sucesso!');
     },
-    onError: (error: any) => {
-      toast.error('Erro ao excluir cartão', { description: error?.message });
-    },
+    onError: (error: any) => toast.error('Erro ao excluir cartão', { description: error?.message }),
   });
 
   return {
