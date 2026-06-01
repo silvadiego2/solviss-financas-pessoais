@@ -95,7 +95,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   const displayEmail = user?.email || '';
   const initial      = displayName.charAt(0).toUpperCase();
 
-  // Ferramentas: Automação + Importar/Exportar numa única seção (2 itens, sem overhead)
   const toolsItems: MenuItem[] = [
     {
       title: 'Automação',
@@ -112,7 +111,10 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     },
   ];
 
-  const settingsItems: MenuItem[] = [
+  // Seção renomeada: 'Configurações' → 'Minha Conta'
+  // Evita ambiguidade com o item 'Preferências' (que também era chamado de Configurações)
+  // Os itens desta seção são dados e estrutura da conta, não preferências do app
+  const accountItems: MenuItem[] = [
     {
       title: 'Contas Bancárias',
       description: 'Gerenciar contas e saldos',
@@ -181,9 +183,9 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
         </div>
       </button>
 
-      <Group title="Ferramentas"   items={toolsItems}    />
-      <Group title="Configurações" items={settingsItems} />
-      <Group title="Avançado"      items={dangerItems}   />
+      <Group title="Ferramentas"  items={toolsItems}   />
+      <Group title="Minha Conta"  items={accountItems} />
+      <Group title="Avançado"     items={dangerItems}  />
 
       <button
         onClick={handleLogout}
