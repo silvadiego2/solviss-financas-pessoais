@@ -3,7 +3,7 @@ import {
   Download, Upload, Tags, User, Building, ChevronRight,
   Shield, Cloud, Zap, Database, Trash2, BarChart3,
   Settings, Copy, Sparkles, Bell,
-  ScanLine, Brain, LogOut, Crown,
+  ScanLine, LogOut, Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -96,22 +96,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   const displayEmail = user?.email || '';
   const initial      = displayName.charAt(0).toUpperCase();
 
-  // "Orçamentos Mensais" removido — agora está em Metas > aba Controlar
-  const financeItems: MenuItem[] = [
-    {
-      title: 'Contas Bancárias',
-      description: 'Gerenciar contas e saldos',
-      icon: Building,
-      action: () => onNavigate('accounts'),
-    },
-    {
-      title: 'Categorias',
-      description: 'Criar e editar categorias',
-      icon: Tags,
-      action: () => onNavigate('categories'),
-    },
-  ];
-
   const toolsItems: MenuItem[] = [
     {
       title: 'Analytics Avançado',
@@ -168,6 +152,18 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   ];
 
   const settingsItems: MenuItem[] = [
+    {
+      title: 'Contas Bancárias',
+      description: 'Gerenciar contas e saldos',
+      icon: Building,
+      action: () => onNavigate('accounts'),
+    },
+    {
+      title: 'Categorias',
+      description: 'Criar e editar categorias',
+      icon: Tags,
+      action: () => onNavigate('categories'),
+    },
     {
       title: 'Configurações',
       description: 'Tema, moeda e preferências',
@@ -230,7 +226,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
         </div>
       </button>
 
-      <Group title="Finanças"      items={financeItems}  />
       <Group title="Ferramentas"   items={toolsItems}    />
       <Group title="Dados"         items={dataItems}     />
       <Group title="Configurações" items={settingsItems} />
