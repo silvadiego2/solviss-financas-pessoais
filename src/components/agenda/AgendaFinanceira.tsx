@@ -1,21 +1,20 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useAgendaFinanceira, type CreateAgendaItem } from '@/hooks/useAgendaFinanceira';
-import { useCategories } from '@/hooks/useCategories';
-import { useAccounts } from '@/hooks/useAccounts';
 import { format, parseISO, isToday, isTomorrow, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  CalendarClock, Plus, CheckCircle2, XCircle, Trash2,
-  AlertTriangle, TrendingDown, TrendingUp, Clock, ChevronRight
+  CalendarClock, Plus, CheckCircle2, Trash2,
+  AlertTriangle, TrendingDown, TrendingUp, Clock,
+  ArrowDownCircle, ArrowUpCircle, XCircle,
 } from 'lucide-react';
 
 interface AgendaFinanceiraProps {
@@ -26,40 +25,45 @@ const formatCurrency = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 const getDueDateLabel = (dateStr: string) => {
-  const d = parseISO(dateStr);
-  if (isToday(d)) return { label: 'Hoje', color: 'text-orange-500' };
-  if (isTomorrow(d)) return { label: 'Amanhã', color: 'text-yellow-500' };
-  if (isPast(d)) return { label: 'Vencida', color: 'text-red-500' };
-  return { label: format(d, "dd 'de' MMM", { locale: ptBR }), color: 'text-muted-foreground' };
+  try {
+    const d = parseISO(dateStr);
+    if (isToday(d))    return { label: 'Hoje',    color: 'text-orange-500' };
+    if (isTomorrow(d)) return { label: 'Amanhã',  color: 'text-yellow-500' };
+    if (isPast(d))     return { label: 'Vencida', color: 'text-red-500'    };
+    return { label: format(d, "dd 'de' MMM", { locale: ptBR }), color: 'text-muted-foreground' };
+  } catch {
+    return { label: dateStr, color: 'text-muted-foreground' };
+  }
 };
 
-const statusConfig = {
-  pending: { label: 'Pendente', variant: 'secondary' as const, icon: Clock },
-  overdue: { label: 'Vencida', variant: 'destructive' as const, icon: AlertTriangle },
-  paid: { label: 'Paga', variant: 'default' as const, icon: CheckCircle2 },
-  cancelled: { label: 'Cancelada', variant: 'outline' as const, icon: XCircle },
-};
+const STATUS_CONFIG = {
+  pending:   { label: 'Pendente',   variant: 'secondary'   as const, Icon: Clock          },
+  overdue:   { label: 'Vencida',    variant: 'destructive' as const, Icon: AlertTriangle   },
+  paid:      { label: 'Pago',       variant: 'default'     as const, Icon: CheckCircle2    },
+  cancelled: { label: 'Cancelado',  variant: 'outline'     as const, Icon: XCircle         },
+} as const;
 
 export const AgendaFinanceira: React.FC<AgendaFinanceiraProps> = ({ onBack }) => {
-  const { items, loading, createItem, markAsPaid, deleteItem } = useAgendaFinanceira();
-  const { categories } = useCategories();
-  const { accounts } = useAccounts();
+  const { items, loading, stats, createItem, markAsPaid, deleteItem } = useAgendaFinanceira();
+
   const [showDialog, setShowDialog] = useState(false);
   const [form, setForm] = useState<Partial<CreateAgendaItem>>({
-    type: 'expense',
-    status: 'pending',
-    is_recurring: false,
+    type: 'payable',
+    recurrent: false,
   });
 
   const handleCreate = async () => {
-    if (!form.title || !form.amount || !form.due_date) return;
+    if (!form.description?.trim() || !form.amount || !form.due_date) return;
     await createItem(form as CreateAgendaItem);
     setShowDialog(false);
-    setForm({ type: 'expense', status: 'pending', is_recurring: false });
+    setForm({ type: 'payable', recurrent: false });
   };
 
-  const pendingItems = items.filter(i => i.status === 'pending' || i.status === 'overdue');
-  const doneItems = items.filter(i => i.status === 'paid' || i.status === 'cancelled');
+  // pending + overdue = ativos; paid + cancelled = histórico
+  const activeItems = items.filter(i => i.status === 'pending' || i.status === 'overdue');
+  const doneItems   = items.filter(i => i.status === 'paid'    || i.status === 'cancelled');
+
+  const isPayable = (type: string) => type === 'payable';
 
   return (
     <div className="space-y-6">
@@ -69,71 +73,53 @@ export const AgendaFinanceira: React.FC<AgendaFinanceiraProps> = ({ onBack }) =>
         icon={<CalendarClock className="h-6 w-6" />}
         onBack={onBack}
         action={
-          <Dialog open={showDialog} onOpenChange={setShowDialog}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-1" />
-                Novo
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Novo Lançamento</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label>Descrição</Label>
-                  <Input
-                    placeholder="Ex: Conta de luz"
-                    value={form.title || ''}
-                    onChange={(e) => setForm(p => ({ ...p, title: e.target.value }))}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Tipo</Label>
-                    <Select value={form.type || 'expense'} onValueChange={(v) => setForm(p => ({ ...p, type: v as any }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="expense">Despesa</SelectItem>
-                        <SelectItem value="income">Receita</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Valor (R$)</Label>
-                    <Input
-                      type="number"
-                      placeholder="0,00"
-                      value={form.amount || ''}
-                      onChange={(e) => setForm(p => ({ ...p, amount: Number(e.target.value) }))}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Vencimento</Label>
-                  <Input
-                    type="date"
-                    value={form.due_date || ''}
-                    onChange={(e) => setForm(p => ({ ...p, due_date: e.target.value }))}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={form.is_recurring || false}
-                    onCheckedChange={(v) => setForm(p => ({ ...p, is_recurring: v }))}
-                  />
-                  <Label>Recorrente</Label>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button onClick={handleCreate} className="flex-1">Salvar</Button>
-                  <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button size="sm" onClick={() => setShowDialog(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Novo
+          </Button>
         }
       />
+
+      {/* Cards de resumo */}
+      {!loading && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <ArrowDownCircle className="h-4 w-4 text-red-500" />
+                <p className="text-xs text-muted-foreground">A pagar</p>
+              </div>
+              <p className="text-lg font-bold text-red-600">{formatCurrency(stats.totalPayable)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <ArrowUpCircle className="h-4 w-4 text-green-500" />
+                <p className="text-xs text-muted-foreground">A receber</p>
+              </div>
+              <p className="text-lg font-bold text-green-600">{formatCurrency(stats.totalReceivable)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+                <p className="text-xs text-muted-foreground">Vencidas</p>
+              </div>
+              <p className="text-lg font-bold">{stats.overdue}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="h-4 w-4 text-yellow-500" />
+                <p className="text-xs text-muted-foreground">Esta semana</p>
+              </div>
+              <p className="text-lg font-bold">{stats.dueThisWeek}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {loading ? (
         <Card>
@@ -141,40 +127,45 @@ export const AgendaFinanceira: React.FC<AgendaFinanceiraProps> = ({ onBack }) =>
         </Card>
       ) : (
         <>
-          {/* Pending */}
-          {pendingItems.length > 0 && (
+          {/* Ativos */}
+          {activeItems.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-base font-semibold">Pendentes ({pendingItems.length})</h3>
-              {pendingItems.map(item => {
+              <h3 className="text-sm font-semibold text-foreground">
+                Pendentes e Vencidas ({activeItems.length})
+              </h3>
+              {activeItems.map(item => {
                 const { label, color } = getDueDateLabel(item.due_date);
-                const StatusIcon = statusConfig[item.status]?.icon || Clock;
+                const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.pending;
                 return (
                   <Card key={item.id}>
                     <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3 flex-1">
-                          {item.type === 'expense' ? (
-                            <TrendingDown className="h-4 w-4 text-red-500" />
-                          ) : (
-                            <TrendingUp className="h-4 w-4 text-green-500" />
-                          )}
-                          <div>
-                            <p className="font-medium">{item.title}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              <span className={`text-xs ${color}`}>{label}</span>
-                              <Badge variant={statusConfig[item.status]?.variant || 'secondary'} className="text-xs h-4">
-                                {statusConfig[item.status]?.label || item.status}
-                              </Badge>
-                            </div>
+                      <div className="flex items-center gap-3">
+                        {isPayable(item.type) ? (
+                          <TrendingDown className="h-4 w-4 text-red-500 shrink-0" />
+                        ) : (
+                          <TrendingUp className="h-4 w-4 text-green-500 shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{item.description}</p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className={`text-xs ${color}`}>{label}</span>
+                            <Badge variant={cfg.variant} className="text-[10px] h-4 px-1.5">
+                              {cfg.label}
+                            </Badge>
+                            {item.recurrent && (
+                              <Badge variant="outline" className="text-[10px] h-4 px-1.5">Recorrente</Badge>
+                            )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-semibold ${item.type === 'expense' ? 'text-red-600' : 'text-green-600'}`}>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`text-sm font-bold ${
+                            isPayable(item.type) ? 'text-red-600' : 'text-green-600'
+                          }`}>
                             {formatCurrency(item.amount)}
                           </span>
                           <Button
                             variant="ghost" size="sm"
-                            className="h-8 w-8 p-0 text-green-600"
+                            className="h-8 w-8 p-0 text-green-600 hover:text-green-700"
                             onClick={() => markAsPaid(item.id)}
                             title="Marcar como pago"
                           >
@@ -182,7 +173,7 @@ export const AgendaFinanceira: React.FC<AgendaFinanceiraProps> = ({ onBack }) =>
                           </Button>
                           <Button
                             variant="ghost" size="sm"
-                            className="h-8 w-8 p-0 text-destructive"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                             onClick={() => deleteItem(item.id)}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -196,57 +187,142 @@ export const AgendaFinanceira: React.FC<AgendaFinanceiraProps> = ({ onBack }) =>
             </div>
           )}
 
-          {/* Done */}
+          {/* Histórico */}
           {doneItems.length > 0 && (
             <div className="space-y-3">
-              <h3 className="text-base font-semibold text-muted-foreground">Concluídos ({doneItems.length})</h3>
-              {doneItems.map(item => (
-                <Card key={item.id} className="opacity-60">
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        {item.type === 'expense' ? (
-                          <TrendingDown className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-semibold text-muted-foreground">
+                Histórico ({doneItems.length})
+              </h3>
+              {doneItems.map(item => {
+                const cfg = STATUS_CONFIG[item.status] ?? STATUS_CONFIG.paid;
+                return (
+                  <Card key={item.id} className="opacity-60">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        {isPayable(item.type) ? (
+                          <TrendingDown className="h-4 w-4 text-muted-foreground shrink-0" />
                         ) : (
-                          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                          <TrendingUp className="h-4 w-4 text-muted-foreground shrink-0" />
                         )}
-                        <div>
-                          <p className="font-medium">{item.title}</p>
-                          <Badge variant={statusConfig[item.status]?.variant || 'outline'} className="text-xs h-4">
-                            {statusConfig[item.status]?.label || item.status}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{item.description}</p>
+                          <Badge variant={cfg.variant} className="text-[10px] h-4 px-1.5">
+                            {cfg.label}
                           </Badge>
                         </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="text-sm font-semibold text-muted-foreground">
+                            {formatCurrency(item.amount)}
+                          </span>
+                          <Button
+                            variant="ghost" size="sm"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            onClick={() => deleteItem(item.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-muted-foreground">{formatCurrency(item.amount)}</span>
-                        <Button
-                          variant="ghost" size="sm"
-                          className="h-8 w-8 p-0 text-destructive"
-                          onClick={() => deleteItem(item.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
 
           {items.length === 0 && (
             <Card>
-              <CardContent className="p-8 text-center">
-                <CalendarClock className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="font-medium mb-2">Nenhum lançamento</h3>
-                <p className="text-sm text-muted-foreground">
-                  Adicione contas a pagar ou receber para organizar seu fluxo financeiro
+              <CardContent className="p-10 text-center space-y-3">
+                <CalendarClock className="h-10 w-10 mx-auto text-muted-foreground opacity-40" />
+                <p className="font-medium">Nenhum lançamento</p>
+                <p className="text-sm text-muted-foreground max-w-xs mx-auto">
+                  Adicione contas a pagar ou a receber para organizar seu fluxo financeiro
                 </p>
+                <Button size="sm" onClick={() => setShowDialog(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> Adicionar lançamento
+                </Button>
               </CardContent>
             </Card>
           )}
         </>
       )}
+
+      {/* Dialog novo lançamento */}
+      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Lançamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Descrição *</Label>
+              <Input
+                placeholder="Ex: Conta de luz"
+                value={form.description || ''}
+                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Tipo</Label>
+                <Select
+                  value={form.type || 'payable'}
+                  onValueChange={v => setForm(p => ({ ...p, type: v as any }))}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="payable">A pagar (despesa)</SelectItem>
+                    <SelectItem value="receivable">A receber (receita)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Valor (R$) *</Label>
+                <Input
+                  type="number"
+                  placeholder="0,00"
+                  min={0}
+                  value={form.amount ?? ''}
+                  onChange={e => setForm(p => ({ ...p, amount: Number(e.target.value) }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Vencimento *</Label>
+              <Input
+                type="date"
+                value={form.due_date || ''}
+                onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Observações</Label>
+              <Input
+                placeholder="Opcional"
+                value={form.notes || ''}
+                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                checked={form.recurrent ?? false}
+                onCheckedChange={v => setForm(p => ({ ...p, recurrent: v }))}
+              />
+              <Label className="cursor-pointer">Recorrente</Label>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button
+                className="flex-1"
+                disabled={!form.description?.trim() || !form.amount || !form.due_date}
+                onClick={handleCreate}
+              >
+                Salvar
+              </Button>
+              <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
