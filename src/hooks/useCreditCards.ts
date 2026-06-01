@@ -30,25 +30,36 @@ function todayStr(): string {
 }
 
 /**
- * Ciclo da fatura ATUAL — mesma lógica de invoicePeriod() em CreditCardInvoices:
+ * Ciclo da fatura ATUAL.
  *
- *   today > closingDay  → fatura do próximo mês
- *   today <= closingDay → fatura do mês corrente
+ * A lógica correta é:
+ *   - Monta a data de fechamento do mês corrente.
+ *   - Se hoje > dataFechamentoCorrente → fatura do próximo mês.
+ *   - Senão → fatura do mês corrente.
  *
- * Exemplos (closingDay = 24):
- *   31/Mai → 25/Mai .. 24/Jun
- *   15/Mai → 25/Abr .. 24/Mai
- *   24/Mai → 25/Abr .. 24/Mai
+ * Usar datas reais evita o bug do último dia do mês:
+ *   Ex: 31/Mai, closingDay=30 → com números puros (31>30) ia pro Jul;
+ *       com datas: closingCorrente=30/Mai, hoje(31)>30/Mai → vai p/ Jun. ✓
  */
 function getInvoiceCycle(closingDay: number): { start: string; end: string } {
   const today      = new Date();
-  const todayDay   = today.getDate();
   const todayYear  = today.getFullYear();
   const todayMonth = today.getMonth(); // 0-based
 
+  // Data de fechamento no mês corrente (clamped ao último dia do mês)
+  const daysInCurrent   = new Date(todayYear, todayMonth + 1, 0).getDate();
+  const closingThisMonth = new Date(
+    todayYear,
+    todayMonth,
+    Math.min(closingDay, daysInCurrent)
+  );
+
+  // Se hoje JÁ passou do fechamento deste mês → fatura do próximo mês
+  const pastClosing = today > closingThisMonth;
+
   let invYear: number;
   let invMonth: number;
-  if (todayDay > closingDay) {
+  if (pastClosing) {
     if (todayMonth === 11) { invYear = todayYear + 1; invMonth = 0; }
     else                   { invYear = todayYear;     invMonth = todayMonth + 1; }
   } else {
@@ -56,10 +67,12 @@ function getInvoiceCycle(closingDay: number): { start: string; end: string } {
     invMonth = todayMonth;
   }
 
-  const daysInInvMonth  = new Date(invYear,  invMonth + 1, 0).getDate();
-  const endDay          = Math.min(closingDay, daysInInvMonth);
-  const endDate         = new Date(invYear, invMonth, endDay);
+  // Fim do ciclo = dia de fechamento no mês da fatura (clamped)
+  const daysInInvMonth = new Date(invYear, invMonth + 1, 0).getDate();
+  const endDay         = Math.min(closingDay, daysInInvMonth);
+  const endDate        = new Date(invYear, invMonth, endDay);
 
+  // Início do ciclo = (dia de fechamento + 1) no mês anterior ao da fatura
   const prevYear  = invMonth === 0 ? invYear - 1 : invYear;
   const prevMonth = invMonth === 0 ? 11 : invMonth - 1;
   const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
@@ -129,14 +142,12 @@ export const useCreditCards = () => {
     return results;
   };
 
-  // queryKey inclui a data local — muda automaticamente a cada novo dia,
-  // descartando o cache quando o ciclo de fatura vira.
   const { data: creditCards = [], isLoading } = useQuery({
     queryKey: ['credit_cards', user?.id, todayStr()],
     queryFn:  fetchCreditCards,
     enabled:  !!user,
-    staleTime: 0,          // sem cache: sempre busca dados frescos ao montar/volcar à aba
-    gcTime:   5 * 60 * 1000, // mantém em memória por 5 min para navegação fluida
+    staleTime: 0,
+    gcTime:   5 * 60 * 1000,
   });
 
   const createCreditCardMutation = useMutation({

@@ -1,20 +1,16 @@
 /**
  * useAgendaFinanceira
  * ─────────────────────────────────────────────────────────────────────────────
- * Agenda de contas a pagar / receber (janela: 30 dias passados + futuros).
+ * Janela de busca: 30 dias passados + 90 dias futuros.
  *
- * Migrado de useState/useEffect manual para React Query:
- *  • Sem memory leak no unmount (o useEffect não cancelava a promise)
- *  • Cache automático — não re-busca ao trocar de aba
- *  • invalidateQueries após mutações em vez de fetchItems() manual
- *    (elimina race condition quando o usuário clica rápido)
- *  • Stats derivados via useMemo — não recalculam a cada render
+ * O limite superior (+90 dias) é essencial: sem ele a query não retorna
+ * transações com data futura (contas a pagar/receber próximos meses),
+ * deixando as métricas de "A pagar" / "A receber" zeradas.
  *
- * Mapeamento de tabela:
- *  A agenda usa `transactions` como fonte única de verdade.
- *  income  → receivable (a receber)
- *  expense → payable    (a pagar)
- *  status: pending/overdue derivado de `status` + data de vencimento
+ * Mapeamento de tabela (fonte única de verdade: `transactions`):
+ *   income  → receivable (a receber)
+ *   expense → payable    (a pagar)
+ *   status: pending/overdue derivado de `status` + data de vencimento
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
@@ -57,9 +53,17 @@ export interface CreateAgendaItem {
 
 const QUERY_KEY = (userId: string) => ['agenda-financeira', userId];
 
+/** Janela de busca: hoje − 30 dias */
 function windowStart(): string {
   const d = new Date();
   d.setDate(d.getDate() - 30);
+  return d.toISOString().split('T')[0];
+}
+
+/** Janela de busca: hoje + 90 dias (inclui contas futuras) */
+function windowEnd(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 90);
   return d.toISOString().split('T')[0];
 }
 
@@ -75,8 +79,9 @@ async function fetchAgenda(userId: string): Promise<AgendaItem[]> {
     )
     .eq('user_id', userId)
     .gte('date', windowStart())
+    .lte('date', windowEnd())   // ← antes ausente: transacões futuras ficavam de fora
     .order('date', { ascending: true })
-    .limit(200);
+    .limit(500);
 
   if (error) throw error;
 
@@ -132,7 +137,7 @@ export const useAgendaFinanceira = () => {
     },
   });
 
-  // ── createItem ─────────────────────────────────────────────────────────────
+  // ── createItem ────────────────────────────────────────────────────────────────────
   const createMutation = useMutation({
     mutationFn: async (data: CreateAgendaItem) => {
       if (!user) throw new Error('Usuário não autenticado');
@@ -160,7 +165,7 @@ export const useAgendaFinanceira = () => {
     onError: (err: any) => toast.error(err.message || 'Erro ao criar lançamento'),
   });
 
-  // ── markAsPaid ─────────────────────────────────────────────────────────────
+  // ── markAsPaid ──────────────────────────────────────────────────────────────────
   const markAsPaidMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -181,7 +186,7 @@ export const useAgendaFinanceira = () => {
     onError: (err: any) => toast.error(err.message || 'Erro ao atualizar lançamento'),
   });
 
-  // ── cancelItem ─────────────────────────────────────────────────────────────
+  // ── cancelItem ──────────────────────────────────────────────────────────────────
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -202,7 +207,7 @@ export const useAgendaFinanceira = () => {
     onError: (err: any) => toast.error(err.message || 'Erro ao cancelar lançamento'),
   });
 
-  // ── deleteItem ─────────────────────────────────────────────────────────────
+  // ── deleteItem ──────────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -220,10 +225,10 @@ export const useAgendaFinanceira = () => {
     onError: (err: any) => toast.error(err.message || 'Erro ao remover lançamento'),
   });
 
-  // ── Stats via useMemo ──────────────────────────────────────────────────────
+  // ── Stats via useMemo ───────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const today  = new Date().toISOString().split('T')[0];
-    const next7  = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const today = new Date().toISOString().split('T')[0];
+    const next7 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const active = (s: AgendaStatus) => s !== 'cancelled' && s !== 'paid';
 
     return {
