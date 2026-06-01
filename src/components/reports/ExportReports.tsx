@@ -1,249 +1,117 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Download, FileText, Table, Settings, Calendar } from 'lucide-react';
-import { toast } from 'sonner';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BackHeader } from '@/components/layout/BackHeader';
-import { useExportReports, type ExportPeriod, type ExportOptions } from '@/hooks/useExportReports';
-import { format } from 'date-fns';
+import { useExportReports } from '@/hooks/useExportReports';
+import { FileText, FileSpreadsheet, Download, Calendar, BarChart3, Settings } from 'lucide-react';
 
 interface ExportReportsProps {
   onBack?: () => void;
 }
 
 export const ExportReports: React.FC<ExportReportsProps> = ({ onBack }) => {
-  const { isExporting, exportToPDF, exportToExcel, exportToCSV } = useExportReports();
-  const [selectedPeriod, setSelectedPeriod] = useState<ExportPeriod>('last_month');
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [exportOptions, setExportOptions] = useState<Omit<ExportOptions, 'period' | 'customPeriod'>>({
-    includeTransactions: true,
-    includeCategories: true,
-    includeBudgets: true,
-    includeAccounts: true
-  });
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const { exportToPDF, exportToExcel, isExporting } = useExportReports();
+  const [period, setPeriod] = useState('current_month');
+  const [includeTransactions, setIncludeTransactions] = useState(true);
+  const [includeCategories, setIncludeCategories] = useState(true);
+  const [includeBudgets, setIncludeBudgets] = useState(false);
+  const [includeGoals, setIncludeGoals] = useState(false);
 
-  const getExportOptions = (): ExportOptions => ({
-    ...exportOptions,
-    period: selectedPeriod,
-    customPeriod: selectedPeriod === 'custom' && customStartDate && customEndDate ? {
-      startDate: new Date(customStartDate),
-      endDate: new Date(customEndDate)
-    } : undefined
-  });
-
-  const handleExportPDF = async () => {
-    if (selectedPeriod === 'custom' && (!customStartDate || !customEndDate)) {
-      toast.error('Por favor, selecione as datas para o período personalizado');
-      return;
-    }
-    await exportToPDF(getExportOptions());
-  };
-
-  const handleExportExcel = async () => {
-    if (selectedPeriod === 'custom' && (!customStartDate || !customEndDate)) {
-      toast.error('Por favor, selecione as datas para o período personalizado');
-      return;
-    }
-    await exportToExcel(getExportOptions());
-  };
-
-  const handleExportCSV = async () => {
-    if (selectedPeriod === 'custom' && (!customStartDate || !customEndDate)) {
-      toast.error('Por favor, selecione as datas para o período personalizado');
-      return;
-    }
-    await exportToCSV(getExportOptions());
-  };
-
-  const getPeriodLabel = (period: ExportPeriod) => {
-    switch (period) {
-      case 'last_month': return 'Último mês';
-      case 'last_3_months': return 'Últimos 3 meses';
-      case 'last_year': return 'Último ano';
-      case 'custom': return 'Período personalizado';
-    }
+  const periodLabels: Record<string, string> = {
+    current_month: 'Mês atual',
+    last_month: 'Mês passado',
+    last_3_months: 'Últimos 3 meses',
+    last_6_months: 'Últimos 6 meses',
+    current_year: 'Ano atual',
+    all: 'Todo o histórico',
   };
 
   return (
-    <div className="space-y-4">
-      {onBack && <BackHeader title="Exportar Relatórios" onBack={onBack} />}
-      
-      {!onBack && (
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Exportar Relatórios</h2>
-        </div>
-      )}
+    <div className="space-y-6">
+      <BackHeader
+        title="Exportar Relatórios"
+        subtitle="Exporte seus dados financeiros em PDF ou Excel"
+        icon={<Download className="h-6 w-6" />}
+        onBack={onBack}
+      />
 
-      {/* Período de Exportação */}
+      {/* Period */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Calendar size={20} />
-            <span>Período dos Dados</span>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Calendar className="h-4 w-4" />
+            Período
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {(['last_month', 'last_3_months', 'last_year', 'custom'] as ExportPeriod[]).map(period => (
-                <Button
-                  key={period}
-                  variant={selectedPeriod === period ? "default" : "outline"}
-                  onClick={() => setSelectedPeriod(period)}
-                  className="justify-start text-sm"
-                >
-                  {getPeriodLabel(period)}
-                </Button>
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(periodLabels).map(([k, v]) => (
+                <SelectItem key={k} value={k}>{v}</SelectItem>
               ))}
-            </div>
-
-            {/* Período Personalizado */}
-            {selectedPeriod === 'custom' && (
-              <div className="grid grid-cols-2 gap-4 mt-4 p-4 border rounded-lg">
-                <div className="space-y-2">
-                  <Label htmlFor="start-date">Data Inicial</Label>
-                  <Input
-                    id="start-date"
-                    type="date"
-                    value={customStartDate}
-                    onChange={(e) => setCustomStartDate(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="end-date">Data Final</Label>
-                  <Input
-                    id="end-date"
-                    type="date"
-                    value={customEndDate}
-                    onChange={(e) => setCustomEndDate(e.target.value)}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
-      {/* Opções Avançadas */}
+      {/* Content */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Settings size={20} />
-              <span>Opções de Exportação</span>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-            >
-              Configurar
-            </Button>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Settings className="h-4 w-4" />
+            Conteúdo
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {showAdvancedOptions && (
-            <div className="space-y-4 mb-4 p-4 border rounded-lg">
-              <h4 className="font-medium">Incluir nos relatórios:</h4>
-              <div className="space-y-3">
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="include-transactions"
-                    checked={exportOptions.includeTransactions}
-                    onCheckedChange={(checked) =>
-                      setExportOptions(prev => ({ ...prev, includeTransactions: !!checked }))
-                    }
-                  />
-                  <Label htmlFor="include-transactions">Transações</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="include-categories"
-                    checked={exportOptions.includeCategories}
-                    onCheckedChange={(checked) =>
-                      setExportOptions(prev => ({ ...prev, includeCategories: !!checked }))
-                    }
-                  />
-                  <Label htmlFor="include-categories">Resumo por Categorias</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="include-accounts"
-                    checked={exportOptions.includeAccounts}
-                    onCheckedChange={(checked) =>
-                      setExportOptions(prev => ({ ...prev, includeAccounts: !!checked }))
-                    }
-                  />
-                  <Label htmlFor="include-accounts">Informações das Contas</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="include-budgets"
-                    checked={exportOptions.includeBudgets}
-                    onCheckedChange={(checked) =>
-                      setExportOptions(prev => ({ ...prev, includeBudgets: !!checked }))
-                    }
-                  />
-                  <Label htmlFor="include-budgets">Orçamentos</Label>
-                </div>
-              </div>
+        <CardContent className="space-y-3">
+          {([
+            { key: 'transactions', label: 'Transações', value: includeTransactions, set: setIncludeTransactions },
+            { key: 'categories', label: 'Categorias', value: includeCategories, set: setIncludeCategories },
+            { key: 'budgets', label: 'Orçamentos', value: includeBudgets, set: setIncludeBudgets },
+            { key: 'goals', label: 'Metas', value: includeGoals, set: setIncludeGoals },
+          ]).map(({ key, label, value, set }) => (
+            <div key={key} className="flex items-center justify-between">
+              <Label htmlFor={key} className="font-normal">{label}</Label>
+              <Switch id={key} checked={value} onCheckedChange={set} />
             </div>
-          )}
-
-          <div className="space-y-3">
-            <Button 
-              onClick={handleExportPDF}
-              disabled={isExporting}
-              className="w-full justify-start"
-              variant="outline"
-            >
-              <FileText size={20} className="mr-3" />
-              {isExporting ? 'Exportando...' : 'Exportar Relatório em PDF'}
-            </Button>
-            
-            <Button 
-              onClick={handleExportExcel}
-              disabled={isExporting}
-              className="w-full justify-start"
-              variant="outline"
-            >
-              <Table size={20} className="mr-3" />
-              {isExporting ? 'Exportando...' : 'Exportar Planilha Excel'}
-            </Button>
-            
-            <Button 
-              onClick={handleExportCSV}
-              disabled={isExporting}
-              className="w-full justify-start"
-              variant="outline"
-            >
-              <Download size={20} className="mr-3" />
-              {isExporting ? 'Exportando...' : 'Exportar Dados CSV'}
-            </Button>
-          </div>
+          ))}
         </CardContent>
       </Card>
 
-      {/* Informações */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="text-sm text-muted-foreground space-y-2">
-            <h4 className="font-medium text-foreground">Sobre os formatos:</h4>
-            <ul className="space-y-1 pl-4">
-              <li>• <strong>PDF</strong>: Relatório visual formatado com resumos e gráficos</li>
-              <li>• <strong>Excel</strong>: Planilha completa com múltiplas abas para análise detalhada</li>
-              <li>• <strong>CSV</strong>: Dados de transações para importação em outros sistemas</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Export Buttons */}
+      <div className="grid grid-cols-2 gap-3">
+        <Button
+          variant="outline"
+          onClick={exportToExcel}
+          disabled={isExporting}
+          className="flex-col h-auto py-4 gap-1"
+        >
+          <FileSpreadsheet className="h-6 w-6 text-green-600" />
+          <span className="text-sm font-medium">Exportar Excel</span>
+          <span className="text-xs text-muted-foreground">.xlsx</span>
+        </Button>
+        <Button
+          variant="outline"
+          onClick={exportToPDF}
+          disabled={isExporting}
+          className="flex-col h-auto py-4 gap-1"
+        >
+          <FileText className="h-6 w-6 text-red-600" />
+          <span className="text-sm font-medium">Exportar PDF</span>
+          <span className="text-xs text-muted-foreground">.pdf</span>
+        </Button>
+      </div>
+
+      {isExporting && (
+        <p className="text-center text-sm text-muted-foreground">
+          Gerando relatório...
+        </p>
+      )}
     </div>
   );
 };

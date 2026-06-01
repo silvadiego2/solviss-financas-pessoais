@@ -2,11 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useExportReports } from '@/hooks/useExportReports';
 import { Cloud, Clock, Download, Settings, AlertCircle, CheckCircle } from 'lucide-react';
@@ -28,377 +25,224 @@ interface BackupConfig {
   nextBackup?: Date;
 }
 
+const STORAGE_KEY = 'solviss_backup_config';
+
+const defaultConfig: BackupConfig = {
+  enabled: false,
+  frequency: 'weekly',
+  format: 'excel',
+  includeTransactions: true,
+  includeCategories: true,
+  includeBudgets: true,
+  includeAccounts: true,
+};
+
 export const AutoBackupManager: React.FC<AutoBackupManagerProps> = ({ onBack }) => {
   const { exportToPDF, exportToExcel, isExporting } = useExportReports();
-  const [backupConfig, setBackupConfig] = useState<BackupConfig>({
-    enabled: false,
-    frequency: 'weekly',
-    format: 'excel',
-    includeTransactions: true,
-    includeCategories: true,
-    includeBudgets: true,
-    includeAccounts: true
-  });
-  const [backupHistory, setBackupHistory] = useState<Array<{
-    date: Date;
-    format: string;
-    status: 'success' | 'failed';
-    size?: string;
-  }>>([]);
-
-  useEffect(() => {
-    // Carregar configuração do localStorage
-    const savedConfig = localStorage.getItem('autoBackupConfig');
-    if (savedConfig) {
-      const parsed = JSON.parse(savedConfig);
-      setBackupConfig({
-        ...parsed,
-        lastBackup: parsed.lastBackup ? new Date(parsed.lastBackup) : undefined,
-        nextBackup: parsed.nextBackup ? new Date(parsed.nextBackup) : undefined
-      });
-    }
-
-    // Carregar histórico do localStorage
-    const savedHistory = localStorage.getItem('backupHistory');
-    if (savedHistory) {
-      const parsed = JSON.parse(savedHistory);
-      setBackupHistory(parsed.map((item: any) => ({
-        ...item,
-        date: new Date(item.date)
-      })));
-    }
-
-    // Verificar se precisa fazer backup
-    checkForScheduledBackup();
-  }, []);
-
-  const calculateNextBackup = (frequency: string, from = new Date()): Date => {
-    switch (frequency) {
-      case 'daily':
-        return addDays(from, 1);
-      case 'weekly':
-        return addWeeks(from, 1);
-      case 'monthly':
-        return addMonths(from, 1);
-      default:
-        return addWeeks(from, 1);
-    }
-  };
-
-  const checkForScheduledBackup = () => {
-    const savedConfig = localStorage.getItem('autoBackupConfig');
-    if (!savedConfig) return;
-
-    const config = JSON.parse(savedConfig);
-    if (!config.enabled || !config.nextBackup) return;
-
-    const nextBackup = new Date(config.nextBackup);
-    const now = new Date();
-
-    if (now >= nextBackup) {
-      toast.info('Backup automático agendado será executado');
-      setTimeout(() => {
-        executeAutoBackup();
-      }, 2000);
-    }
-  };
-
-  const executeAutoBackup = async () => {
+  const [backupConfig, setBackupConfig] = useState<BackupConfig>(() => {
     try {
-      const exportOptions = {
-        period: 'last_month' as const,
-        includeTransactions: backupConfig.includeTransactions,
-        includeCategories: backupConfig.includeCategories,
-        includeBudgets: backupConfig.includeBudgets,
-        includeAccounts: backupConfig.includeAccounts
-      };
-
-      let success = false;
-
-      if (backupConfig.format === 'pdf' || backupConfig.format === 'both') {
-        await exportToPDF(exportOptions);
-        success = true;
-      }
-
-      if (backupConfig.format === 'excel' || backupConfig.format === 'both') {
-        await exportToExcel(exportOptions);
-        success = true;
-      }
-
-      if (success) {
-        const now = new Date();
-        const nextBackup = calculateNextBackup(backupConfig.frequency, now);
-        
-        const newConfig = {
-          ...backupConfig,
-          lastBackup: now,
-          nextBackup: nextBackup
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          ...defaultConfig,
+          ...parsed,
+          lastBackup: parsed.lastBackup ? new Date(parsed.lastBackup) : undefined,
+          nextBackup: parsed.nextBackup ? new Date(parsed.nextBackup) : undefined,
         };
-
-        setBackupConfig(newConfig);
-        localStorage.setItem('autoBackupConfig', JSON.stringify(newConfig));
-
-        // Adicionar ao histórico
-        const newHistoryEntry = {
-          date: now,
-          format: backupConfig.format,
-          status: 'success' as const,
-          size: '~2.5MB'
-        };
-
-        const updatedHistory = [newHistoryEntry, ...backupHistory].slice(0, 10);
-        setBackupHistory(updatedHistory);
-        localStorage.setItem('backupHistory', JSON.stringify(updatedHistory));
-
-        toast.success('Backup automático realizado com sucesso!');
       }
-    } catch (error) {
-      console.error('Erro no backup automático:', error);
-      
-      const failedEntry = {
-        date: new Date(),
-        format: backupConfig.format,
-        status: 'failed' as const
-      };
+    } catch {}
+    return defaultConfig;
+  });
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
 
-      const updatedHistory = [failedEntry, ...backupHistory].slice(0, 10);
-      setBackupHistory(updatedHistory);
-      localStorage.setItem('backupHistory', JSON.stringify(updatedHistory));
-
-      toast.error('Falha no backup automático');
-    }
+  const saveConfig = (config: BackupConfig) => {
+    setBackupConfig(config);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+    } catch {}
   };
 
-  const handleConfigChange = (key: keyof BackupConfig, value: any) => {
-    const newConfig = { ...backupConfig, [key]: value };
-    
-    if (key === 'enabled' && value) {
-      newConfig.nextBackup = calculateNextBackup(newConfig.frequency);
-    } else if (key === 'frequency') {
-      newConfig.nextBackup = calculateNextBackup(value);
-    }
-
-    setBackupConfig(newConfig);
-    localStorage.setItem('autoBackupConfig', JSON.stringify(newConfig));
-  };
-
-  const triggerManualBackup = async () => {
-    await executeAutoBackup();
-  };
-
-  const getFrequencyLabel = (frequency: string) => {
+  const calculateNextBackup = (frequency: BackupConfig['frequency'], from: Date = new Date()): Date => {
     switch (frequency) {
-      case 'daily': return 'Diariamente';
-      case 'weekly': return 'Semanalmente';
-      case 'monthly': return 'Mensalmente';
-      default: return 'Semanalmente';
+      case 'daily': return addDays(from, 1);
+      case 'weekly': return addWeeks(from, 1);
+      case 'monthly': return addMonths(from, 1);
     }
   };
 
-  const getFormatLabel = (format: string) => {
-    switch (format) {
-      case 'pdf': return 'PDF';
-      case 'excel': return 'Excel';
-      case 'both': return 'PDF + Excel';
-      default: return 'Excel';
+  const handleToggleEnabled = (enabled: boolean) => {
+    const newConfig = {
+      ...backupConfig,
+      enabled,
+      nextBackup: enabled ? calculateNextBackup(backupConfig.frequency) : undefined,
+    };
+    saveConfig(newConfig);
+  };
+
+  const handleFrequencyChange = (frequency: BackupConfig['frequency']) => {
+    const newConfig = {
+      ...backupConfig,
+      frequency,
+      nextBackup: backupConfig.enabled ? calculateNextBackup(frequency) : undefined,
+    };
+    saveConfig(newConfig);
+  };
+
+  const handleFormatChange = (fmt: BackupConfig['format']) => {
+    saveConfig({ ...backupConfig, format: fmt });
+  };
+
+  const handleToggleInclude = (field: keyof Pick<BackupConfig, 'includeTransactions' | 'includeCategories' | 'includeBudgets' | 'includeAccounts'>, value: boolean) => {
+    saveConfig({ ...backupConfig, [field]: value });
+  };
+
+  const handleManualBackup = async () => {
+    setIsCreatingBackup(true);
+    try {
+      if (backupConfig.format === 'pdf' || backupConfig.format === 'both') {
+        await exportToPDF();
+      }
+      if (backupConfig.format === 'excel' || backupConfig.format === 'both') {
+        await exportToExcel();
+      }
+      const now = new Date();
+      saveConfig({
+        ...backupConfig,
+        lastBackup: now,
+        nextBackup: backupConfig.enabled ? calculateNextBackup(backupConfig.frequency, now) : undefined,
+      });
+    } finally {
+      setIsCreatingBackup(false);
     }
   };
+
+  const frequencyLabels = { daily: 'Diário', weekly: 'Semanal', monthly: 'Mensal' };
+  const formatLabels = { pdf: 'PDF', excel: 'Excel', both: 'PDF + Excel' };
 
   return (
-    <div className="space-y-4">
-      {onBack && <BackHeader title="Backup Automático" onBack={onBack} />}
-      
-      {!onBack && (
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Backup Automático</h2>
-        </div>
-      )}
+    <div className="space-y-6">
+      <BackHeader
+        title="Backup Automático"
+        subtitle="Agende exportações periódicas dos seus dados"
+        icon={<Cloud className="h-6 w-6" />}
+        onBack={onBack}
+      />
 
-      {/* Configuração Principal */}
+      {/* Status Card */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Cloud size={20} />
-            <span>Configuração de Backup</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Ativar/Desativar */}
+        <CardContent className="p-4">
           <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <Label htmlFor="backup-enabled">Backup Automático</Label>
-              <p className="text-sm text-muted-foreground">
-                Gerar backups automaticamente dos seus dados financeiros
-              </p>
+            <div className="flex items-center space-x-3">
+              {backupConfig.enabled ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-muted-foreground" />
+              )}
+              <div>
+                <p className="font-medium">{backupConfig.enabled ? 'Backup Ativo' : 'Backup Inativo'}</p>
+                {backupConfig.lastBackup && (
+                  <p className="text-sm text-muted-foreground">
+                    Último: {format(backupConfig.lastBackup, 'dd/MM/yyyy HH:mm')}
+                  </p>
+                )}
+                {backupConfig.enabled && backupConfig.nextBackup && (
+                  <p className="text-sm text-muted-foreground">
+                    Próximo: {format(backupConfig.nextBackup, 'dd/MM/yyyy HH:mm')}
+                  </p>
+                )}
+              </div>
             </div>
             <Switch
-              id="backup-enabled"
               checked={backupConfig.enabled}
-              onCheckedChange={(checked) => handleConfigChange('enabled', checked)}
+              onCheckedChange={handleToggleEnabled}
             />
           </div>
-
-          {backupConfig.enabled && (
-            <>
-              {/* Frequência */}
-              <div className="space-y-2">
-                <Label htmlFor="frequency">Frequência</Label>
-                <Select 
-                  value={backupConfig.frequency} 
-                  onValueChange={(value) => handleConfigChange('frequency', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a frequência" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="daily">Diariamente</SelectItem>
-                    <SelectItem value="weekly">Semanalmente</SelectItem>
-                    <SelectItem value="monthly">Mensalmente</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Formato */}
-              <div className="space-y-2">
-                <Label htmlFor="format">Formato de Exportação</Label>
-                <Select 
-                  value={backupConfig.format} 
-                  onValueChange={(value) => handleConfigChange('format', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o formato" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pdf">Apenas PDF</SelectItem>
-                    <SelectItem value="excel">Apenas Excel</SelectItem>
-                    <SelectItem value="both">PDF + Excel</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Dados Incluídos */}
-              <div className="space-y-3">
-                <Label>Dados Incluídos no Backup</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="include-transactions"
-                      checked={backupConfig.includeTransactions}
-                      onCheckedChange={(checked) => handleConfigChange('includeTransactions', checked)}
-                    />
-                    <Label htmlFor="include-transactions" className="text-sm">Transações</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="include-categories"
-                      checked={backupConfig.includeCategories}
-                      onCheckedChange={(checked) => handleConfigChange('includeCategories', checked)}
-                    />
-                    <Label htmlFor="include-categories" className="text-sm">Categorias</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="include-budgets"
-                      checked={backupConfig.includeBudgets}
-                      onCheckedChange={(checked) => handleConfigChange('includeBudgets', checked)}
-                    />
-                    <Label htmlFor="include-budgets" className="text-sm">Orçamentos</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="include-accounts"
-                      checked={backupConfig.includeAccounts}
-                      onCheckedChange={(checked) => handleConfigChange('includeAccounts', checked)}
-                    />
-                    <Label htmlFor="include-accounts" className="text-sm">Contas</Label>
-                  </div>
-                </div>
-              </div>
-
-              {/* Próximo Backup */}
-              {backupConfig.nextBackup && (
-                <div className="p-4 bg-muted rounded-lg">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Clock size={16} />
-                    <span className="font-medium">Próximo Backup</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {format(backupConfig.nextBackup, "dd/MM/yyyy 'às' HH:mm")}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Frequência: {getFrequencyLabel(backupConfig.frequency)} • Formato: {getFormatLabel(backupConfig.format)}
-                  </p>
-                </div>
-              )}
-
-              {/* Backup Manual */}
-              <div className="pt-4 border-t">
-                <Button 
-                  onClick={triggerManualBackup}
-                  disabled={isExporting}
-                  className="w-full"
-                  variant="outline"
-                >
-                  <Download size={16} className="mr-2" />
-                  {isExporting ? 'Gerando Backup...' : 'Executar Backup Agora'}
-                </Button>
-              </div>
-            </>
-          )}
         </CardContent>
       </Card>
 
-      {/* Histórico de Backups */}
-      {backupHistory.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Settings size={20} />
-              <span>Histórico de Backups</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {backupHistory.map((backup, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    {backup.status === 'success' ? (
-                      <CheckCircle size={16} className="text-green-500" />
-                    ) : (
-                      <AlertCircle size={16} className="text-red-500" />
-                    )}
-                    <div>
-                      <p className="font-medium">
-                        {format(backup.date, "dd/MM/yyyy 'às' HH:mm")}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        Formato: {getFormatLabel(backup.format)}
-                        {backup.size && ` • Tamanho: ${backup.size}`}
-                      </p>
-                    </div>
-                  </div>
-                  <Badge variant={backup.status === 'success' ? 'default' : 'destructive'}>
-                    {backup.status === 'success' ? 'Sucesso' : 'Falha'}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Informações */}
+      {/* Configuration */}
       <Card>
-        <CardContent className="pt-6">
-          <div className="text-sm text-muted-foreground space-y-2">
-            <h4 className="font-medium text-foreground">Sobre o Backup Automático:</h4>
-            <ul className="space-y-1 pl-4">
-              <li>• Os backups são gerados automaticamente no seu dispositivo</li>
-              <li>• Os arquivos são baixados na pasta de Downloads padrão</li>
-              <li>• Recomendamos manter backup mensal para segurança</li>
-              <li>• Os dados sempre refletem o último mês completo</li>
-            </ul>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Settings className="h-4 w-4" />
+            Configurações
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Frequência</Label>
+              <Select value={backupConfig.frequency} onValueChange={(v) => handleFrequencyChange(v as BackupConfig['frequency'])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(frequencyLabels).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Formato</Label>
+              <Select value={backupConfig.format} onValueChange={(v) => handleFormatChange(v as BackupConfig['format'])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(formatLabels).map(([k, v]) => (
+                    <SelectItem key={k} value={k}>{v}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          <div className="space-y-3">
+            <Label>Incluir no backup</Label>
+            {([
+              { key: 'includeTransactions', label: 'Transações' },
+              { key: 'includeCategories', label: 'Categorias' },
+              { key: 'includeBudgets', label: 'Orçamentos' },
+              { key: 'includeAccounts', label: 'Contas' },
+            ] as const).map(({ key, label }) => (
+              <div key={key} className="flex items-center justify-between">
+                <Label htmlFor={key} className="font-normal">{label}</Label>
+                <Switch
+                  id={key}
+                  checked={backupConfig[key]}
+                  onCheckedChange={(v) => handleToggleInclude(key, v)}
+                />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Manual Backup */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Download className="h-4 w-4" />
+            Backup Manual
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Faça um backup imediato dos seus dados no formato configurado acima.
+          </p>
+          <Button
+            onClick={handleManualBackup}
+            disabled={isCreatingBackup || isExporting}
+            className="w-full"
+          >
+            {isCreatingBackup || isExporting ? (
+              <><Clock className="h-4 w-4 mr-2 animate-spin" />Criando backup...</>
+            ) : (
+              <><Download className="h-4 w-4 mr-2" />Fazer Backup Agora</>
+            )}
+          </Button>
         </CardContent>
       </Card>
     </div>

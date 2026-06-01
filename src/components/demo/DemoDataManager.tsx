@@ -1,15 +1,15 @@
 import React, { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { BackHeader } from '@/components/layout/BackHeader';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useGoals } from '@/hooks/useGoals';
 import { useBudgets } from '@/hooks/useBudgets';
 import { useAutomationRules } from '@/hooks/useAutomationRules';
 import { useCategories } from '@/hooks/useCategories';
-import { toast } from 'sonner';
-import { Loader2, Database, CheckCircle } from 'lucide-react';
-import { BackHeader } from '@/components/layout/BackHeader';
+import { Database, CheckCircle, Loader2, Play } from 'lucide-react';
+import { enhancedToast } from '@/components/ui/enhanced-toast';
 
 interface DemoDataManagerProps {
   onBack?: () => void;
@@ -18,7 +18,7 @@ interface DemoDataManagerProps {
 export const DemoDataManager: React.FC<DemoDataManagerProps> = ({ onBack }) => {
   const [isCreating, setIsCreating] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<string[]>([]);
-  
+
   const { createAccount } = useAccounts();
   const { createTransaction } = useTransactions();
   const { addGoal } = useGoals();
@@ -33,277 +33,138 @@ export const DemoDataManager: React.FC<DemoDataManagerProps> = ({ onBack }) => {
   const createDemoData = async () => {
     setIsCreating(true);
     setCompletedSteps([]);
-    
+
     try {
-      // 1. Criar contas bancárias
-      toast.info('Criando contas bancárias...');
-      
-      const checkingAccount = await new Promise((resolve) => {
-        createAccount({
-          name: 'Conta Corrente',
-          type: 'checking' as any,
-          bank_name: 'Banco do Brasil',
-          balance: 2500
+      // 1. Contas
+      const contaCorrente = await createAccount({
+        name: 'Conta Corrente Nubank',
+        type: 'checking',
+        initial_balance: 3500,
+        color: '#820ad1',
+        icon: '🏦',
+        is_active: true,
+      });
+      const poupanca = await createAccount({
+        name: 'Poupança Itaú',
+        type: 'savings',
+        initial_balance: 12000,
+        color: '#003d7a',
+        icon: '💰',
+        is_active: true,
+      });
+      updateProgress('accounts');
+
+      // 2. Transações demo
+      const expenseCategories = categories.filter(c => c.type === 'expense');
+      const incomeCategories = categories.filter(c => c.type === 'income');
+      const today = new Date();
+
+      const demoTransactions = [
+        { description: 'Salário', amount: 5500, type: 'income' as const, days: 5, catIdx: 0 },
+        { description: 'Aluguel', amount: 1200, type: 'expense' as const, days: 4, catIdx: 0 },
+        { description: 'Supermercado', amount: 380, type: 'expense' as const, days: 3, catIdx: 1 },
+        { description: 'Netflix', amount: 39.9, type: 'expense' as const, days: 3, catIdx: 2 },
+        { description: 'Uber', amount: 45, type: 'expense' as const, days: 2, catIdx: 3 },
+        { description: 'Freelance', amount: 1200, type: 'income' as const, days: 1, catIdx: 1 },
+      ];
+
+      for (const t of demoTransactions) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - t.days);
+        const cats = t.type === 'income' ? incomeCategories : expenseCategories;
+        await createTransaction({
+          description: t.description,
+          amount: t.amount,
+          type: t.type,
+          date: date.toISOString().split('T')[0],
+          account_id: contaCorrente?.id || '',
+          category_id: cats[t.catIdx % cats.length]?.id,
         });
-        // Simular delay para demonstrar progresso
-        setTimeout(() => resolve('checking-created'), 500);
-      });
-      updateProgress('Conta corrente criada');
-
-      const savingsAccount = await new Promise((resolve) => {
-        createAccount({
-          name: 'Poupança',
-          type: 'savings' as any,
-          bank_name: 'Caixa Econômica Federal', 
-          balance: 8000
-        });
-        setTimeout(() => resolve('savings-created'), 500);
-      });
-      updateProgress('Conta poupança criada');
-
-      const creditCardAccount = await new Promise((resolve) => {
-        createAccount({
-          name: 'Cartão Nubank',
-          type: 'credit_card' as any,
-          bank_name: 'Nubank',
-          balance: -850,
-          credit_limit: 3000,
-          due_day: 15,
-          closing_day: 8
-        });
-        setTimeout(() => resolve('credit-created'), 500);
-      });
-      updateProgress('Cartão de crédito criado');
-
-      // 2. Criar metas financeiras
-      toast.info('Criando metas financeiras...');
-      
-      addGoal({
-        name: 'Reserva de Emergência',
-        description: 'Acumular 6 meses de gastos para emergências',
-        target_amount: 20000,
-        current_amount: 8000,
-        target_date: '2024-12-31',
-        is_completed: false
-      });
-      updateProgress('Meta: Reserva de Emergência');
-
-      addGoal({
-        name: 'Viagem para Europa',
-        description: 'Economizar para viagem dos sonhos',
-        target_amount: 15000,
-        current_amount: 2300,
-        target_date: '2025-06-30',
-        is_completed: false
-      });
-      updateProgress('Meta: Viagem Europa');
-
-      addGoal({
-        name: 'Novo Notebook',
-        description: 'Comprar notebook para trabalho',
-        target_amount: 4000,
-        current_amount: 1200,
-        target_date: '2024-03-31',
-        is_completed: false
-      });
-      updateProgress('Meta: Notebook');
-
-      // 3. Criar orçamentos
-      toast.info('Criando orçamentos...');
-      
-      const alimentacaoCategory = categories.find(c => c.name === 'Alimentação');
-      const transporteCategory = categories.find(c => c.name === 'Transporte');
-      const lazerCategory = categories.find(c => c.name === 'Lazer');
-      const moradiaCategory = categories.find(c => c.name === 'Moradia');
-
-      if (alimentacaoCategory) {
-        createBudget({
-          category_id: alimentacaoCategory.id,
-          amount: 800,
-          spent: 0,
-          month: new Date().getMonth() + 1,
-          year: new Date().getFullYear()
-        });
-        updateProgress('Orçamento: Alimentação');
       }
+      updateProgress('transactions');
 
-      if (transporteCategory) {
-        createBudget({
-          category_id: transporteCategory.id,
-          amount: 300,
-          spent: 0,
-          month: new Date().getMonth() + 1,
-          year: new Date().getFullYear()
-        });
-        updateProgress('Orçamento: Transporte');
-      }
-
-      if (lazerCategory) {
-        createBudget({
-          category_id: lazerCategory.id,
-          amount: 400,
-          spent: 0,
-          month: new Date().getMonth() + 1,
-          year: new Date().getFullYear()
-        });
-        updateProgress('Orçamento: Lazer');
-      }
-
-      if (moradiaCategory) {
-        createBudget({
-          category_id: moradiaCategory.id,
-          amount: 1500,
-          spent: 0,
-          month: new Date().getMonth() + 1,
-          year: new Date().getFullYear()
-        });
-        updateProgress('Orçamento: Moradia');
-      }
-
-      // 4. Criar regras de automação
-      toast.info('Criando regras de automação...');
-      
-      createRule({
-        name: 'Auto-categorizar Transferências',
-        rule_type: 'categorization',
-        conditions: [
-          {
-            field: 'description',
-            operator: 'contains',
-            value: 'transferencia'
-          }
-        ],
-        actions: [
-          {
-            type: 'set_category',
-            value: 'investimentos'
-          }
-        ],
-        priority: 1
+      // 3. Meta
+      await addGoal({
+        title: 'Fundo de Emergência',
+        description: 'Reserva equivalente a 6 meses de despesas',
+        target_amount: 18000,
+        current_amount: 12000,
+        deadline: new Date(today.getFullYear() + 1, 5, 30).toISOString().split('T')[0],
+        icon: '🛡️',
+        color: '#059669',
       });
-      updateProgress('Regra: Auto-categorização');
+      updateProgress('goals');
 
-      createRule({
-        name: 'Alerta Gastos Alimentação',
-        rule_type: 'alert',
-        conditions: [
-          {
-            field: 'category',
-            operator: 'equals',
-            value: 'alimentacao'
-          },
-          {
-            field: 'amount',
-            operator: 'greater_than',
-            value: 600
-          }
-        ],
-        actions: [
-          {
-            type: 'send_alert',
-            value: 'Gastos com alimentação acima de R$ 600'
-          }
-        ],
-        priority: 2
+      // 4. Orçamento
+      const firstExpenseCat = expenseCategories[0];
+      if (firstExpenseCat) {
+        await createBudget({
+          category_id: firstExpenseCat.id,
+          amount: 600,
+          period: 'monthly',
+          month: today.getMonth() + 1,
+          year: today.getFullYear(),
+        });
+      }
+      updateProgress('budgets');
+
+      enhancedToast.success('Dados de demonstração criados!', {
+        description: 'Explore o app com dados reais de exemplo.'
       });
-      updateProgress('Regra: Alerta gastos');
-
-      toast.success('🎉 Dados de demonstração criados com sucesso!');
-      
     } catch (error) {
-      console.error('Erro ao criar dados demo:', error);
-      toast.error('Erro ao criar dados de demonstração');
+      enhancedToast.error('Erro ao criar dados de demonstração');
     } finally {
       setIsCreating(false);
     }
   };
 
+  const steps = [
+    { id: 'accounts', label: 'Contas bancárias' },
+    { id: 'transactions', label: 'Transações' },
+    { id: 'goals', label: 'Metas' },
+    { id: 'budgets', label: 'Orçamentos' },
+  ];
+
   return (
-    <div className="space-y-4">
-      {onBack && <BackHeader title="Dados de Demonstração" onBack={onBack} />}
-      <Card className="w-full max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Database className="h-5 w-5" />
-          Dados de Demonstração
-        </CardTitle>
-        <CardDescription>
-          Crie dados de exemplo para testar todas as funcionalidades do aplicativo
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-          <div className="space-y-3">
-          <h4 className="font-medium">O que será criado:</h4>
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="font-medium">📊 Contas (3)</p>
-              <ul className="text-muted-foreground space-y-1">
-                <li>• Conta Corrente BB</li>
-                <li>• Poupança Caixa</li>
-                <li>• Cartão Nubank</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-medium">🎯 Metas (3)</p>
-              <ul className="text-muted-foreground space-y-1">
-                <li>• Reserva emergência</li>
-                <li>• Viagem Europa</li>
-                <li>• Novo notebook</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-medium">💰 Orçamentos (4)</p>
-              <ul className="text-muted-foreground space-y-1">
-                <li>• Alimentação: R$ 800</li>
-                <li>• Transporte: R$ 300</li>
-                <li>• Lazer: R$ 400</li>
-                <li>• Moradia: R$ 1.500</li>
-              </ul>
-            </div>
-            <div>
-              <p className="font-medium">🤖 Automação (2)</p>
-              <ul className="text-muted-foreground space-y-1">
-                <li>• Auto-categorização</li>
-                <li>• Alertas orçamento</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+    <div className="space-y-6">
+      <BackHeader
+        title="Dados de Demonstração"
+        subtitle="Crie dados de exemplo para explorar o app"
+        icon={<Database className="h-6 w-6" />}
+        onBack={onBack}
+      />
 
-        {completedSteps.length > 0 && (
-          <div className="space-y-2">
-            <h4 className="font-medium">Progresso:</h4>
-            <div className="space-y-1">
-              {completedSteps.map((step, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <span className="text-muted-foreground">{step}</span>
-                </div>
-              ))}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">O que será criado</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {steps.map(step => (
+            <div key={step.id} className="flex items-center justify-between">
+              <span className="text-sm">{step.label}</span>
+              {completedSteps.includes(step.id) ? (
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              ) : isCreating ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <div className="h-4 w-4 rounded-full border-2 border-muted" />
+              )}
             </div>
-          </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Button
+        onClick={createDemoData}
+        disabled={isCreating}
+        className="w-full"
+      >
+        {isCreating ? (
+          <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Criando dados...</>
+        ) : (
+          <><Play className="h-4 w-4 mr-2" />Criar Dados de Demonstração</>
         )}
-
-        <Button 
-          onClick={createDemoData} 
-          disabled={isCreating}
-          className="w-full"
-          size="lg"
-        >
-          {isCreating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Criando dados...
-            </>
-          ) : (
-            <>
-              <Database className="mr-2 h-4 w-4" />
-              Criar Dados de Demonstração
-            </>
-          )}
-        </Button>
-      </CardContent>
-    </Card>
+      </Button>
     </div>
   );
 };

@@ -1,22 +1,28 @@
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AuditLogViewer } from './AuditLogViewer';
-import { useAuth } from '@/components/auth/AuthProvider';
+import { BackHeader } from '@/components/layout/BackHeader';
+import { useAuth } from '@/hooks/useAuth';
 import { useAuditLogs } from '@/hooks/useAuditLogs';
-import { Shield, AlertTriangle, CheckCircle, Activity } from 'lucide-react';
+import { Shield, Activity, User, Clock, Eye, Edit, Trash2, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { BackHeader } from '@/components/layout/BackHeader';
 
 interface SecurityDashboardProps {
   onBack?: () => void;
 }
 
+const operationConfig: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  INSERT: { label: 'Criado', icon: Plus, color: 'text-green-600' },
+  UPDATE: { label: 'Atualizado', icon: Edit, color: 'text-blue-600' },
+  DELETE: { label: 'Removido', icon: Trash2, color: 'text-red-600' },
+  SELECT: { label: 'Consultado', icon: Eye, color: 'text-muted-foreground' },
+};
+
 export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ onBack }) => {
   const { user } = useAuth();
   const { auditLogs, loading } = useAuditLogs();
 
-  // Estatísticas de segurança
   const recentLogs = auditLogs.slice(0, 10);
   const todayLogs = auditLogs.filter(log => {
     const logDate = new Date(log.created_at);
@@ -33,116 +39,129 @@ export const SecurityDashboard: React.FC<SecurityDashboardProps> = ({ onBack }) 
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      {onBack ? (
-        <BackHeader title="Dashboard de Segurança" onBack={onBack} />
-      ) : (
-        <div className="flex items-center gap-2 mb-6">
-          <Shield className="h-6 w-6" />
-          <h1 className="text-2xl font-bold">Dashboard de Segurança</h1>
-        </div>
-      )}
+      <BackHeader
+        title="Dashboard de Segurança"
+        subtitle="Monitoramento de atividades e logs de auditoria"
+        icon={<Shield className="h-6 w-6" />}
+        onBack={onBack}
+      />
 
-      {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total de Logs</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{auditLogs.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Todas as atividades registradas
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Hoje</CardTitle>
-            <CheckCircle className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{todayLogs.length}</div>
-            <p className="text-xs text-muted-foreground">
-              Atividades de hoje
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Última Atividade</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-warning" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm font-bold">
-              {lastActivity ? format(new Date(lastActivity), 'HH:mm', { locale: ptBR }) : 'N/A'}
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Activity className="h-4 w-4 text-blue-600" />
+              <div>
+                <p className="text-2xl font-bold">{todayLogs.length}</p>
+                <p className="text-xs text-muted-foreground">Ações hoje</p>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {lastActivity ? format(new Date(lastActivity), "dd/MM", { locale: ptBR }) : 'Nenhuma atividade'}
-            </p>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Status</CardTitle>
-            <Shield className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-sm font-bold text-success">Seguro</div>
-            <p className="text-xs text-muted-foreground">
-              Sistema monitorado
-            </p>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Shield className="h-4 w-4 text-green-600" />
+              <div>
+                <p className="text-2xl font-bold">{auditLogs.length}</p>
+                <p className="text-xs text-muted-foreground">Total de logs</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Resumo de Operações */}
+      {/* User Info */}
       <Card>
         <CardHeader>
-          <CardTitle>Resumo de Operações</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <User className="h-4 w-4" />
+            Informações da Conta
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {Object.entries(operationCounts).map(([operation, count]) => (
-              <Badge key={operation} variant="outline" className="flex items-center gap-1">
-                {operation}: {count}
-              </Badge>
-            ))}
+        <CardContent className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Email</span>
+            <span className="font-medium">{user?.email}</span>
           </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Status</span>
+            <Badge variant="default" className="text-xs">Ativo</Badge>
+          </div>
+          {lastActivity && (
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Última atividade</span>
+              <span className="font-medium">
+                {format(new Date(lastActivity), "dd/MM 'às' HH:mm", { locale: ptBR })}
+              </span>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Informações do Usuário */}
+      {/* Operation Summary */}
+      {Object.keys(operationCounts).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Resumo de Operações</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {Object.entries(operationCounts).map(([op, count]) => {
+              const config = operationConfig[op];
+              if (!config) return null;
+              const Icon = config.icon;
+              return (
+                <div key={op} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Icon className={`h-4 w-4 ${config.color}`} />
+                    <span className="text-sm">{config.label}</span>
+                  </div>
+                  <Badge variant="secondary">{count}</Badge>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recent Logs */}
       <Card>
         <CardHeader>
-          <CardTitle>Informações da Sessão</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-4 w-4" />
+            Atividade Recente
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">ID do Usuário:</span>
-              <span className="text-sm font-mono">{user?.id}</span>
+          {loading ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Carregando...</p>
+          ) : recentLogs.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhuma atividade registrada</p>
+          ) : (
+            <div className="space-y-2">
+              {recentLogs.map((log) => {
+                const config = operationConfig[log.operation];
+                const Icon = config?.icon || Activity;
+                return (
+                  <div key={log.id} className="flex items-center justify-between py-2 border-b last:border-0">
+                    <div className="flex items-center gap-2">
+                      <Icon className={`h-3.5 w-3.5 ${config?.color || 'text-muted-foreground'}`} />
+                      <div>
+                        <p className="text-sm font-medium capitalize">{log.table_name}</p>
+                        <p className="text-xs text-muted-foreground">{config?.label || log.operation}</p>
+                      </div>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(log.created_at), 'HH:mm', { locale: ptBR })}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">Email:</span>
-              <span className="text-sm">{user?.email}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">Status da Conta:</span>
-              <Badge variant="outline" className="text-success">
-                Ativo
-              </Badge>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
-
-      {/* Log de Auditoria */}
-      <AuditLogViewer />
     </div>
   );
 };

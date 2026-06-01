@@ -3,262 +3,147 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Edit, Trash2, Tag } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useCategories } from '@/hooks/useCategories';
-import { supabase } from '@/integrations/supabase/client';
-import { defaultCategories } from '@/data/defaultCategories';
+import { Tag, Plus, Trash2, Edit } from 'lucide-react';
+import { enhancedToast } from '@/components/ui/enhanced-toast';
 
 interface CategoryManagerProps {
   onBack?: () => void;
 }
 
 export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
-  const { categories, loading, createCategory, updateCategory, deleteCategory } = useCategories();
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<any>(null);
-  const [newCategory, setNewCategory] = useState({
-    name: '',
-    icon: '📋',
-    color: '#6B7280',
-    transaction_type: 'expense' as 'income' | 'expense',
-  });
+  const { categories, createCategory, deleteCategory, isCreating } = useCategories();
+  const [showDialog, setShowDialog] = useState(false);
+  const [form, setForm] = useState({ name: '', icon: '📋', color: '#6b7280', type: 'expense' as 'income' | 'expense' });
 
-  const handleAddCategory = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      if (editingCategory) {
-        await updateCategory(editingCategory.id, newCategory);
-        setEditingCategory(null);
-      } else {
-        await createCategory(newCategory);
-      }
-      setShowAddForm(false);
-      setNewCategory({ name: '', icon: '📋', color: '#6B7280', transaction_type: 'expense' });
-    } catch (_) {}
+  const handleCreate = async () => {
+    if (!form.name.trim()) {
+      enhancedToast.error('Nome da categoria é obrigatório');
+      return;
+    }
+    await createCategory(form);
+    setShowDialog(false);
+    setForm({ name: '', icon: '📋', color: '#6b7280', type: 'expense' });
   };
 
-  const handleEditCategory = (category: any) => {
-    setEditingCategory(category);
-    setNewCategory({
-      name: category.name,
-      icon: category.icon || '📋',
-      color: category.color || '#6B7280',
-      transaction_type: category.transaction_type,
-    });
-    setShowAddForm(true);
-  };
+  const incomeCategories = categories.filter(c => c.type === 'income');
+  const expenseCategories = categories.filter(c => c.type === 'expense');
 
-  const handleDeleteCategory = async (categoryId: string, categoryName: string) => {
-    const { count } = await supabase
-      .from('transactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('category_id', categoryId);
-
-    const transactionCount = count ?? 0;
-    const message = transactionCount > 0
-      ? `A categoria "${categoryName}" possui ${transactionCount} transação(ões) vinculada(s).\n\n⚠️ Ao excluir, as transações ficarão sem categoria.\n\nDeseja continuar?`
-      : `Excluir a categoria "${categoryName}"?`;
-
-    if (!window.confirm(message)) return;
-    try { await deleteCategory(categoryId); } catch (_) {}
-  };
-
-  const handleCancelForm = () => {
-    setShowAddForm(false);
-    setEditingCategory(null);
-    setNewCategory({ name: '', icon: '📋', color: '#6B7280', transaction_type: 'expense' });
-  };
-
-  const incomeCategories  = categories.filter(c => c.transaction_type === 'income');
-  const expenseCategories = categories.filter(c => c.transaction_type === 'expense');
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-      </div>
-    );
-  }
+  const CategoryList = ({ cats }: { cats: typeof categories }) => (
+    <div className="space-y-1">
+      {cats.length === 0 ? (
+        <p className="text-sm text-muted-foreground py-3 text-center">Nenhuma categoria</p>
+      ) : (
+        cats.map(category => (
+          <div key={category.id} className="flex items-center justify-between py-2.5 px-1 rounded hover:bg-muted/50 group">
+            <div className="flex items-center space-x-3">
+              <span className="text-lg">{category.icon}</span>
+              <span className="font-medium text-sm">{category.name}</span>
+              {!category.user_id && (
+                <Badge variant="secondary" className="text-xs">Padrão</Badge>
+              )}
+            </div>
+            {category.user_id && (
+              <Button
+                variant="ghost" size="sm"
+                className="h-7 w-7 p-0 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => deleteCategory(category.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        ))
+      )}
+    </div>
+  );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <BackHeader
         title="Categorias"
+        subtitle="Organize seus lançamentos por categoria"
+        icon={<Tag className="h-6 w-6" />}
         onBack={onBack}
         action={
-          <Button size="sm" onClick={() => setShowAddForm(!showAddForm)} className="flex items-center gap-1.5">
-            <Plus size={15} />
-            <span>Nova</span>
-          </Button>
+          <Dialog open={showDialog} onOpenChange={setShowDialog}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="h-4 w-4 mr-1" />
+                Nova
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Nova Categoria</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Nome</Label>
+                  <Input
+                    placeholder="Ex: Alimentação"
+                    value={form.name}
+                    onChange={(e) => setForm(p => ({ ...p, name: e.target.value }))}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Ícone (emoji)</Label>
+                    <Input
+                      value={form.icon}
+                      onChange={(e) => setForm(p => ({ ...p, icon: e.target.value }))}
+                      className="text-center text-lg"
+                      maxLength={2}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Tipo</Label>
+                    <select
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                      value={form.type}
+                      onChange={(e) => setForm(p => ({ ...p, type: e.target.value as any }))}
+                    >
+                      <option value="expense">Despesa</option>
+                      <option value="income">Receita</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button onClick={handleCreate} disabled={isCreating} className="flex-1">
+                    {isCreating ? 'Criando...' : 'Criar Categoria'}
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowDialog(false)}>Cancelar</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         }
       />
 
-      {showAddForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleAddCategory} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome *</Label>
-                  <Input
-                    id="name"
-                    value={newCategory.name}
-                    onChange={(e) => setNewCategory(prev => ({ ...prev, name: e.target.value }))}
-                    placeholder="Ex: Pets, Academia..."
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="icon">Ícone</Label>
-                  <Input
-                    id="icon"
-                    value={newCategory.icon}
-                    onChange={(e) => setNewCategory(prev => ({ ...prev, icon: e.target.value }))}
-                    placeholder="📋"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="type">Tipo *</Label>
-                  <Select
-                    value={newCategory.transaction_type}
-                    onValueChange={(value: 'income' | 'expense') =>
-                      setNewCategory(prev => ({ ...prev, transaction_type: value }))
-                    }
-                  >
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="expense">Despesa</SelectItem>
-                      <SelectItem value="income">Receita</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="color">Cor</Label>
-                  <Input
-                    id="color"
-                    type="color"
-                    value={newCategory.color}
-                    onChange={(e) => setNewCategory(prev => ({ ...prev, color: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={handleCancelForm}>Cancelar</Button>
-                <Button type="submit">{editingCategory ? 'Salvar Alterações' : 'Adicionar'}</Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Receitas */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-green-600 text-base">
-            <Tag size={17} /><span>Receitas ({incomeCategories.length})</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="divide-y divide-border">
-            {incomeCategories.map((category) => (
-              <div key={category.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg leading-none">{category.icon}</span>
-                  <span className="text-sm font-medium">{category.name}</span>
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
-                </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleEditCategory(category)}>
-                    <Edit size={14} />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive" onClick={() => handleDeleteCategory(category.id, category.name)}>
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {incomeCategories.length === 0 && (
-              <p className="text-sm text-muted-foreground py-2">Nenhuma categoria de receita</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Despesas */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-red-600 text-base">
-            <Tag size={17} /><span>Despesas ({expenseCategories.length})</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="divide-y divide-border">
-            {expenseCategories.map((category) => (
-              <div key={category.id} className="flex items-center justify-between py-2.5 first:pt-0 last:pb-0">
-                <div className="flex items-center gap-3">
-                  <span className="text-lg leading-none">{category.icon}</span>
-                  <span className="text-sm font-medium">{category.name}</span>
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: category.color }} />
-                </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => handleEditCategory(category)}>
-                    <Edit size={14} />
-                  </Button>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive" onClick={() => handleDeleteCategory(category.id, category.name)}>
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              </div>
-            ))}
-            {expenseCategories.length === 0 && (
-              <p className="text-sm text-muted-foreground py-2">Nenhuma categoria de despesa</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Sugestões */}
-      {defaultCategories.filter(d => !categories.some(e => e.name.toLowerCase() === d.name.toLowerCase())).length > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="text-base">Sugestões</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-2">
-              {defaultCategories
-                .filter(d => !categories.some(e => e.name.toLowerCase() === d.name.toLowerCase()))
-                .slice(0, 6)
-                .map((suggestion, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    size="sm"
-                    className="justify-start h-auto py-2"
-                    onClick={() => {
-                      setNewCategory({
-                        name: suggestion.name,
-                        icon: suggestion.icon,
-                        color: suggestion.color,
-                        transaction_type: suggestion.transaction_type,
-                      });
-                      setShowAddForm(true);
-                    }}
-                  >
-                    <span className="mr-2">{suggestion.icon}</span>
-                    <span className="text-xs">{suggestion.name}</span>
-                  </Button>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Tabs defaultValue="expense">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="expense">Despesas ({expenseCategories.length})</TabsTrigger>
+          <TabsTrigger value="income">Receitas ({incomeCategories.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="expense">
+          <Card>
+            <CardContent className="p-4">
+              <CategoryList cats={expenseCategories} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="income">
+          <Card>
+            <CardContent className="p-4">
+              <CategoryList cats={incomeCategories} />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

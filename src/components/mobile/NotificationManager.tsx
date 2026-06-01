@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { Bell, Calendar, DollarSign, Target, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -32,193 +31,143 @@ const DEFAULT_RULES: NotificationRule[] = [
   { id: '4', type: 'spending_alert', title: 'Gastos Excessivos', enabled: true, threshold: 500 },
 ];
 
+const typeIcons = {
+  budget_alert: AlertTriangle,
+  bill_reminder: Calendar,
+  goal_deadline: Target,
+  spending_alert: DollarSign,
+};
+
 export const NotificationManager: React.FC<NotificationManagerProps> = ({ onBack }) => {
   const [rules, setRules] = useState<NotificationRule[]>(() => {
     try {
-      const saved = sessionStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? JSON.parse(saved) : DEFAULT_RULES;
     } catch {
       return DEFAULT_RULES;
     }
   });
-  const [permission, setPermission] = useState<NotificationPermission>('default');
 
   useEffect(() => {
-    if ('Notification' in window) {
-      setPermission(Notification.permission);
-    }
-  }, []);
-
-  useEffect(() => {
-    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(rules)); } catch {}
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rules));
+    } catch {}
   }, [rules]);
 
-  const requestPermission = async () => {
-    if (!('Notification' in window)) {
-      toast.error('Seu navegador não suporta notificações');
-      return;
-    }
-    const result = await Notification.requestPermission();
-    setPermission(result);
-    if (result === 'granted') {
-      toast.success('Notificações ativadas!');
-    } else {
-      toast.error('Permissão de notificação negada');
-    }
-  };
-
-  const sendTestNotification = () => {
-    if (permission !== 'granted') {
-      toast.error('Ative as notificações primeiro');
-      return;
-    }
-    new Notification('Solviss Finanças', {
-      body: 'Notificações funcionando corretamente! 🎉',
-      icon: '/favicon.ico',
-    });
-    toast.success('Notificação de teste enviada!');
-  };
-
-  const sendBudgetAlert = useCallback((categoryName: string, percent: number) => {
-    if (permission !== 'granted') return;
-    new Notification('⚠️ Alerta de Orçamento — Solviss', {
-      body: `${categoryName}: ${percent.toFixed(0)}% do orçamento utilizado.`,
-      icon: '/favicon.ico',
-    });
-  }, [permission]);
-
-  const sendBillReminder = useCallback((description: string, dueDate: string) => {
-    if (permission !== 'granted') return;
-    new Notification('📅 Conta a Vencer — Solviss', {
-      body: `${description} vence em ${dueDate}.`,
-      icon: '/favicon.ico',
-    });
-  }, [permission]);
-
-  const toggleRule = (id: string) =>
+  const toggleRule = (id: string) => {
     setRules(prev => prev.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r));
-
-  const updateRule = (id: string, patch: Partial<NotificationRule>) =>
-    setRules(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r));
-
-  const getIcon = (type: string) => {
-    switch (type) {
-      case 'budget_alert': return <DollarSign className="w-4 h-4" />;
-      case 'bill_reminder': return <Calendar className="w-4 h-4" />;
-      case 'goal_deadline': return <Target className="w-4 h-4" />;
-      case 'spending_alert': return <AlertTriangle className="w-4 h-4" />;
-      default: return <Bell className="w-4 h-4" />;
-    }
   };
 
-  const permissionGranted = permission === 'granted';
+  const updateRule = (id: string, field: string, value: any) => {
+    setRules(prev => prev.map(r => r.id === id ? { ...r, [field]: value } : r));
+  };
+
+  const testNotification = (rule: NotificationRule) => {
+    toast(rule.title, {
+      description: 'Notificação de teste enviada com sucesso!',
+      icon: '🔔',
+    });
+  };
+
+  const enabledCount = rules.filter(r => r.enabled).length;
 
   return (
-    <div className="space-y-4">
-      {onBack && <BackHeader title="Gerenciar Notificações" onBack={onBack} />}
+    <div className="space-y-6">
+      <BackHeader
+        title="Gerenciar Notificações"
+        subtitle="Configure alertas e lembretes automáticos"
+        icon={<Bell className="h-6 w-6" />}
+        onBack={onBack}
+      />
 
-      {!onBack && (
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-foreground">Notificações</h1>
-          <p className="text-muted-foreground">Configure alertas e lembretes inteligentes</p>
-        </div>
-      )}
-
-      {/* Status */}
+      {/* Summary */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bell className="w-5 h-5" />
-            Status das Permissões
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium">Notificações do Navegador</p>
-              <p className="text-sm text-muted-foreground">
-                {permissionGranted ? 'Ativadas e funcionando' : permission === 'denied' ? 'Bloqueadas pelo navegador' : 'Aguardando permissão'}
-              </p>
+              <p className="font-medium">{enabledCount} de {rules.length} notificações ativas</p>
+              <p className="text-sm text-muted-foreground">Clique em uma regra para configurar</p>
             </div>
-            <Badge variant={permissionGranted ? 'default' : 'secondary'} className="flex items-center gap-1">
-              {permissionGranted && <CheckCircle2 className="w-3 h-3" />}
-              {permissionGranted ? 'Ativo' : permission === 'denied' ? 'Bloqueado' : 'Inativo'}
-            </Badge>
+            <Bell className="h-8 w-8 text-muted-foreground" />
           </div>
-
-          {!permissionGranted && permission !== 'denied' && (
-            <Button onClick={requestPermission} className="w-full">
-              <Bell className="w-4 h-4 mr-2" /> Ativar Notificações
-            </Button>
-          )}
-
-          {permission === 'denied' && (
-            <p className="text-sm text-muted-foreground p-3 bg-muted rounded-lg">
-              As notificações estão bloqueadas. Para ativar, vá nas configurações do seu navegador e permita notificações para este site.
-            </p>
-          )}
-
-          {permissionGranted && (
-            <Button variant="outline" onClick={sendTestNotification} className="w-full">
-              Enviar Notificação de Teste
-            </Button>
-          )}
         </CardContent>
       </Card>
 
-      {/* Regras */}
+      {/* Rules */}
       <div className="space-y-3">
-        {rules.map(rule => (
-          <Card key={rule.id}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {getIcon(rule.type)}
-                  <div>
-                    <p className="text-sm font-medium">{rule.title}</p>
+        {rules.map(rule => {
+          const Icon = typeIcons[rule.type];
+          return (
+            <Card key={rule.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start space-x-3 flex-1">
+                    <Icon className="h-4 w-4 mt-0.5 text-primary" />
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="font-medium">{rule.title}</Label>
+                        <Switch
+                          checked={rule.enabled}
+                          onCheckedChange={() => toggleRule(rule.id)}
+                        />
+                      </div>
+                      {rule.enabled && (
+                        <div className="space-y-2">
+                          {rule.threshold !== undefined && (
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs text-muted-foreground w-20">Limite</Label>
+                              <Input
+                                type="number"
+                                value={rule.threshold}
+                                onChange={(e) => updateRule(rule.id, 'threshold', Number(e.target.value))}
+                                className="h-7 text-sm"
+                              />
+                            </div>
+                          )}
+                          {rule.days !== undefined && (
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs text-muted-foreground w-20">Dias antes</Label>
+                              <Input
+                                type="number"
+                                value={rule.days}
+                                onChange={(e) => updateRule(rule.id, 'days', Number(e.target.value))}
+                                className="h-7 text-sm"
+                              />
+                            </div>
+                          )}
+                          {rule.time !== undefined && (
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs text-muted-foreground w-20">Horário</Label>
+                              <Input
+                                type="time"
+                                value={rule.time}
+                                onChange={(e) => updateRule(rule.id, 'time', e.target.value)}
+                                className="h-7 text-sm"
+                              />
+                            </div>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs h-7 px-2"
+                            onClick={() => testNotification(rule)}
+                          >
+                            Testar
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
-                <Switch checked={rule.enabled} onCheckedChange={() => toggleRule(rule.id)} />
-              </div>
-            </CardHeader>
-
-            {rule.enabled && (
-              <CardContent className="space-y-3 pt-0">
-                {rule.threshold !== undefined && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">Limite ({rule.type === 'budget_alert' ? '%' : 'R$'})</Label>
-                    <Input
-                      type="number"
-                      value={rule.threshold}
-                      onChange={e => updateRule(rule.id, { threshold: Number(e.target.value) })}
-                    />
-                  </div>
-                )}
-                {rule.days !== undefined && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">Dias de antecedência</Label>
-                    <Input
-                      type="number"
-                      value={rule.days}
-                      onChange={e => updateRule(rule.id, { days: Number(e.target.value) })}
-                    />
-                  </div>
-                )}
-                {rule.time !== undefined && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">Horário</Label>
-                    <Input
-                      type="time"
-                      value={rule.time}
-                      onChange={e => updateRule(rule.id, { time: e.target.value })}
-                    />
-                  </div>
-                )}
               </CardContent>
-            )}
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
+
+      <p className="text-xs text-muted-foreground text-center">
+        As notificações dependem das permissões do dispositivo
+      </p>
     </div>
   );
 };
