@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { BackHeader } from '@/components/layout/BackHeader';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { useAuditLogs } from '@/hooks/useAuditLogs';
 import { Shield, Activity, User, Clock, Eye, Edit, Trash2, Plus } from 'lucide-react';
 import { format } from 'date-fns';
