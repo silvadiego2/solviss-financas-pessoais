@@ -6,6 +6,7 @@ import { FinanceApp } from '@/components/FinanceApp';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider';
+import { BalanceVisibilityProvider } from '@/contexts/BalanceVisibilityContext';
 
 const queryClient = new QueryClient();
 
@@ -16,8 +17,10 @@ function App() {
         <SettingsProvider>
           <AuthProvider>
             <OnboardingProvider>
-              <FinanceApp />
-              <Toaster />
+              <BalanceVisibilityProvider>
+                <FinanceApp />
+                <Toaster />
+              </BalanceVisibilityProvider>
             </OnboardingProvider>
           </AuthProvider>
         </SettingsProvider>
