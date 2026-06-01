@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import { Settings, Moon, Sun, DollarSign, Calendar, Bell, Trash2 } from 'lucide-react';
 
 interface SettingsScreenProps {
@@ -11,10 +12,12 @@ interface SettingsScreenProps {
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   const { theme, toggleTheme } = useTheme();
-  const [notifications, setNotifications] = useState(true);
-  const [confirmDelete, setConfirmDelete] = useState(true);
-  const [currency, setCurrency] = useState('BRL');
-  const [weekStart, setWeekStart] = useState('monday');
+  const {
+    currency, setCurrency,
+    weekStart, setWeekStart,
+    notifications, setNotifications,
+    confirmDelete, setConfirmDelete,
+  } = useSettings();
 
   const sections = [
     {
@@ -44,7 +47,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
             { value: 'USD', label: '$ — Dólar Americano' },
             { value: 'EUR', label: '€ — Euro' },
           ],
-          onChange: (v: string) => setCurrency(v),
+          onChange: (v: string) => setCurrency(v as any),
         },
         {
           icon: Calendar,
@@ -53,10 +56,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           type: 'select' as const,
           value: weekStart,
           options: [
-            { value: 'sunday',  label: 'Domingo' },
-            { value: 'monday',  label: 'Segunda-feira' },
+            { value: 'sunday', label: 'Domingo' },
+            { value: 'monday', label: 'Segunda-feira' },
           ],
-          onChange: (v: string) => setWeekStart(v),
+          onChange: (v: string) => setWeekStart(v as any),
         },
       ],
     },
@@ -69,7 +72,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           description: 'Alertas de vencimento e orçamento',
           type: 'toggle' as const,
           value: notifications,
-          onChange: () => setNotifications(p => !p),
+          onChange: () => setNotifications(!notifications),
         },
         {
           icon: Trash2,
@@ -77,7 +80,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           description: 'Pede confirmação antes de excluir',
           type: 'toggle' as const,
           value: confirmDelete,
-          onChange: () => setConfirmDelete(p => !p),
+          onChange: () => setConfirmDelete(!confirmDelete),
         },
       ],
     },
@@ -117,18 +120,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
 
                     {item.type === 'toggle' && (
                       <Switch
-                        checked={(item as any).value}
-                        onCheckedChange={(item as any).onChange}
+                        checked={(item as any).value as boolean}
+                        onCheckedChange={() => (item as any).onChange()}
                       />
                     )}
 
                     {item.type === 'select' && (
                       <select
-                        value={(item as any).value}
+                        value={(item as any).value as string}
                         onChange={e => (item as any).onChange(e.target.value)}
-                        className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+                        className="text-sm border border-input rounded-md px-2 py-1.5 bg-background text-foreground cursor-pointer"
                       >
-                        {(item as any).options.map((opt: any) => (
+                        {(item as any).options.map((opt: { value: string; label: string }) => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
                         ))}
                       </select>
@@ -142,7 +145,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
       ))}
 
       <p className="text-xs text-muted-foreground text-center px-4">
-        Para importar/exportar dados, backup e segurança, acesse o menu <strong>Mais</strong>.
+        Para importar/exportar dados, backup e segurança acesse o menu <strong>Mais</strong>.
       </p>
     </div>
   );
