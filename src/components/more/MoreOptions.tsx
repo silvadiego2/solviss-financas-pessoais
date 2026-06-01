@@ -165,8 +165,8 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       action: () => onNavigate('categories'),
     },
     {
-      title: 'Configurações',
-      description: 'Tema, moeda e preferências',
+      title: 'Preferências',
+      description: 'Tema, moeda e idioma',
       icon: Settings,
       action: () => onNavigate('settings'),
     },
