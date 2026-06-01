@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Home, Receipt, CalendarRange, TrendingUp,
-  CreditCard, Target, BarChart3,
+  Wallet, Target, BarChart3,
   Settings, Moon, Sun, User, LogOut,
   X, PlusCircle, MoreHorizontal,
   Brain, Repeat, Plus, CalendarClock,
@@ -22,7 +22,7 @@ interface AppSidebarProps {
 const PRIMARY_NAV = [
   { id: 'dashboard',    icon: Home,          label: 'Início'       },
   { id: 'transactions', icon: Receipt,       label: 'Transações'   },
-  { id: 'cards',        icon: CreditCard,    label: 'Cartões'      },
+  { id: 'cards',        icon: Wallet,        label: 'Contas'       },
   { id: 'agenda',       icon: CalendarClock, label: 'Agenda'       },
   { id: 'goals',        icon: Target,        label: 'Metas'        },
   { id: 'budgets',      icon: CalendarRange, label: 'Planejamento' },
@@ -183,7 +183,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
           </aside>
         )}
 
-        {/* Bottom Tab Bar: Início · Transações · [+] · Cartões · Mais */}
+        {/* Bottom Tab Bar: Início · Transações · [+] · Contas · Mais */}
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border">
           <div className="flex items-end h-16 max-w-md mx-auto">
             <MobileTab id="dashboard" activeTab={activeTab} label="Início" onClick={() => handleNav('dashboard')}>
@@ -206,8 +206,8 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
               <span className="text-[10px] font-medium text-muted-foreground mt-0.5">Adicionar</span>
             </div>
 
-            <MobileTab id="cards" activeTab={activeTab} label="Cartões" onClick={() => handleNav('cards')}>
-              <CreditCard size={22} strokeWidth={activeTab === 'cards' ? 2.25 : 1.75} />
+            <MobileTab id="cards" activeTab={activeTab} label="Contas" onClick={() => handleNav('cards')}>
+              <Wallet size={22} strokeWidth={activeTab === 'cards' ? 2.25 : 1.75} />
             </MobileTab>
 
             <MobileTab
