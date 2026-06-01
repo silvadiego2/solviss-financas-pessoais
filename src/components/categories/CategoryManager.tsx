@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useCategories } from '@/hooks/useCategories';
-import { Tag, Plus, Trash2, Edit } from 'lucide-react';
+import { Tag, Plus, Trash2 } from 'lucide-react';
 import { enhancedToast } from '@/components/ui/enhanced-toast';
 
 interface CategoryManagerProps {
@@ -18,7 +18,12 @@ interface CategoryManagerProps {
 export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
   const { categories, createCategory, deleteCategory, isCreating } = useCategories();
   const [showDialog, setShowDialog] = useState(false);
-  const [form, setForm] = useState({ name: '', icon: '📋', color: '#6b7280', type: 'expense' as 'income' | 'expense' });
+  const [form, setForm] = useState({
+    name: '',
+    icon: '📋',
+    color: '#6b7280',
+    type: 'expense' as 'income' | 'expense',
+  });
 
   const handleCreate = async () => {
     if (!form.name.trim()) {
@@ -30,8 +35,12 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
     setForm({ name: '', icon: '📋', color: '#6b7280', type: 'expense' });
   };
 
-  const incomeCategories = categories.filter(c => c.type === 'income');
-  const expenseCategories = categories.filter(c => c.type === 'expense');
+  // Helper: lê 'type' ou 'transaction_type', com fallback para 'expense'
+  const getType = (c: typeof categories[0]): string =>
+    (c.type ?? (c as any).transaction_type ?? 'expense');
+
+  const incomeCategories  = categories.filter(c => getType(c) === 'income');
+  const expenseCategories = categories.filter(c => getType(c) === 'expense');
 
   const CategoryList = ({ cats }: { cats: typeof categories }) => (
     <div className="space-y-1">
@@ -39,7 +48,10 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
         <p className="text-sm text-muted-foreground py-3 text-center">Nenhuma categoria</p>
       ) : (
         cats.map(category => (
-          <div key={category.id} className="flex items-center justify-between py-2.5 px-1 rounded hover:bg-muted/50 group">
+          <div
+            key={category.id}
+            className="flex items-center justify-between py-2.5 px-1 rounded hover:bg-muted/50 group"
+          >
             <div className="flex items-center space-x-3">
               <span className="text-lg">{category.icon}</span>
               <span className="font-medium text-sm">{category.name}</span>
@@ -49,7 +61,8 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ onBack }) => {
             </div>
             {category.user_id && (
               <Button
-                variant="ghost" size="sm"
+                variant="ghost"
+                size="sm"
                 className="h-7 w-7 p-0 text-destructive hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                 onClick={() => deleteCategory(category.id)}
               >
