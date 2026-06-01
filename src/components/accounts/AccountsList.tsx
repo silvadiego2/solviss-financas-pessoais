@@ -5,7 +5,7 @@ import { BackHeader } from '@/components/layout/BackHeader';
 import { useAccounts } from '@/hooks/useAccounts';
 import { AddAccountForm } from './AddAccountForm';
 import { EditAccountForm } from './EditAccountForm';
-import { Wallet, Plus, Edit, Trash2, TrendingUp, TrendingDown, CreditCard } from 'lucide-react';
+import { Wallet, Plus, Edit, Trash2, TrendingUp, TrendingDown } from 'lucide-react';
 
 interface AccountsListProps {
   onBack?: () => void;
@@ -15,13 +15,12 @@ const formatCurrency = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
 const accountTypeLabels: Record<string, string> = {
-  checking:    'Conta Corrente',
-  savings:     'Poupança',
-  investment:  'Investimento',
-  wallet:      'Carteira',
-  cash:        'Dinheiro',
-  credit_card: 'Cartão de Crédito',
-  other:       'Outro',
+  checking:   'Conta Corrente',
+  savings:    'Poupança',
+  investment: 'Investimento',
+  wallet:     'Carteira',
+  cash:       'Dinheiro',
+  other:      'Outro',
 };
 
 export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
@@ -37,15 +36,10 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
     return <EditAccountForm account={editingAccount} onBack={() => { setEditingAccount(null); refetch(); }} />;
   }
 
+  // Cartões de crédito têm aba própria — esta tela exibe apenas contas reais
+  const regularAccounts = accounts.filter(a => a.type !== 'credit_card');
   const getBalance = (a: any): number => a.balance ?? 0;
-
-  // Saldo total: apenas contas reais (corrente, poupança, carteira, investimento)
-  // Cartões de crédito representam dívida (passivo), não saldo positivo
-  const regularAccounts    = accounts.filter(a => a.type !== 'credit_card');
-  const creditCardAccounts = accounts.filter(a => a.type === 'credit_card');
-
-  const totalBalance  = regularAccounts.reduce((sum, a) => sum + getBalance(a), 0);
-  const totalCCDebt   = creditCardAccounts.reduce((sum, a) => sum + Math.abs(Math.min(0, getBalance(a))), 0);
+  const totalBalance = regularAccounts.reduce((sum, a) => sum + getBalance(a), 0);
 
   return (
     <div className="space-y-6">
@@ -62,35 +56,18 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
         }
       />
 
-      {/* Resumo financeiro */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Card className="bg-primary text-primary-foreground">
-          <CardContent className="p-4">
-            <p className="text-sm opacity-80">Saldo em Contas</p>
-            <p className="text-2xl font-bold">{formatCurrency(totalBalance)}</p>
-            <p className="text-xs opacity-70 mt-1">
-              {regularAccounts.length} conta{regularAccounts.length !== 1 ? 's' : ''}
-            </p>
-          </CardContent>
-        </Card>
+      {/* Saldo total — apenas contas reais */}
+      <Card className="bg-primary text-primary-foreground">
+        <CardContent className="p-4">
+          <p className="text-sm opacity-80">Saldo Total em Contas</p>
+          <p className="text-2xl font-bold">{formatCurrency(totalBalance)}</p>
+          <p className="text-xs opacity-70 mt-1">
+            {regularAccounts.length} conta{regularAccounts.length !== 1 ? 's' : ''}
+          </p>
+        </CardContent>
+      </Card>
 
-        {creditCardAccounts.length > 0 && (
-          <Card className="border-destructive/30 bg-destructive/5">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-1.5 mb-1">
-                <CreditCard className="h-4 w-4 text-destructive" />
-                <p className="text-sm text-destructive font-medium">Faturas em Aberto</p>
-              </div>
-              <p className="text-2xl font-bold text-destructive">{formatCurrency(totalCCDebt)}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {creditCardAccounts.length} cartão{creditCardAccounts.length !== 1 ? 'es' : ''}
-              </p>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {accounts.length === 0 ? (
+      {regularAccounts.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center">
             <Wallet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
@@ -106,11 +83,9 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
         </Card>
       ) : (
         <div className="space-y-3">
-          {accounts.map((account: any) => {
+          {regularAccounts.map((account: any) => {
             const balance    = getBalance(account);
-            const isCC       = account.type === 'credit_card';
-            // Para cartão: saldo negativo = fatura em aberto (vermelho); positivo = crédito disponível
-            const isPositive = isCC ? balance >= 0 : balance >= 0;
+            const isPositive = balance >= 0;
             return (
               <Card key={account.id}>
                 <CardContent className="p-4">
@@ -138,14 +113,9 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
                           <span className={`font-semibold ${
                             isPositive ? 'text-green-600' : 'text-red-600'
                           }`}>
-                            {isCC && balance < 0 ? `-${formatCurrency(Math.abs(balance))}` : formatCurrency(balance)}
+                            {formatCurrency(balance)}
                           </span>
                         </div>
-                        {isCC && (
-                          <p className="text-xs text-muted-foreground text-right">
-                            {balance < 0 ? 'fatura em aberto' : 'crédito disponível'}
-                          </p>
-                        )}
                       </div>
                       <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
                         onClick={() => setEditingAccount(account)}>
