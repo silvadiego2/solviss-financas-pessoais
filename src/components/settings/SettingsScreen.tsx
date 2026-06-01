@@ -1,17 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useTheme } from '@/contexts/ThemeContext';
-import { Settings, Moon, Sun, Shield, Database, Trash2, Download, Upload, ChevronRight } from 'lucide-react';
+import { Settings, Moon, Sun, DollarSign, Calendar, Bell, Trash2 } from 'lucide-react';
 
 interface SettingsScreenProps {
   onBack?: () => void;
-  onNavigate?: (view: string) => void;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onNavigate }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   const { theme, toggleTheme } = useTheme();
+  const [notifications, setNotifications] = useState(true);
+  const [confirmDelete, setConfirmDelete] = useState(true);
+  const [currency, setCurrency] = useState('BRL');
+  const [weekStart, setWeekStart] = useState('monday');
 
   const sections = [
     {
@@ -28,53 +31,53 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onNaviga
       ],
     },
     {
-      title: 'Dados',
+      title: 'Regional',
       items: [
         {
-          icon: Download,
-          label: 'Exportar relatórios',
-          description: 'PDF ou Excel',
-          type: 'nav' as const,
-          onPress: () => onNavigate?.('export'),
+          icon: DollarSign,
+          label: 'Moeda padrão',
+          description: 'Moeda usada em toda a aplicação',
+          type: 'select' as const,
+          value: currency,
+          options: [
+            { value: 'BRL', label: 'R$ — Real Brasileiro' },
+            { value: 'USD', label: '$ — Dólar Americano' },
+            { value: 'EUR', label: '€ — Euro' },
+          ],
+          onChange: (v: string) => setCurrency(v),
         },
         {
-          icon: Upload,
-          label: 'Importar transações',
-          description: 'CSV, Excel ou PDF',
-          type: 'nav' as const,
-          onPress: () => onNavigate?.('import'),
-        },
-        {
-          icon: Database,
-          label: 'Backup automático',
-          description: 'Agende exportações periódicas',
-          type: 'nav' as const,
-          onPress: () => onNavigate?.('backup'),
+          icon: Calendar,
+          label: 'Primeiro dia da semana',
+          description: 'Usado em calendários e gráficos',
+          type: 'select' as const,
+          value: weekStart,
+          options: [
+            { value: 'sunday',  label: 'Domingo' },
+            { value: 'monday',  label: 'Segunda-feira' },
+          ],
+          onChange: (v: string) => setWeekStart(v),
         },
       ],
     },
     {
-      title: 'Segurança',
+      title: 'Comportamento',
       items: [
         {
-          icon: Shield,
-          label: 'Dashboard de segurança',
-          description: 'Logs de auditoria e atividade',
-          type: 'nav' as const,
-          onPress: () => onNavigate?.('security'),
+          icon: Bell,
+          label: 'Notificações push',
+          description: 'Alertas de vencimento e orçamento',
+          type: 'toggle' as const,
+          value: notifications,
+          onChange: () => setNotifications(p => !p),
         },
-      ],
-    },
-    {
-      title: 'Avançado',
-      items: [
         {
           icon: Trash2,
-          label: 'Limpar todos os dados',
-          description: 'Remove todas as informações',
-          type: 'nav' as const,
-          danger: true,
-          onPress: () => onNavigate?.('reset'),
+          label: 'Confirmar exclusões',
+          description: 'Pede confirmação antes de excluir',
+          type: 'toggle' as const,
+          value: confirmDelete,
+          onChange: () => setConfirmDelete(p => !p),
         },
       ],
     },
@@ -84,7 +87,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onNaviga
     <div className="space-y-6">
       <BackHeader
         title="Configurações"
-        subtitle="Personalize o app e gerencie seus dados"
+        subtitle="Tema, moeda e preferências"
         icon={<Settings className="h-6 w-6" />}
         onBack={onBack}
       />
@@ -100,28 +103,35 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onNaviga
                 return (
                   <div
                     key={item.label}
-                    className={`flex items-center justify-between px-4 py-3 ${
+                    className={`flex items-center justify-between px-4 py-3.5 ${
                       !isLast ? 'border-b' : ''
-                    } ${item.type === 'nav' ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}`}
-                    onClick={item.type === 'nav' ? (item as any).onPress : undefined}
+                    }`}
                   >
                     <div className="flex items-center space-x-3">
-                      <Icon className={`h-4 w-4 ${'danger' in item && item.danger ? 'text-destructive' : 'text-muted-foreground'}`} />
+                      <Icon className="h-4 w-4 text-muted-foreground" />
                       <div>
-                        <p className={`text-sm font-medium ${'danger' in item && item.danger ? 'text-destructive' : ''}`}>
-                          {item.label}
-                        </p>
+                        <p className="text-sm font-medium">{item.label}</p>
                         <p className="text-xs text-muted-foreground">{item.description}</p>
                       </div>
                     </div>
-                    {item.type === 'toggle' ? (
+
+                    {item.type === 'toggle' && (
                       <Switch
                         checked={(item as any).value}
                         onCheckedChange={(item as any).onChange}
-                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
                       />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    )}
+
+                    {item.type === 'select' && (
+                      <select
+                        value={(item as any).value}
+                        onChange={e => (item as any).onChange(e.target.value)}
+                        className="text-sm border border-input rounded-md px-2 py-1 bg-background text-foreground"
+                      >
+                        {(item as any).options.map((opt: any) => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                      </select>
                     )}
                   </div>
                 );
@@ -130,6 +140,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onNaviga
           </Card>
         </div>
       ))}
+
+      <p className="text-xs text-muted-foreground text-center px-4">
+        Para importar/exportar dados, backup e segurança, acesse o menu <strong>Mais</strong>.
+      </p>
     </div>
   );
 };
