@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -22,19 +21,23 @@ export const useAccounts = () => {
 
   const fetchAccounts = async (): Promise<Account[]> => {
     if (!user) return [];
-    
+
+    // FIX: is_active é boolean | null no schema.
+    // .eq('is_active', true) exclui linhas com NULL no PostgreSQL.
+    // .neq('is_active', false) inclui TRUE e NULL — comportamento correto.
     const { data, error } = await supabase
       .from('accounts')
       .select('*')
       .eq('user_id', user.id)
-      .eq('is_active', true)
+      .neq('is_active', false)
       .order('created_at', { ascending: true });
 
     if (error) {
       console.error('Erro ao buscar contas:', error);
       throw error;
     }
-    
+
+    console.log('[useAccounts] contas carregadas:', data?.length ?? 0, data);
     return data || [];
   };
 
@@ -42,25 +45,22 @@ export const useAccounts = () => {
     queryKey: ['accounts', user?.id],
     queryFn: fetchAccounts,
     enabled: !!user,
+    staleTime: 30 * 1000, // 30s — reduzido para detectar mudanças rápido
   });
 
-  // Filter out credit cards from regular accounts for balance calculations
+  // Contas regulares (sem cartão de crédito) para cálculo de saldo
   const regularAccounts = accounts.filter(account => account.type !== 'credit_card');
   const creditCardAccounts = accounts.filter(account => account.type === 'credit_card');
 
   const createAccountMutation = useMutation({
     mutationFn: async (accountData: Omit<Account, 'id' | 'is_active'>) => {
-      if (!user) {
-        console.error('User not authenticated:', user);
-        throw new Error('Usuário não autenticado');
-      }
-      
+      if (!user) throw new Error('Usuário não autenticado');
+
       console.log('Creating account with data:', accountData);
-      console.log('User authenticated:', user.id);
 
       const { data, error } = await supabase
         .from('accounts')
-        .insert([{ ...accountData, user_id: user.id }])
+        .insert([{ ...accountData, user_id: user.id, is_active: true }])
         .select()
         .single();
 
@@ -69,6 +69,7 @@ export const useAccounts = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
       toast.success('Conta criada com sucesso!');
     },
     onError: (error) => {
@@ -92,6 +93,7 @@ export const useAccounts = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
       toast.success('Conta atualizada com sucesso!');
     },
     onError: (error) => {
@@ -112,6 +114,7 @@ export const useAccounts = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-data'] });
       toast.success('Conta excluída com sucesso!');
     },
     onError: (error) => {
@@ -122,8 +125,8 @@ export const useAccounts = () => {
 
   return {
     accounts,
-    regularAccounts, // Accounts excluding credit cards
-    creditCardAccounts, // Only credit card accounts
+    regularAccounts,
+    creditCardAccounts,
     loading: isLoading,
     createAccount: createAccountMutation.mutate,
     updateAccount: updateAccountMutation.mutate,
