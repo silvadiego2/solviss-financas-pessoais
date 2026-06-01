@@ -34,6 +34,16 @@ const maskBRL = (raw: string): string => {
   return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+/** Lê um File como base64 data URL — persistente, ao contrário de createObjectURL */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = (e) => resolve(e.target?.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose }) => {
   const [type,                setType]                = useState<'income' | 'expense'>('expense');
   const [amount,              setAmount]              = useState('');
@@ -82,13 +92,13 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setAmount(maskBRL(e.target.value));
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setReceiptFile(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => setReceiptPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    // Usa FileReader para gerar data URL persistente (createObjectURL expira)
+    const dataUrl = await fileToDataUrl(file);
+    setReceiptPreview(dataUrl);
   };
 
   const removeReceipt = () => {
@@ -99,14 +109,16 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   // handleScanResult: respeita source — 'photo-only' só salva a foto sem
   // sobrescrever campos já preenchidos pelo usuário.
-  const handleScanResult = (data: ScannedData) => {
-    // Sempre salva o comprovante (thumbnail)
+  const handleScanResult = async (data: ScannedData) => {
+    // Sempre salva o comprovante usando data URL persistente
     if (data.thumbnail) {
       setReceiptFile(data.thumbnail);
-      setReceiptPreview(URL.createObjectURL(data.thumbnail));
+      // FIX: usa FileReader ao invés de createObjectURL (que expira com a aba)
+      const dataUrl = await fileToDataUrl(data.thumbnail);
+      setReceiptPreview(dataUrl);
     }
 
-    // Só preenche os campos se o modo foi de extração (qrcode ou ocr)
+    // Só preenche campos se o modo foi de extração (qrcode ou ocr)
     if (data.source !== 'photo-only') {
       if (data.amount)      setAmount(maskBRL(String(Math.round(data.amount * 100))));
       if (data.description) setDescription(data.description);
@@ -308,8 +320,10 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               <Label>Comprovante / Nota Fiscal</Label>
               {!receiptPreview ? (
                 <div className="flex gap-2">
-                  <div className="flex-1 flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors min-w-0"
-                    onClick={() => fileInputRef.current?.click()}>
+                  <div
+                    className="flex-1 flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors min-w-0"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     <Upload size={15} className="text-muted-foreground flex-shrink-0" />
                     <span className="text-sm text-muted-foreground truncate">Clique para anexar</span>
                   </div>
@@ -339,8 +353,11 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               ) : (
                 <div className="relative rounded-lg overflow-hidden border border-border">
                   <img src={receiptPreview} alt="Comprovante" className="w-full max-h-40 object-cover" />
-                  <button type="button" onClick={removeReceipt}
-                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center transition-colors">
+                  <button
+                    type="button"
+                    onClick={removeReceipt}
+                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center transition-colors"
+                  >
                     <X size={14} className="text-white" />
                   </button>
                   <div className="px-3 py-2 bg-muted/80 text-xs text-muted-foreground flex items-center justify-between">

@@ -4,7 +4,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { toast } from 'sonner';
 
 const PAGE_SIZE  = 50;
-const STALE_TIME = 2 * 60 * 1000; // 2 min
+const STALE_TIME = 2 * 60 * 1000;
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
 
@@ -58,24 +58,19 @@ export interface CreateTransactionInput {
   receiptFile?: File;
 }
 
-// Campos virtuais/joined que NÃO existem como colunas na tabela transactions
 const VIRTUAL_FIELDS = ['category', 'account', 'category_name'] as const;
-
-// Campos UUID — string vazia deve virar null para o Supabase não rejeitar
-const UUID_FIELDS = ['category_id', 'account_id', 'transfer_account_id', 'user_id'] as const;
+const UUID_FIELDS    = ['category_id', 'account_id', 'transfer_account_id', 'user_id'] as const;
 
 function sanitizeForDB(obj: Record<string, any>): Record<string, any> {
   const clean = { ...obj };
-  // Remove campos virtuais
   for (const field of VIRTUAL_FIELDS) delete clean[field];
-  // Converte string vazia em null para campos UUID
   for (const field of UUID_FIELDS) {
     if (field in clean && clean[field] === '') clean[field] = null;
   }
   return clean;
 }
 
-// ─── Fetcher com filtros server-side ──────────────────────────────────────────
+// ─── Fetcher ──────────────────────────────────────────────────────────────────
 
 async function fetchPage(
   userId: string,
@@ -123,18 +118,46 @@ function normalizeRow(t: any): Transaction {
   };
 }
 
-// ─── Upload de comprovante ───────────────────────────────────────────────
-
+// ─── Upload de comprovante ────────────────────────────────────────────────────
+// Salva o arquivo e retorna o CAMINHO relativo (ex: "userId/timestamp.jpg").
+// Nunca salva uma URL pública — geramos signed URLs on demand.
 async function uploadReceipt(userId: string, file: File): Promise<string> {
-  const ext      = file.name.split('.').pop();
-  const fileName = `${userId}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('receipts').upload(fileName, file);
+  const ext      = file.name.split('.').pop() ?? 'jpg';
+  const filePath = `${userId}/${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from('receipts').upload(filePath, file, {
+    upsert: false,
+    contentType: file.type || 'image/jpeg',
+  });
   if (error) throw error;
-  const { data: urlData } = supabase.storage.from('receipts').getPublicUrl(fileName);
-  return urlData.publicUrl;
+  return filePath;
 }
 
-// ─── Hook principal ──────────────────────────────────────────────────────────────────
+// ─── Geração de URL assinada (1 hora) ────────────────────────────────────────
+// Funciona com bucket privado (recomendado) E público.
+// Se a URL salva no banco já for uma URL completa (legado), tenta extrair o path.
+export async function getReceiptUrl(rawUrlOrPath: string): Promise<string | null> {
+  try {
+    let filePath = rawUrlOrPath;
+
+    // Compatibilidade com registros antigos que guardaram a URL pública completa
+    if (rawUrlOrPath.startsWith('http')) {
+      const match = rawUrlOrPath.match(/\/receipts\/(.+)$/);
+      if (!match) return rawUrlOrPath; // URL externa desconhecida — usa direto
+      filePath = match[1];
+    }
+
+    const { data, error } = await supabase.storage
+      .from('receipts')
+      .createSignedUrl(filePath, 60 * 60); // 1 hora
+
+    if (error || !data?.signedUrl) return null;
+    return data.signedUrl;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Hook principal ───────────────────────────────────────────────────────────
 
 export const useTransactions = (filters: TransactionFilters = {}) => {
   const { user }    = useAuth();
@@ -167,7 +190,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
 
-  // ── Create ─────────────────────────────────────────────────────────────────────
+  // ── Create ────────────────────────────────────────────────────────────────
   const createTransactionMutation = useMutation({
     mutationFn: async ({ receiptFile, ...input }: CreateTransactionInput) => {
       if (!user) throw new Error('Usuário não autenticado');
@@ -195,7 +218,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
     onError: (err: any) => toast.error('Erro ao adicionar transação', { description: err?.message }),
   });
 
-  // ── Update ─────────────────────────────────────────────────────────────────────
+  // ── Update ────────────────────────────────────────────────────────────────
   const updateTransactionMutation = useMutation({
     mutationFn: async ({ id, receiptFile, ...updates }: Partial<Transaction> & { id: string; receiptFile?: File }) => {
       if (!user) throw new Error('Usuário não autenticado');
@@ -224,7 +247,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
     onError: (err: any) => toast.error('Erro ao atualizar transação', { description: err?.message }),
   });
 
-  // ── Delete ─────────────────────────────────────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────────────
   const deleteTransactionMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
