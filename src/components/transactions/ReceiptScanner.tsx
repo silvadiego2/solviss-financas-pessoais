@@ -1,30 +1,19 @@
 /**
- * ReceiptScanner v6
+ * ReceiptScanner v7
  *
- * CORREÇÕES v6:
+ * CORREÇÕES v7:
  * ─────────────
- * 1. qrInputRef.onChange agora seta useMode('extract') ANTES de chamar
- *    handleImageFile — antes ficava null e handleCropConfirm retornava cedo.
+ * 1. BUG CRÍTICO — QR live não lia automaticamente:
+ *    stopStream e startQrLoop eram recriados a cada render (useCallback sem
+ *    deps estáveis), fazendo o useLayoutEffect cancelar e reiniciar o stream
+ *    a cada ciclo. Movidos para useRef → referência estável → o loop roda
+ *    sem interrupção.
  *
- * 2. QR live: o overlay com o quadrado de leitura agora é exibido
- *    corretamente. O useLayoutEffect aguarda o <video> estar montado via
- *    requestAnimationFrame antes de chamar getUserMedia, evitando que o
- *    catch silencioso mandasse de volta para 'choose' sem mostrar nada.
- *    Também adicionado fallback: se getUserMedia falhar, mantém modo 'qr-live'
- *    mas exibe mensagem de erro no overlay (sem resetar para 'choose').
+ * 2. Linha de scan animada corrigida: estava fora do overlay porque
+ *    position:absolute não estava no elemento correto. Agora está dentro
+ *    do container relativo com inset correto.
  *
- * 3. Fluxo CamScanner-like confirmado:
- *    - Foto capturada → tela de RECORTE (ajusta handles) → confirma →
- *      aí sim roda OCR / salva foto. Nada acontece "antes do OK".
- *    - Modo 'photo-only': recorta e salva, sem tocar nos campos do form.
- *    - Modo 'extract': recorta → tenta QR → OCR → tela de revisão editável.
- *
- * FLUXO:
- * ──────
- * A) "Só salvar foto"  → câmera → crop → confirma → foto salva (sem OCR)
- * B) "Ler QR Code"     → QR live (Android) ou câmera (iOS) → crop → QR/OCR → review
- * C) "Fotografar e extrair dados" → câmera → crop → QR/OCR → review
- * D) "Galeria e extrair dados"    → galeria → crop → QR/OCR → review
+ * 3. useLayoutEffect agora tem deps=[mode] apenas — sem funções instáveis.
  */
 import React, {
   useRef, useEffect, useState, useCallback, useLayoutEffect,
@@ -215,10 +204,10 @@ function extractByOcr(text: string): Partial<ScannedData> {
       .filter(n => !isNaN(n) && n > 0 && n < 100_000);
     if (all.length) amount = Math.max(...all);
   }
-  const dm = text.match(/(\d{1,2})[/\-.}(\d{1,2})[/\-.}(\d{2,4})/);
-  const dm2 = text.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/);
+  const dm2 = text.match(/(\d{1,2})[\/\-.}(\d{1,2})[\/\-.}(\d{2,4})/);
+  const dm3 = text.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   let date: string | undefined;
-  if (dm2) { const [, d, mo, y] = dm2; date = `${y.length === 2 ? '20' + y : y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`; }
+  if (dm3) { const [, d, mo, y] = dm3; date = `${y.length === 2 ? '20' + y : y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`; }
   const merchant = lines.find(l => l.length >= 4 && l.length <= 60 && !/^[\d\s\W]+$/.test(l));
   return { amount, date, merchant, description: merchant || 'Transação escaneada', source: 'ocr' };
 }
@@ -233,35 +222,31 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
   const [camError,   setCamError]   = useState<string | null>(null);
   const [ocrMode,    setOcrMode]    = useState(false);
 
-  // estado da imagem original (antes do recorte)
   const [origDataUrl, setOrigDataUrl] = useState<string | null>(null);
   const [origImg,     setOrigImg]     = useState<HTMLImageElement | null>(null);
-
-  // estado do recorte
   const [quad,        setQuad]        = useState<Quad | null>(null);
   const [dragIdx,     setDragIdx]     = useState<number | null>(null);
 
-  // resultado final (após recorte)
   const [croppedUrl,  setCroppedUrl]  = useState<string | null>(null);
   const [thumbFile,   setThumbFile]   = useState<File | null>(null);
 
-  // dados extraídos e campos editáveis
   const [extracted,       setExtracted]       = useState<Partial<ScannedData> | null>(null);
   const [editAmount,      setEditAmount]      = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDate,        setEditDate]        = useState('');
 
-  // modo de uso: 'photo-only' = só salvar foto; 'extract' = preencher formulário
   const [useMode, setUseMode] = useState<'photo-only' | 'extract' | null>(null);
 
-  // refs
   const cropCanvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef      = useRef<HTMLVideoElement>(null);
   const canvasRef     = useRef<HTMLCanvasElement>(null);
-  const streamRef     = useRef<MediaStream | null>(null);
-  const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
-  const doneRef       = useRef(false);
-  // FIX: usar refs separados para cada input evita conflito de useMode
+
+  // FIX v7: streamRef, intervalRef, doneRef — todos como refs para evitar
+  // que funções que os usam precisem ser recriadas a cada render.
+  const streamRef   = useRef<MediaStream | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const doneRef     = useRef(false);
+
   const qrInputRef    = useRef<HTMLInputElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const galleryRef    = useRef<HTMLInputElement>(null);
@@ -269,7 +254,20 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
   const jsQRRef = useRef<any>(null);
   useEffect(() => { import('jsqr').then(m => { jsQRRef.current = m.default; }); }, []);
 
-  // preenche campos editáveis quando extracted muda
+  // FIX v7: setModeRef para callbacks internos do loop não causarem
+  // re-renders que reiniciam o useLayoutEffect.
+  const setModeRef = useRef(setMode);
+  useEffect(() => { setModeRef.current = setMode; }, []);
+
+  const setCroppedUrlRef = useRef(setCroppedUrl);
+  useEffect(() => { setCroppedUrlRef.current = setCroppedUrl; }, []);
+  const setThumbFileRef = useRef(setThumbFile);
+  useEffect(() => { setThumbFileRef.current = setThumbFile; }, []);
+  const setExtractedRef = useRef(setExtracted);
+  useEffect(() => { setExtractedRef.current = setExtracted; }, []);
+  const setCamErrorRef = useRef(setCamError);
+  useEffect(() => { setCamErrorRef.current = setCamError; }, []);
+
   useEffect(() => {
     if (!extracted) return;
     setEditAmount(extracted.amount ? maskBRL(String(Math.round(extracted.amount * 100))) : '');
@@ -277,46 +275,77 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     setEditDate(extracted.date ?? '');
   }, [extracted]);
 
-  // ── stop câmera ───────────────────────────────────────────────────────────
-  const stopStream = useCallback(() => {
+  // ── stop câmera — função estável via ref ──────────────────────────────────
+  // FIX v7: não usar useCallback — guardamos a função em um ref para que
+  // useLayoutEffect possa referenciá-la sem precisar adicioná-la às deps.
+  const stopStreamFn = () => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     streamRef.current?.getTracks().forEach(t => t.stop());
     streamRef.current = null;
-  }, []);
-  useEffect(() => () => stopStream(), [stopStream]);
+  };
+  const stopStreamRef = useRef(stopStreamFn);
+  // Sempre atualiza o ref, mas a referência do objeto ref é estável
+  stopStreamRef.current = stopStreamFn;
 
-  // ── inicia câmera QR live DEPOIS que o <video> está no DOM ────────────────
-  const startQrLoop = useCallback(() => {
+  useEffect(() => () => stopStreamRef.current(), []);
+
+  // ── QR detectado (câmera live) ────────────────────────────────────────────
+  const handleQrDetectedLive = async (qrText: string, frameDataUrl: string) => {
+    setModeRef.current('processing');
+    const fromUrl = qrText.startsWith('http') ? parseNFeUrl(qrText) : null;
+    const img = await loadImage(frameDataUrl);
+    const out = document.createElement('canvas');
+    out.width = img.width; out.height = img.height;
+    out.getContext('2d')!.drawImage(img, 0, 0);
+    const { dataUrl, file } = await compressToFile(out, 0.85);
+    setCroppedUrlRef.current(dataUrl);
+    setThumbFileRef.current(file);
+    if (fromUrl) {
+      setExtractedRef.current({ ...fromUrl, source: 'qrcode' });
+      toast.success('Nota Fiscal lida com sucesso!');
+    } else {
+      const { data: { text } } = await Tesseract.recognize(dataUrl, 'por', { logger: () => {} });
+      setExtractedRef.current({ ...extractByOcr(text), source: 'ocr' });
+      toast.success('Recibo processado!');
+    }
+    setModeRef.current('review');
+  };
+
+  // FIX v7: startQrLoopFn não usa useCallback — guardamos em ref para
+  // estabilidade. Assim o useLayoutEffect não precisa de startQrLoop nas deps.
+  const startQrLoopFn = () => {
     doneRef.current = false;
     intervalRef.current = setInterval(async () => {
       if (doneRef.current) return;
-      const video = videoRef.current, canvas = canvasRef.current, jsQR = jsQRRef.current;
+      const video  = videoRef.current;
+      const canvas = canvasRef.current;
+      const jsQR   = jsQRRef.current;
       if (!video || !canvas || !jsQR) return;
       if (video.readyState < 2 || video.videoWidth === 0) return;
-      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+
+      canvas.width  = video.videoWidth;
+      canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(video, 0, 0);
       const id   = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(id.data, id.width, id.height, { inversionAttempts: 'attemptBoth' });
       if (code?.data) {
         doneRef.current = true;
-        stopStream();
+        stopStreamRef.current();
         await handleQrDetectedLive(code.data, canvas.toDataURL('image/jpeg', 0.85));
       }
     }, 200);
-  }, [stopStream]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+  const startQrLoopRef = useRef(startQrLoopFn);
+  startQrLoopRef.current = startQrLoopFn;
 
-  // FIX: useLayoutEffect aguarda o <video> ser montado no DOM via
-  // requestAnimationFrame antes de chamar getUserMedia. Isso evita que o
-  // videoRef.current seja null quando o stream tenta ser atribuído.
-  // Além disso, erros de câmera agora mostram mensagem NO overlay (sem resetar
-  // para 'choose'), mantendo o quadrado de leitura visível.
+  // FIX v7: deps=[mode] apenas — stopStream e startQrLoop via refs estáveis,
+  // sem risco de o effect ser cancelado e reiniciado a cada render.
   useLayoutEffect(() => {
     if (mode !== 'qr-live') return;
     let cancelled = false;
 
     const init = async () => {
-      // aguarda um frame para garantir que o <video> está no DOM
       await new Promise<void>(r => requestAnimationFrame(() => r()));
       if (cancelled) return;
 
@@ -331,45 +360,25 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
           video.srcObject = stream;
           video.setAttribute('playsinline', 'true');
           await video.play();
-          startQrLoop();
+          startQrLoopRef.current();  // ← ref estável, não recria o effect
         }
       } catch {
         if (!cancelled) {
-          // FIX: exibe erro no overlay sem resetar o modo — o quadrado continua visível
-          setCamError('Câmera não autorizada. Use o botão "Tirar foto" abaixo.');
+          setCamErrorRef.current('Câmera não autorizada. Use "Tirar foto" abaixo.');
         }
       }
     };
 
     init();
-    return () => { cancelled = true; };
-  }, [mode, startQrLoop]);
+    return () => {
+      cancelled = true;
+      // NÃO chama stopStream aqui — deixa o stream vivo enquanto mode==='qr-live'
+      // stopStream é chamado apenas quando o usuário sai do modo (botão Cancelar
+      // ou quando o QR é detectado)
+    };
+  }, [mode]); // deps=[mode] — sem funções instáveis
 
-  // ── QR detectado (câmera live) → pula etapa de recorte, vai direto ao review ─
-  const handleQrDetectedLive = async (qrText: string, frameDataUrl: string) => {
-    setMode('processing');
-    const fromUrl = qrText.startsWith('http') ? parseNFeUrl(qrText) : null;
-    const img = await loadImage(frameDataUrl);
-    const out = document.createElement('canvas');
-    out.width = img.width; out.height = img.height;
-    out.getContext('2d')!.drawImage(img, 0, 0);
-    const { dataUrl, file } = await compressToFile(out, 0.85);
-    setCroppedUrl(dataUrl);
-    setThumbFile(file);
-    if (fromUrl) {
-      setExtracted({ ...fromUrl, source: 'qrcode' });
-      toast.success('Nota Fiscal lida com sucesso!');
-    } else {
-      const { data: { text } } = await Tesseract.recognize(dataUrl, 'por', { logger: () => {} });
-      setExtracted({ ...extractByOcr(text), source: 'ocr' });
-      toast.success('Recibo processado!');
-    }
-    setMode('review');
-  };
-
-  // ── recebe arquivo de imagem → detecta quad e vai para tela de recorte ────
-  // FIX: handleImageFile NÃO seta useMode — quem chama deve setar ANTES.
-  // Assim garantimos que useMode está correto quando handleCropConfirm rodar.
+  // ── recebe arquivo de imagem ──────────────────────────────────────────────
   const handleImageFile = useCallback(async (file: File) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -396,7 +405,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     const ctx = canvas.getContext('2d')!;
     ctx.drawImage(origImg, 0, 0, canvas.width, canvas.height);
 
-    // overlay escuro fora do quad
     ctx.save();
     ctx.fillStyle = 'rgba(0,0,0,0.45)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -410,7 +418,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     ctx.fill();
     ctx.restore();
 
-    // borda do quad
     ctx.strokeStyle = '#22d3ee';
     ctx.lineWidth   = 2;
     ctx.beginPath();
@@ -421,7 +428,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     ctx.closePath();
     ctx.stroke();
 
-    // handles
     quad.forEach((pt, i) => {
       ctx.beginPath();
       ctx.arc(pt.x * scale, pt.y * scale, 14, 0, Math.PI * 2);
@@ -435,7 +441,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
 
   useEffect(() => { if (mode === 'crop') drawCropCanvas(); }, [mode, drawCropCanvas]);
 
-  // ── touch/mouse nos handles do crop canvas ────────────────────────────────
   const getCanvasPoint = (canvas: HTMLCanvasElement, e: React.MouseEvent | React.TouchEvent): Point => {
     const rect  = canvas.getBoundingClientRect();
     const scaleX = canvas.width  / rect.width;
@@ -466,7 +471,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
   const onCropPointerMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
     if (dragIdx === null || !origImg || !quad) return;
     const canvas = cropCanvasRef.current; if (!canvas) return;
-    const pt      = getCanvasPoint(canvas, e);
+    const pt       = getCanvasPoint(canvas, e);
     const imgScale = canvas.width / origImg.naturalWidth;
     const newQuad: Quad = [...quad] as Quad;
     newQuad[dragIdx] = {
@@ -498,7 +503,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
       return;
     }
 
-    // mode === 'extract': tenta QR na imagem original primeiro
     toast.info('Verificando QR Code...');
     const qrText = origDataUrl ? await tryQrFromImage(origDataUrl) : null;
     if (qrText?.startsWith('http')) {
@@ -510,7 +514,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
         return;
       }
     }
-    // OCR
     toast.info('Lendo texto da nota (OCR)...');
     setOcrMode(true);
     try {
@@ -526,7 +529,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     setMode('review');
   }, [origImg, quad, useMode, origDataUrl]);
 
-  // ── confirma revisão (usa campos editados) ────────────────────────────────
   const handleConfirm = () => {
     if (useMode === 'photo-only') {
       onResult({ thumbnail: thumbFile ?? undefined, source: 'photo-only' });
@@ -544,7 +546,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
   };
 
   const reset = () => {
-    stopStream(); doneRef.current = false;
+    stopStreamRef.current(); doneRef.current = false;
     setMode('choose'); setCamError(null); setOcrMode(false);
     setOrigDataUrl(null); setOrigImg(null); setQuad(null); setDragIdx(null);
     setCroppedUrl(null); setThumbFile(null); setExtracted(null);
@@ -558,11 +560,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
   return (
     <div className="space-y-4" style={{ touchAction: mode === 'crop' ? 'none' : undefined }}>
 
-      {/* inputs nativos sempre presentes no DOM */}
-      {/*
-        FIX: qrInputRef agora seta useMode('extract') ANTES de chamar handleImageFile.
-        Antes, useMode ficava null e handleCropConfirm retornava cedo sem fazer nada.
-      */}
       <input ref={qrInputRef}    type="file" accept="image/*" capture="environment" className="hidden"
         onChange={e => {
           const f = e.target.files?.[0];
@@ -591,7 +588,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
             </p>
           )}
 
-          {/* Dois cartões principais: só foto vs. ler dados */}
           <div className="grid grid-cols-2 gap-3">
             <button type="button"
               onClick={() => { setUseMode('photo-only'); photoInputRef.current?.click(); }}
@@ -610,7 +606,6 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
                 setCamError(null);
                 setUseMode('extract');
                 if (isIOS()) {
-                  // iOS: câmera nativa via input — qrInputRef já seta useMode('extract')
                   qrInputRef.current?.click();
                 } else {
                   setMode('qr-live');
@@ -692,25 +687,27 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
       {/* ── QR Code live (Android/Desktop) ─────────────────────────────────── */}
       {mode === 'qr-live' && (
         <div className="space-y-3">
+          {/* FIX v7: container relativo — linha de scan dentro do mesmo container */}
           <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3]">
             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
             <canvas ref={canvasRef} className="hidden" />
 
-            {/* FIX: overlay do quadrado sempre visível, independente do estado da câmera */}
+            {/* Overlay com quadrado de leitura */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-56 h-56 border-2 border-white/50 rounded-xl relative">
                 <span className="absolute -top-px -left-px   w-8 h-8 border-t-4 border-l-4 border-cyan-400 rounded-tl-xl" />
                 <span className="absolute -top-px -right-px  w-8 h-8 border-t-4 border-r-4 border-cyan-400 rounded-tr-xl" />
                 <span className="absolute -bottom-px -left-px  w-8 h-8 border-b-4 border-l-4 border-cyan-400 rounded-bl-xl" />
                 <span className="absolute -bottom-px -right-px w-8 h-8 border-b-4 border-r-4 border-cyan-400 rounded-br-xl" />
-                <ScanLine size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-cyan-400/70 animate-pulse" />
+
+                {/* FIX v7: linha de scan dentro do quadrado, position:absolute correto */}
+                <div
+                  className="absolute left-2 right-2 h-0.5 bg-cyan-400/80 rounded-full"
+                  style={{ animation: 'scanline 2s ease-in-out infinite', top: '10%' }}
+                />
               </div>
             </div>
 
-            {/* linha de scan animada */}
-            <div className="absolute left-[calc(50%-88px)] w-44 top-[22%] h-0.5 bg-cyan-400/80 animate-[scanline_2s_ease-in-out_infinite]" />
-
-            {/* FIX: erro de câmera mostrado no overlay sem resetar o modo */}
             {camError && (
               <div className="absolute bottom-3 left-3 right-3 bg-black/70 text-white text-xs rounded-lg px-3 py-2 flex items-center gap-2">
                 <AlertCircle size={12} className="flex-shrink-0 text-yellow-400" />
@@ -719,15 +716,23 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
             )}
           </div>
 
-          <style>{`@keyframes scanline{0%,100%{top:22%}50%{top:60%}}`}</style>
+          <style>{`
+            @keyframes scanline {
+              0%   { top: 10%; }
+              50%  { top: 80%; }
+              100% { top: 10%; }
+            }
+          `}</style>
 
           <p className="text-xs text-center text-muted-foreground">Centralize o QR Code dentro da área marcada</p>
           <div className="flex gap-2">
-            <Button type="button" variant="outline" size="sm" onClick={() => { stopStream(); setCamError(null); setMode('choose'); }} className="flex-1">
+            <Button type="button" variant="outline" size="sm"
+              onClick={() => { stopStreamRef.current(); setCamError(null); setMode('choose'); }}
+              className="flex-1">
               <X size={14} className="mr-1.5" /> Cancelar
             </Button>
             <Button type="button" variant="outline" size="sm"
-              onClick={() => { stopStream(); setCamError(null); setUseMode('extract'); qrInputRef.current?.click(); }}
+              onClick={() => { stopStreamRef.current(); setCamError(null); setUseMode('extract'); qrInputRef.current?.click(); }}
               className="flex-1">
               <Camera size={14} className="mr-1.5" /> Tirar foto
             </Button>
