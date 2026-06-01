@@ -10,7 +10,7 @@ import { CategoryCombobox } from '@/components/ui/category-combobox';
 import { ReceiptScanner, ScannedData } from './ReceiptScanner';
 import {
   X, Upload, ArrowDown, ArrowUp, Loader2,
-  Building, CreditCard as CreditCardIcon, Scan, ImageOff,
+  Building, CreditCard as CreditCardIcon, Scan,
 } from 'lucide-react';
 import { useTransactions, Transaction, getReceiptUrl } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
@@ -37,7 +37,6 @@ const numToMask = (value: number | string): string => {
   return maskBRL(String(cents));
 };
 
-/** Lê um File como base64 data URL — persistente, ao contrário de createObjectURL */
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -48,27 +47,26 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transaction, onClose }) => {
-  const { updateTransaction } = useTransactions();
-  const { accounts } = useAccounts();
+  const { updateTransactionAsync } = useTransactions();
+  const { accounts }    = useAccounts();
   const { creditCards } = useCreditCards();
-  const { categories } = useCategories();
+  const { categories }  = useCategories();
 
   const [amountMasked, setAmountMasked] = useState(numToMask(transaction.amount));
-  const [description, setDescription] = useState(transaction.description);
-  const [date, setDate] = useState(transaction.date ? String(transaction.date).slice(0, 10) : '');
-  const [accountId, setAccountId] = useState(transaction.account_id);
-  const [categoryId, setCategoryId] = useState(transaction.category_id || '');
-  const [notes, setNotes] = useState(transaction.notes || '');
-  const [status, setStatus] = useState(transaction.status);
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  // Começa null; carregamos a signed URL via useEffect abaixo
+  const [description,  setDescription]  = useState(transaction.description);
+  const [date,         setDate]         = useState(transaction.date ? String(transaction.date).slice(0, 10) : '');
+  const [accountId,    setAccountId]    = useState(transaction.account_id);
+  const [categoryId,   setCategoryId]   = useState(transaction.category_id || '');
+  const [notes,        setNotes]        = useState(transaction.notes || '');
+  const [status,       setStatus]       = useState(transaction.status);
+  const [receiptFile,    setReceiptFile]    = useState<File | null>(null);
   const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
   const [receiptLoading, setReceiptLoading] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [showScanner, setShowScanner] = useState(false);
+  const [loading,      setLoading]      = useState(false);
+  const [showScanner,  setShowScanner]  = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Carrega a signed URL do comprovante salvo (funciona com bucket privado)
+  // Carrega a signed URL do comprovante já salvo no storage
   useEffect(() => {
     if (!transaction.receipt_image_url) return;
     setReceiptLoading(true);
@@ -95,15 +93,13 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
     })),
   ];
 
-  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setAmountMasked(maskBRL(e.target.value));
-  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setReceiptFile(file);
-    // FileReader gera data URL persistente (createObjectURL expira com a aba)
     const dataUrl = await fileToDataUrl(file);
     setReceiptPreview(dataUrl);
   };
@@ -115,23 +111,17 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
   };
 
   const handleScanResult = async (data: ScannedData) => {
-    // Sempre salva o comprovante com data URL persistente
     if (data.thumbnail) {
       setReceiptFile(data.thumbnail);
-      // FIX: FileReader ao invés de createObjectURL (que expira)
       const dataUrl = await fileToDataUrl(data.thumbnail);
       setReceiptPreview(dataUrl);
     }
-
-    // Só preenche campos se for extração (qr/ocr), nunca em photo-only
     if (data.source !== 'photo-only') {
       if (data.amount)      setAmountMasked(maskBRL(String(Math.round(data.amount * 100))));
       if (data.description) setDescription(data.description);
       if (data.date)        setDate(data.date);
     }
-
     setShowScanner(false);
-
     if (data.source === 'photo-only') {
       enhancedToast.success('Comprovante salvo!', { description: 'Foto recortada e anexada à transação.' });
     } else {
@@ -142,37 +132,31 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
     }
   };
 
-  const parseAmount = (masked: string): number => {
-    return parseFloat(masked.replace(/\./g, '').replace(',', '.')) || 0;
-  };
+  const parseAmount = (masked: string): number =>
+    parseFloat(masked.replace(/\./g, '').replace(',', '.')) || 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const numericAmount = parseAmount(amountMasked);
     if (!numericAmount || !description || !accountId) {
-      enhancedToast.error('Campos obrigatórios', {
-        description: 'Preencha valor, descrição e conta.',
-      });
+      enhancedToast.error('Campos obrigatórios', { description: 'Preencha valor, descrição e conta.' });
       return;
     }
     setLoading(true);
     try {
-      await updateTransaction({
+      // mutateAsync: aguarda upload antes de fechar; erros de storage aparecem no toast
+      await updateTransactionAsync({
         id: transaction.id,
-        description,
-        amount: numericAmount,
-        date,
-        account_id: accountId,
-        category_id: categoryId,
-        notes,
-        status,
+        description, amount: numericAmount, date,
+        account_id: accountId, category_id: categoryId,
+        notes, status,
         receiptFile: receiptFile || undefined,
-        // Se removeu o comprovante, limpa no banco também
+        // Se não há novo arquivo: mantém path existente OU limpa se removido
         receipt_image_url: receiptFile
-          ? undefined                          // será sobrescrito pelo upload
+          ? undefined
           : receiptPreview
-            ? transaction.receipt_image_url    // mantém o path existente
-            : undefined,                       // foi removido
+            ? transaction.receipt_image_url
+            : undefined,
       });
       enhancedToast.success('Transação atualizada!', {
         description: `${formatCurrency(numericAmount)} salvo com sucesso.`,
@@ -197,14 +181,12 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CardTitle>Editar Transação</CardTitle>
-              <span
-                className={cn(
-                  'inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full',
-                  isIncome
-                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-destructive/10 text-destructive'
-                )}
-              >
+              <span className={cn(
+                'inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full',
+                isIncome
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-destructive/10 text-destructive'
+              )}>
                 {isIncome ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
                 {isIncome ? 'Receita' : 'Despesa'}
               </span>
@@ -223,41 +205,24 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                 <Label htmlFor="edit-amount">Valor *</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
-                  <Input
-                    id="edit-amount"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="0,00"
-                    value={amountMasked}
-                    onChange={handleAmountChange}
-                    className="pl-9 w-full"
-                  />
+                  <Input id="edit-amount" type="text" inputMode="numeric" placeholder="0,00"
+                    value={amountMasked} onChange={handleAmountChange} className="pl-9 w-full" />
                 </div>
               </div>
               <div className="space-y-2 min-w-0 overflow-hidden">
                 <Label htmlFor="edit-date">Data *</Label>
-                <Input
-                  id="edit-date"
-                  type="date"
-                  value={date}
+                <Input id="edit-date" type="date" value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full min-w-0 block"
-                  style={{ maxWidth: '100%' }}
-                  required
-                />
+                  className="w-full min-w-0 block" style={{ maxWidth: '100%' }} required />
               </div>
             </div>
 
             {/* Descrição */}
             <div className="space-y-2">
               <Label htmlFor="edit-description">Descrição *</Label>
-              <Input
-                id="edit-description"
-                value={description}
+              <Input id="edit-description" value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Ex: Supermercado, Salário..."
-                required
-              />
+                placeholder="Ex: Supermercado, Salário..." required />
             </div>
 
             {/* Conta + Categoria */}
@@ -265,9 +230,7 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
               <div className="space-y-2">
                 <Label>Conta / Cartão *</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
                     {allAccounts.map((a) => (
                       <SelectItem key={a.id} value={a.id}>
@@ -282,12 +245,8 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
               </div>
               <div className="space-y-2">
                 <Label>Categoria</Label>
-                <CategoryCombobox
-                  categories={filteredCategories as any}
-                  value={categoryId}
-                  onChange={setCategoryId}
-                  placeholder="Selecione"
-                />
+                <CategoryCombobox categories={filteredCategories as any}
+                  value={categoryId} onChange={setCategoryId} placeholder="Selecione" />
               </div>
             </div>
 
@@ -307,20 +266,16 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
             {/* Observações */}
             <div className="space-y-2">
               <Label htmlFor="edit-notes">Observações</Label>
-              <Textarea
-                id="edit-notes"
-                value={notes}
+              <Textarea id="edit-notes" value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Adicione observações sobre esta transação..."
-                rows={2}
-              />
+                rows={2} />
             </div>
 
-            {/* Comprovante / Nota Fiscal */}
+            {/* Comprovante */}
             <div className="space-y-2">
               <Label>Comprovante / Nota Fiscal</Label>
 
-              {/* Carregando signed URL do comprovante existente */}
               {receiptLoading && (
                 <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-3 text-sm text-muted-foreground">
                   <Loader2 size={15} className="animate-spin flex-shrink-0" />
@@ -336,24 +291,18 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                   >
                     <Upload size={15} className="text-muted-foreground flex-shrink-0" />
                     <span className="text-sm text-muted-foreground truncate">
-                      {transaction.receipt_image_url ? 'Comprovante indisponível — clique para substituir' : 'Clique para anexar'}
+                      {transaction.receipt_image_url
+                        ? 'Comprovante indisponível — clique para substituir'
+                        : 'Clique para anexar'}
                     </span>
                   </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
+                  <input ref={fileInputRef} type="file" accept="image/*,.pdf"
+                    onChange={handleFileChange} className="hidden" />
                   <Dialog open={showScanner} onOpenChange={setShowScanner}>
                     <DialogTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
+                      <Button type="button" variant="outline"
                         className="flex items-center gap-1.5 px-3 flex-shrink-0"
-                        title="Escanear nota fiscal"
-                      >
+                        title="Escanear nota fiscal">
                         <Scan size={15} />
                         <span className="text-xs hidden sm:inline">Escanear NF</span>
                       </Button>
@@ -364,10 +313,7 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                           <Scan size={16} /> Scanner de Nota Fiscal
                         </DialogTitle>
                       </DialogHeader>
-                      <ReceiptScanner
-                        onResult={handleScanResult}
-                        onCancel={() => setShowScanner(false)}
-                      />
+                      <ReceiptScanner onResult={handleScanResult} onCancel={() => setShowScanner(false)} />
                     </DialogContent>
                   </Dialog>
                 </div>
@@ -375,18 +321,12 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
 
               {!receiptLoading && receiptPreview && (
                 <div className="relative rounded-lg overflow-hidden border border-border">
-                  <img
-                    src={receiptPreview}
-                    alt="Comprovante"
+                  <img src={receiptPreview} alt="Comprovante"
                     className="w-full max-h-40 object-cover"
-                    onError={() => setReceiptPreview(null)}
-                  />
-                  <button
-                    type="button"
-                    onClick={removeReceipt}
+                    onError={() => setReceiptPreview(null)} />
+                  <button type="button" onClick={removeReceipt}
                     className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center transition-colors"
-                    title="Remover comprovante"
-                  >
+                    title="Remover comprovante">
                     <X size={14} className="text-white" />
                   </button>
                   <div className="px-3 py-2 bg-muted/80 text-xs text-muted-foreground flex items-center justify-between">
@@ -405,12 +345,11 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                 Cancelar
               </Button>
               <Button type="submit" className="flex-1 h-11 font-semibold" disabled={loading}>
-                {loading ? (
-                  <><Loader2 size={16} className="mr-2 animate-spin" /> Salvando...</>
-                ) : 'Salvar Alterações'}
+                {loading
+                  ? <><Loader2 size={16} className="mr-2 animate-spin" /> Salvando...</>
+                  : 'Salvar Alterações'}
               </Button>
             </div>
-
           </form>
         </CardContent>
       </Card>

@@ -1,4 +1,4 @@
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { toast } from 'sonner';
@@ -120,39 +120,59 @@ function normalizeRow(t: any): Transaction {
 
 // ─── Upload de comprovante ────────────────────────────────────────────────────
 // Salva o arquivo e retorna o CAMINHO relativo (ex: "userId/timestamp.jpg").
-// Nunca salva uma URL pública — geramos signed URLs on demand.
 async function uploadReceipt(userId: string, file: File): Promise<string> {
-  const ext      = file.name.split('.').pop() ?? 'jpg';
+  const ext      = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
   const filePath = `${userId}/${Date.now()}.${ext}`;
-  const { error } = await supabase.storage.from('receipts').upload(filePath, file, {
-    upsert: false,
-    contentType: file.type || 'image/jpeg',
-  });
-  if (error) throw error;
-  return filePath;
+
+  const { data, error } = await supabase.storage
+    .from('receipts')
+    .upload(filePath, file, {
+      upsert: false,
+      contentType: file.type || 'image/jpeg',
+    });
+
+  if (error) {
+    // Loga para debug no console do browser
+    console.error('[uploadReceipt] Erro no storage:', error);
+    throw new Error(`Falha ao enviar comprovante: ${error.message}`);
+  }
+
+  // data.path é o caminho real confirmado pelo servidor
+  return data.path;
 }
 
 // ─── Geração de URL assinada (1 hora) ────────────────────────────────────────
-// Funciona com bucket privado (recomendado) E público.
-// Se a URL salva no banco já for uma URL completa (legado), tenta extrair o path.
 export async function getReceiptUrl(rawUrlOrPath: string): Promise<string | null> {
   try {
     let filePath = rawUrlOrPath;
 
-    // Compatibilidade com registros antigos que guardaram a URL pública completa
+    // Compatibilidade com registros antigos que guardaram URL pública completa
     if (rawUrlOrPath.startsWith('http')) {
-      const match = rawUrlOrPath.match(/\/receipts\/(.+)$/);
-      if (!match) return rawUrlOrPath; // URL externa desconhecida — usa direto
-      filePath = match[1];
+      // Se já for uma signed URL válida, testa direto
+      if (rawUrlOrPath.includes('token=')) return rawUrlOrPath;
+      const match = rawUrlOrPath.match(/\/receipts\/(.+?)(?:\?|$)/);
+      if (!match) return rawUrlOrPath;
+      filePath = decodeURIComponent(match[1]);
     }
 
-    const { data, error } = await supabase.storage
+    // Tenta signed URL (funciona com bucket privado)
+    const { data: signed, error: signedError } = await supabase.storage
       .from('receipts')
-      .createSignedUrl(filePath, 60 * 60); // 1 hora
+      .createSignedUrl(filePath, 60 * 60);
 
-    if (error || !data?.signedUrl) return null;
-    return data.signedUrl;
-  } catch {
+    if (!signedError && signed?.signedUrl) return signed.signedUrl;
+
+    // Fallback: getPublicUrl (funciona se o bucket for público)
+    const { data: pub } = supabase.storage
+      .from('receipts')
+      .getPublicUrl(filePath);
+
+    if (pub?.publicUrl) return pub.publicUrl;
+
+    console.warn('[getReceiptUrl] Não foi possível gerar URL para:', filePath, signedError);
+    return null;
+  } catch (e) {
+    console.error('[getReceiptUrl] Exceção:', e);
     return null;
   }
 }
@@ -165,12 +185,8 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
 
   const queryKey = [
     'transactions', user?.id,
-    filters.type,
-    filters.category_id,
-    filters.account_id,
-    filters.dateFrom,
-    filters.dateTo,
-    filters.search,
+    filters.type, filters.category_id, filters.account_id,
+    filters.dateFrom, filters.dateTo, filters.search,
   ];
 
   const infiniteQuery = useInfiniteQuery({
@@ -191,7 +207,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
     queryClient.invalidateQueries({ queryKey: ['transactions'] });
 
   // ── Create ────────────────────────────────────────────────────────────────
-  const createTransactionMutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: async ({ receiptFile, ...input }: CreateTransactionInput) => {
       if (!user) throw new Error('Usuário não autenticado');
       const receipt_image_url = receiptFile
@@ -219,7 +235,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
   });
 
   // ── Update ────────────────────────────────────────────────────────────────
-  const updateTransactionMutation = useMutation({
+  const updateMutation = useMutation({
     mutationFn: async ({ id, receiptFile, ...updates }: Partial<Transaction> & { id: string; receiptFile?: File }) => {
       if (!user) throw new Error('Usuário não autenticado');
       const receipt_image_url = receiptFile
@@ -248,7 +264,7 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
   });
 
   // ── Delete ────────────────────────────────────────────────────────────────
-  const deleteTransactionMutation = useMutation({
+  const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('transactions')
@@ -277,12 +293,17 @@ export const useTransactions = (filters: TransactionFilters = {}) => {
     loading:    infiniteQuery.isLoading,
     isFetching: infiniteQuery.isFetching,
     error:      infiniteQuery.error,
-    createTransaction: createTransactionMutation.mutate,
-    updateTransaction: updateTransactionMutation.mutate,
-    deleteTransaction: deleteTransactionMutation.mutate,
-    isCreating: createTransactionMutation.isPending,
-    isUpdating: updateTransactionMutation.isPending,
-    isDeleting: deleteTransactionMutation.isPending,
+    // mutate  — fire-and-forget (não retorna Promise, não propóe erros ao chamador)
+    createTransaction:      createMutation.mutate,
+    updateTransaction:      updateMutation.mutate,
+    deleteTransaction:      deleteMutation.mutate,
+    // mutateAsync — retorna Promise; use nos forms para await e tratar erros
+    createTransactionAsync: createMutation.mutateAsync,
+    updateTransactionAsync: updateMutation.mutateAsync,
+    deleteTransactionAsync: deleteMutation.mutateAsync,
+    isCreating: createMutation.isPending,
+    isUpdating: updateMutation.isPending,
+    isDeleting: deleteMutation.isPending,
     refetch:    invalidate,
   };
 };

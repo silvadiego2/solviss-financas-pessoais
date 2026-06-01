@@ -62,10 +62,10 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { accounts }          = useAccounts();
-  const { creditCards }       = useCreditCards();
-  const { categories }        = useCategories();
-  const { createTransaction } = useTransactions();
+  const { accounts }                 = useAccounts();
+  const { creditCards }              = useCreditCards();
+  const { categories }               = useCategories();
+  const { createTransactionAsync }   = useTransactions();
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
 
@@ -96,7 +96,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     const file = e.target.files?.[0];
     if (!file) return;
     setReceiptFile(file);
-    // Usa FileReader para gerar data URL persistente (createObjectURL expira)
     const dataUrl = await fileToDataUrl(file);
     setReceiptPreview(dataUrl);
   };
@@ -107,26 +106,18 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // handleScanResult: respeita source — 'photo-only' só salva a foto sem
-  // sobrescrever campos já preenchidos pelo usuário.
   const handleScanResult = async (data: ScannedData) => {
-    // Sempre salva o comprovante usando data URL persistente
     if (data.thumbnail) {
       setReceiptFile(data.thumbnail);
-      // FIX: usa FileReader ao invés de createObjectURL (que expira com a aba)
       const dataUrl = await fileToDataUrl(data.thumbnail);
       setReceiptPreview(dataUrl);
     }
-
-    // Só preenche campos se o modo foi de extração (qrcode ou ocr)
     if (data.source !== 'photo-only') {
       if (data.amount)      setAmount(maskBRL(String(Math.round(data.amount * 100))));
       if (data.description) setDescription(data.description);
       if (data.date)        setDate(data.date);
     }
-
     setShowScanner(false);
-
     if (data.source === 'photo-only') {
       enhancedToast.success('Comprovante salvo!', { description: 'Foto recortada e anexada à transação.' });
     } else {
@@ -160,7 +151,8 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     const numericAmount = parseAmount(amount);
     setLoading(true);
     try {
-      await createTransaction({
+      // mutateAsync: aguarda o upload do comprovante antes de fechar o form
+      await createTransactionAsync({
         type, amount: numericAmount, description,
         account_id: accountId, category_id: categoryId, date,
         status: 'completed',
@@ -315,7 +307,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               )}
             </div>
 
-            {/* Comprovante / Nota Fiscal */}
+            {/* Comprovante */}
             <div className="space-y-2">
               <Label>Comprovante / Nota Fiscal</Label>
               {!receiptPreview ? (
@@ -328,7 +320,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                     <span className="text-sm text-muted-foreground truncate">Clique para anexar</span>
                   </div>
                   <input ref={fileInputRef} type="file" accept="image/*,.pdf" onChange={handleFileChange} className="hidden" />
-
                   <Dialog open={showScanner} onOpenChange={setShowScanner}>
                     <DialogTrigger asChild>
                       <Button type="button" variant="outline"
@@ -343,21 +334,15 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                           <Scan size={16} /> Scanner de Nota Fiscal
                         </DialogTitle>
                       </DialogHeader>
-                      <ReceiptScanner
-                        onResult={handleScanResult}
-                        onCancel={() => setShowScanner(false)}
-                      />
+                      <ReceiptScanner onResult={handleScanResult} onCancel={() => setShowScanner(false)} />
                     </DialogContent>
                   </Dialog>
                 </div>
               ) : (
                 <div className="relative rounded-lg overflow-hidden border border-border">
                   <img src={receiptPreview} alt="Comprovante" className="w-full max-h-40 object-cover" />
-                  <button
-                    type="button"
-                    onClick={removeReceipt}
-                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center transition-colors"
-                  >
+                  <button type="button" onClick={removeReceipt}
+                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center transition-colors">
                     <X size={14} className="text-white" />
                   </button>
                   <div className="px-3 py-2 bg-muted/80 text-xs text-muted-foreground flex items-center justify-between">
