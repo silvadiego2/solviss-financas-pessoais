@@ -14,13 +14,9 @@ import { ImportTransactions } from './transactions/ImportTransactions';
 import { SecurityDashboard } from './security/SecurityDashboard';
 import { useAuth } from './auth/AuthProvider';
 import { AuthScreen } from './auth/AuthScreen';
-import { AutoCategorizationManager } from './advanced/AutoCategorizationManager';
-import { DuplicateDetectionManager } from './advanced/DuplicateDetectionManager';
 import { AutoBackupManager } from './advanced/AutoBackupManager';
-import { AnalyticsHub } from './analytics/AnalyticsHub';
-import { NotificationManager } from './mobile/NotificationManager';
-import { ReceiptScanner } from './mobile/ReceiptScanner';
-import { AutoRules } from './automation/AutoRules';
+import { AutomationHub } from './automation/AutomationHub';
+import { DataTransferHub } from './data/DataTransferHub';
 import { UserProfile } from './profile/UserProfile';
 import { DemoDataManager } from './demo/DemoDataManager';
 import { DataResetManager } from './advanced/DataResetManager';
@@ -120,20 +116,12 @@ export const FinanceApp: React.FC = () => {
         return <UserProfile onBack={handleBack} />;
       case 'settings':
         return <SettingsScreen onBack={handleBack} />;
-      case 'auto-categorization':
-        return <AutoCategorizationManager onBack={handleBack} />;
-      case 'duplicate-detection':
-        return <DuplicateDetectionManager onBack={handleBack} />;
       case 'auto-backup':
         return <AutoBackupManager onBack={handleBack} />;
-      case 'analytics':
-        return <AnalyticsHub onBack={handleBack} />;
-      case 'receipt-scanner':
-        return <ReceiptScanner onBack={handleBack} />;
-      case 'notifications':
-        return <NotificationManager onBack={handleBack} />;
-      case 'auto-rules':
-        return <AutoRules onBack={handleBack} />;
+      case 'automation-hub':
+        return <AutomationHub onBack={handleBack} />;
+      case 'data-transfer':
+        return <DataTransferHub onBack={handleBack} />;
       case 'demo-data':
         return <DemoDataManager onBack={handleBack} />;
       case 'data-reset':

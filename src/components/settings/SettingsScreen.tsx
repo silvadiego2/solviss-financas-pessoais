@@ -4,7 +4,9 @@ import { Switch } from '@/components/ui/switch';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSettings } from '@/contexts/SettingsContext';
-import { Settings, Moon, Sun, DollarSign, Calendar, Bell, Trash2 } from 'lucide-react';
+import { Settings, Moon, Sun, DollarSign, Calendar, Bell, Trash2, Cloud } from 'lucide-react';
+import { AutoBackupManager } from '@/components/advanced/AutoBackupManager';
+import { useState } from 'react';
 
 interface SettingsScreenProps {
   onBack?: () => void;
@@ -18,6 +20,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
     notifications, setNotifications,
     confirmDelete, setConfirmDelete,
   } = useSettings();
+
+  const [showBackup, setShowBackup] = useState(false);
+
+  if (showBackup) return <AutoBackupManager onBack={() => setShowBackup(false)} />;
 
   const sections = [
     {
@@ -64,7 +70,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
       ],
     },
     {
-      title: 'Comportamento',
+      title: 'Notificações',
       items: [
         {
           icon: Bell,
@@ -89,8 +95,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
   return (
     <div className="space-y-6">
       <BackHeader
-        title="Configurações"
-        subtitle="Tema, moeda e preferências"
+        title="Preferências"
+        subtitle="Tema, moeda, notificações e backup"
         icon={<Settings className="h-6 w-6" />}
         onBack={onBack}
       />
@@ -144,9 +150,27 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
         </div>
       ))}
 
-      <p className="text-xs text-muted-foreground text-center px-4">
-        Para importar/exportar dados, backup e segurança acesse o menu <strong>Mais</strong>.
-      </p>
+      {/* Backup — abre subview inline */}
+      <div className="space-y-2">
+        <h3 className="text-sm font-medium text-muted-foreground px-1">Dados</h3>
+        <Card>
+          <CardContent className="p-0">
+            <button
+              onClick={() => setShowBackup(true)}
+              className="flex items-center justify-between w-full px-4 py-3.5 hover:bg-accent transition-colors rounded-xl text-left"
+            >
+              <div className="flex items-center space-x-3">
+                <Cloud className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">Backup Automático</p>
+                  <p className="text-xs text-muted-foreground">Sincronização e recuperação na nuvem</p>
+                </div>
+              </div>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground/40"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

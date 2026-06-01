@@ -1,9 +1,8 @@
 import React from 'react';
 import {
-  Download, Upload, Tags, Building, ChevronRight,
-  Shield, Cloud, Zap, Database, Trash2,
-  Copy, Sparkles, Bell,
-  ScanLine, LogOut, Crown, Settings,
+  Download, Tags, Building, ChevronRight,
+  Shield, Zap, Database, Trash2,
+  Sparkles, Crown, Settings, LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -96,56 +95,32 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   const displayEmail = user?.email || '';
   const initial      = displayName.charAt(0).toUpperCase();
 
-  // Analytics Avançado removido — conteúdo migrado para Relatórios > aba Detalhado
+  // Ferramentas: Categorização IA + Automação de Regras fundidos em "Automação"
+  // Scanner de Recibos removido — já integrado no formulário de adicionar transação
+  // Detector de Duplicatas removido — roda em background ao importar
   const toolsItems: MenuItem[] = [
     {
-      title: 'Categorização por IA',
-      description: 'Classificação automática de gastos',
+      title: 'Automação',
+      description: 'Regras, IA de categorização e ações automáticas',
       icon: Sparkles,
-      action: () => onNavigate('auto-categorization'),
+      action: () => onNavigate('automation-hub'),
       badge: 'IA',
     },
-    {
-      title: 'Automação de Regras',
-      description: 'Ações automáticas em transações',
-      icon: Zap,
-      action: () => onNavigate('auto-rules'),
-    },
-    {
-      title: 'Detector de Duplicatas',
-      description: 'Identificar lançamentos repetidos',
-      icon: Copy,
-      action: () => onNavigate('duplicate-detection'),
-    },
-    {
-      title: 'Scanner de Recibos',
-      description: 'Escanear comprovantes por foto',
-      icon: ScanLine,
-      action: () => onNavigate('receipt-scanner'),
-    },
   ];
 
+  // Dados: Import + Export fundidos em "Importar / Exportar"
+  // Backup Automático removido — movido para Preferências
   const dataItems: MenuItem[] = [
     {
-      title: 'Importar Transações',
-      description: 'CSV ou Excel',
-      icon: Upload,
-      action: () => onNavigate('import-transactions'),
-    },
-    {
-      title: 'Exportar Relatórios',
-      description: 'Baixar dados em planilha ou PDF',
+      title: 'Importar / Exportar',
+      description: 'CSV, Excel ou PDF — entrada e saída de dados',
       icon: Download,
-      action: () => onNavigate('export'),
-    },
-    {
-      title: 'Backup Automático',
-      description: 'Sincronização na nuvem',
-      icon: Cloud,
-      action: () => onNavigate('auto-backup'),
+      action: () => onNavigate('data-transfer'),
     },
   ];
 
+  // Notificações removidas — já existem dentro de Preferências (SettingsScreen)
+  // Backup Automático removido — movido para Preferências (SettingsScreen)
   const settingsItems: MenuItem[] = [
     {
       title: 'Contas Bancárias',
@@ -161,15 +136,9 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     },
     {
       title: 'Preferências',
-      description: 'Tema, moeda e idioma',
+      description: 'Tema, moeda, notificações e backup',
       icon: Settings,
       action: () => onNavigate('settings'),
-    },
-    {
-      title: 'Notificações',
-      description: 'Alertas de vencimento e orçamento',
-      icon: Bell,
-      action: () => onNavigate('notifications'),
     },
     {
       title: 'Segurança',
