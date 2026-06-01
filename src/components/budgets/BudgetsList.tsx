@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Plus, Target, TrendingUp, AlertTriangle, Info } from 'lucide-react';
+import { Plus, Target, TrendingUp, AlertTriangle } from 'lucide-react';
 import { useBudgets } from '@/hooks/useBudgets';
 import { AddBudgetForm } from './AddBudgetForm';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { BackHeader } from '@/components/layout/BackHeader';
 
 interface BudgetsListProps {
@@ -15,16 +14,11 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({ onBack }) => {
   const { budgets, loading } = useBudgets();
   const [showAddForm, setShowAddForm] = useState(false);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const getSpentPercentage = (spent: number, budget: number) => {
-    return budget > 0 ? (spent / budget) * 100 : 0;
-  };
+  const getSpentPercentage = (spent: number, budget: number) =>
+    budget > 0 ? (spent / budget) * 100 : 0;
 
   const getProgressColor = (percentage: number) => {
     if (percentage >= 100) return 'bg-red-500';
@@ -38,14 +32,14 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({ onBack }) => {
     return <Target size={16} className="text-green-500" />;
   };
 
-  const totalBudget = budgets.reduce((sum, budget) => sum + budget.amount, 0);
-  const totalSpent = budgets.reduce((sum, budget) => sum + budget.spent, 0);
+  const totalBudget = budgets.reduce((sum, b) => sum + b.amount, 0);
+  const totalSpent = budgets.reduce((sum, b) => sum + b.spent, 0);
   const overallPercentage = getSpentPercentage(totalSpent, totalBudget);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
       </div>
     );
   }
@@ -56,27 +50,16 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({ onBack }) => {
 
   return (
     <div className="space-y-4">
-      {onBack && <BackHeader title="Orçamentos" onBack={onBack} />}
-      {/* Alerta explicativo */}
-      <Alert className="mb-4">
-        <Info size={16} />
-        <AlertTitle>Sobre Orçamentos</AlertTitle>
-        <AlertDescription>
-          Orçamentos controlam gastos mensais por categoria. 
-          Para metas de economia, use "Objetivos Financeiros" no menu Mais.
-        </AlertDescription>
-      </Alert>
-
-      <div className="flex items-center justify-between">
-        {!onBack && <h2 className="text-lg font-semibold">Orçamentos</h2>}
-        <Button 
-          onClick={() => setShowAddForm(true)}
-          className="flex items-center space-x-2"
-        >
-          <Plus size={16} />
-          <span>Novo Orçamento</span>
-        </Button>
-      </div>
+      <BackHeader
+        title="Orçamentos"
+        onBack={onBack}
+        action={
+          <Button onClick={() => setShowAddForm(true)} size="sm" className="flex items-center gap-2">
+            <Plus size={16} />
+            Novo Orçamento
+          </Button>
+        }
+      />
 
       {/* Resumo Geral */}
       {budgets.length > 0 && (
@@ -90,23 +73,23 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({ onBack }) => {
           <CardContent>
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Total Orçado</span>
+                <span className="text-sm text-muted-foreground">Total Orçado</span>
                 <span className="font-medium">{formatCurrency(totalBudget)}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Total Gasto</span>
-                <span className={`font-medium ${overallPercentage >= 100 ? 'text-red-600' : 'text-gray-900'}`}>
+                <span className="text-sm text-muted-foreground">Total Gasto</span>
+                <span className={`font-medium ${overallPercentage >= 100 ? 'text-red-600' : ''}`}>
                   {formatCurrency(totalSpent)}
                 </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
-                <div 
+              <div className="w-full bg-muted rounded-full h-3">
+                <div
                   className={`h-3 rounded-full transition-all ${getProgressColor(overallPercentage)}`}
                   style={{ width: `${Math.min(overallPercentage, 100)}%` }}
                 />
               </div>
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-500">{overallPercentage.toFixed(1)}% do orçamento</span>
+                <span className="text-muted-foreground">{overallPercentage.toFixed(1)}% do orçamento</span>
                 <span className={overallPercentage >= 100 ? 'text-red-600' : 'text-green-600'}>
                   {formatCurrency(totalBudget - totalSpent)} restante
                 </span>
@@ -118,12 +101,10 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({ onBack }) => {
 
       {budgets.length === 0 ? (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-8">
-            <Target size={48} className="text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Nenhum orçamento encontrado
-            </h3>
-            <p className="text-gray-500 text-center mb-4">
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Target size={48} className="text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">Nenhum orçamento encontrado</h3>
+            <p className="text-muted-foreground text-center mb-4">
               Crie orçamentos para controlar melhor seus gastos mensais
             </p>
             <Button onClick={() => setShowAddForm(true)}>
@@ -136,43 +117,37 @@ export const BudgetsList: React.FC<BudgetsListProps> = ({ onBack }) => {
           {budgets.map((budget) => {
             const spentPercentage = getSpentPercentage(budget.spent, budget.amount);
             const remaining = budget.amount - budget.spent;
-            
             return (
               <Card key={budget.id}>
                 <CardContent className="p-4">
                   <div className="space-y-3">
-                    {/* Header */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-2">
                         <span className="text-lg">{budget.category?.icon}</span>
                         <div>
                           <h3 className="font-medium">{budget.category?.name}</h3>
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-muted-foreground">
                             {formatCurrency(budget.spent)} de {formatCurrency(budget.amount)}
                           </p>
                         </div>
                       </div>
                       {getStatusIcon(spentPercentage)}
                     </div>
-
-                    {/* Progress Bar */}
                     <div className="space-y-2">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div
                           className={`h-2 rounded-full transition-all ${getProgressColor(spentPercentage)}`}
                           style={{ width: `${Math.min(spentPercentage, 100)}%` }}
                         />
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">{spentPercentage.toFixed(1)}%</span>
+                        <span className="text-muted-foreground">{spentPercentage.toFixed(1)}%</span>
                         <span className={remaining < 0 ? 'text-red-600' : 'text-green-600'}>
                           {remaining < 0 ? 'Excedido em ' : 'Restam '}
                           {formatCurrency(Math.abs(remaining))}
                         </span>
                       </div>
                     </div>
-
-                    {/* Status Message */}
                     {spentPercentage >= 100 && (
                       <div className="flex items-center space-x-2 text-red-600 text-sm">
                         <AlertTriangle size={14} />

@@ -13,6 +13,7 @@ import { useAccounts } from '@/hooks/useAccounts';
 import { useCategories } from '@/hooks/useCategories';
 import { DuplicateDetectionEngine, DuplicateGroup, DuplicateDetectionSettings, DEFAULT_DUPLICATE_SETTINGS } from '@/utils/duplicateDetection';
 import { enhancedToast } from '@/components/ui/enhanced-toast';
+import { BackHeader } from '@/components/layout/BackHeader';
 
 interface DuplicateDetectionManagerProps {
   onBack?: () => void;
@@ -22,7 +23,7 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
   const { transactions, deleteTransaction, updateTransaction } = useTransactions();
   const { accounts } = useAccounts();
   const { categories } = useCategories();
-  
+
   const [engine, setEngine] = useState<DuplicateDetectionEngine>(new DuplicateDetectionEngine());
   const [settings, setSettings] = useState<DuplicateDetectionSettings>(DEFAULT_DUPLICATE_SETTINGS);
   const [duplicateGroups, setDuplicateGroups] = useState<DuplicateGroup[]>([]);
@@ -30,20 +31,14 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
   const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
-    const newEngine = new DuplicateDetectionEngine(settings);
-    setEngine(newEngine);
+    setEngine(new DuplicateDetectionEngine(settings));
   }, [settings]);
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-  const getAccountName = (accountId: string) => {
-    return accounts.find(a => a.id === accountId)?.name || 'Conta desconhecida';
-  };
+  const getAccountName = (accountId: string) =>
+    accounts.find(a => a.id === accountId)?.name || 'Conta desconhecida';
 
   const getCategoryName = (categoryId?: string) => {
     if (!categoryId) return 'Sem categoria';
@@ -58,67 +53,53 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
   const analyzeDuplicates = async () => {
     setIsAnalyzing(true);
     setDuplicateGroups([]);
-
     try {
-      // Converter transações para o formato esperado
       const duplicateTransactions = transactions.map(t => ({
         id: t.id,
         description: t.description,
         amount: Number(t.amount),
         date: t.date,
         account_id: t.account_id,
-        category_id: t.category_id
+        category_id: t.category_id,
       }));
-
       const groups = engine.detectDuplicates(duplicateTransactions);
       setDuplicateGroups(groups);
-
       if (groups.length === 0) {
         enhancedToast.info('Nenhuma duplicata encontrada', {
-          description: 'Todas as transações parecem ser únicas com base nos critérios atuais.'
+          description: 'Todas as transações parecem ser únicas com base nos critérios atuais.',
         });
       } else {
         enhancedToast.success(`${groups.length} grupos de duplicatas encontrados!`, {
-          description: `Total de ${groups.reduce((sum, g) => sum + g.transactions.length, 0)} transações envolvidas.`
+          description: `Total de ${groups.reduce((sum, g) => sum + g.transactions.length, 0)} transações envolvidas.`,
         });
       }
-    } catch (error) {
+    } catch {
       enhancedToast.error('Erro ao analisar duplicatas');
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  const handleGroupAction = async (group: DuplicateGroup, action: 'merge' | 'keep_all' | 'remove_duplicates' | 'keep_first' | 'keep_latest') => {
+  const handleGroupAction = async (
+    group: DuplicateGroup,
+    action: 'merge' | 'keep_all' | 'remove_duplicates' | 'keep_first' | 'keep_latest',
+  ) => {
     setIsProcessing(true);
-
     try {
       const result = DuplicateDetectionEngine.applyDuplicateAction(group, action);
-
-      // Executar deletions
-      for (const id of result.toDelete) {
-        await deleteTransaction(id);
-      }
-
-      // Executar update se necessário
-      if (result.toUpdate) {
-        await updateTransaction({ id: result.toUpdate.id, ...result.toUpdate.updates });
-      }
-
-      // Remover grupo da lista
+      for (const id of result.toDelete) await deleteTransaction(id);
+      if (result.toUpdate) await updateTransaction({ id: result.toUpdate.id, ...result.toUpdate.updates });
       setDuplicateGroups(prev => prev.filter(g => g.id !== group.id));
-
       enhancedToast.success(result.message);
-    } catch (error) {
+    } catch {
       enhancedToast.error('Erro ao aplicar ação');
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleSettingsChange = (key: keyof DuplicateDetectionSettings, value: any) => {
+  const handleSettingsChange = (key: keyof DuplicateDetectionSettings, value: unknown) =>
     setSettings(prev => ({ ...prev, [key]: value }));
-  };
 
   const getConfidenceColor = (confidence: number) => {
     if (confidence >= 0.9) return 'bg-red-100 text-red-800';
@@ -137,23 +118,11 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <Shield className="h-6 w-6 text-primary" />
-          <div>
-            <h2 className="text-xl font-semibold">Detecção de Duplicatas</h2>
-            <p className="text-sm text-muted-foreground">
-              Identifique e gerencie transações duplicadas automaticamente
-            </p>
-          </div>
-        </div>
-        {onBack && (
-          <Button variant="outline" onClick={onBack}>
-            Voltar
-          </Button>
-        )}
-      </div>
+      <BackHeader
+        title="Detecção de Duplicatas"
+        subtitle="Identifique e gerencie transações duplicadas automaticamente"
+        onBack={onBack}
+      />
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -168,7 +137,6 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -180,7 +148,6 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
             </div>
           </CardContent>
         </Card>
-
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-2">
@@ -196,7 +163,6 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
         </Card>
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="detection" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="detection">Detecção de Duplicatas</TabsTrigger>
@@ -204,13 +170,11 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
         </TabsList>
 
         <TabsContent value="detection" className="space-y-4">
-          {/* Action Button */}
           <Button onClick={analyzeDuplicates} disabled={isAnalyzing} className="w-full">
             <Search className="h-4 w-4 mr-2" />
             {isAnalyzing ? 'Analisando...' : 'Analisar Duplicatas'}
           </Button>
 
-          {/* Duplicate Groups */}
           {duplicateGroups.length > 0 ? (
             <div className="space-y-4">
               {duplicateGroups.map(group => (
@@ -235,13 +199,13 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
                       Razão: {group.reason} • {group.transactions.length} transações
                     </p>
                   </CardHeader>
-                  
                   <CardContent className="space-y-3">
-                    {/* Transactions */}
                     {group.transactions.map((transaction, index) => (
                       <div
                         key={transaction.id}
-                        className={`p-3 rounded-lg border ${index === 0 ? 'bg-blue-50 border-blue-200' : 'bg-gray-50 border-gray-200'}`}
+                        className={`p-3 rounded-lg border ${
+                          index === 0 ? 'bg-blue-50 border-blue-200' : 'bg-muted/50 border-border'
+                        }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex-1">
@@ -262,8 +226,6 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
                         </div>
                       </div>
                     ))}
-
-                    {/* Action Buttons */}
                     <div className="flex flex-wrap gap-2 pt-2">
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
@@ -276,7 +238,8 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Confirmar Remoção</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Isso irá remover {group.transactions.length - 1} transações duplicadas, mantendo apenas a primeira. Esta ação não pode ser desfeita.
+                              Isso irá remover {group.transactions.length - 1} transações duplicadas,
+                              mantendo apenas a primeira. Esta ação não pode ser desfeita.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -290,32 +253,14 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleGroupAction(group, 'keep_latest')}
-                        disabled={isProcessing}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handleGroupAction(group, 'keep_latest')} disabled={isProcessing}>
                         Manter Mais Recente
                       </Button>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleGroupAction(group, 'merge')}
-                        disabled={isProcessing}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handleGroupAction(group, 'merge')} disabled={isProcessing}>
                         <Merge className="h-4 w-4 mr-1" />
                         Mesclar
                       </Button>
-
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleGroupAction(group, 'keep_all')}
-                        disabled={isProcessing}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => handleGroupAction(group, 'keep_all')} disabled={isProcessing}>
                         Manter Todas
                       </Button>
                     </div>
@@ -345,126 +290,58 @@ export const DuplicateDetectionManager: React.FC<DuplicateDetectionManagerProps>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Amount Tolerance */}
               <div className="space-y-2">
                 <Label>Tolerância de Valor: {(settings.amountTolerance * 100).toFixed(0)}%</Label>
-                <Input
-                  type="range"
-                  min="0"
-                  max="0.1"
-                  step="0.01"
-                  value={settings.amountTolerance}
-                  onChange={(e) => handleSettingsChange('amountTolerance', parseFloat(e.target.value))}
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Diferença percentual permitida entre valores para serem considerados similares
-                </p>
+                <Input type="range" min="0" max="0.1" step="0.01" value={settings.amountTolerance}
+                  onChange={(e) => handleSettingsChange('amountTolerance', parseFloat(e.target.value))} className="w-full" />
+                <p className="text-xs text-muted-foreground">Diferença percentual permitida entre valores para serem considerados similares</p>
               </div>
-
-              {/* Days Tolerance */}
               <div className="space-y-2">
                 <Label>Tolerância de Data: {settings.daysTolerance} dias</Label>
-                <Input
-                  type="range"
-                  min="0"
-                  max="30"
-                  step="1"
-                  value={settings.daysTolerance}
-                  onChange={(e) => handleSettingsChange('daysTolerance', parseInt(e.target.value))}
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Número máximo de dias entre transações para serem consideradas duplicatas
-                </p>
+                <Input type="range" min="0" max="30" step="1" value={settings.daysTolerance}
+                  onChange={(e) => handleSettingsChange('daysTolerance', parseInt(e.target.value))} className="w-full" />
+                <p className="text-xs text-muted-foreground">Número máximo de dias entre transações para serem consideradas duplicatas</p>
               </div>
-
-              {/* Description Similarity */}
               <div className="space-y-2">
                 <Label>Similaridade de Descrição: {(settings.descriptionSimilarityThreshold * 100).toFixed(0)}%</Label>
-                <Input
-                  type="range"
-                  min="0.5"
-                  max="1"
-                  step="0.05"
-                  value={settings.descriptionSimilarityThreshold}
-                  onChange={(e) => handleSettingsChange('descriptionSimilarityThreshold', parseFloat(e.target.value))}
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Quão similares as descrições devem ser para serem consideradas duplicatas
-                </p>
+                <Input type="range" min="0.5" max="1" step="0.05" value={settings.descriptionSimilarityThreshold}
+                  onChange={(e) => handleSettingsChange('descriptionSimilarityThreshold', parseFloat(e.target.value))} className="w-full" />
+                <p className="text-xs text-muted-foreground">Quão similares as descrições devem ser para serem consideradas duplicatas</p>
               </div>
-
-              {/* Small Amount Filter */}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label>Ignorar valores pequenos</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Ignorar transações menores que R$ {settings.smallAmountThreshold.toFixed(2)}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Ignorar transações menores que R$ {settings.smallAmountThreshold.toFixed(2)}</p>
                 </div>
-                <Switch
-                  checked={settings.ignoreSmallAmounts}
-                  onCheckedChange={(checked) => handleSettingsChange('ignoreSmallAmounts', checked)}
-                />
+                <Switch checked={settings.ignoreSmallAmounts} onCheckedChange={(checked) => handleSettingsChange('ignoreSmallAmounts', checked)} />
               </div>
-
               {settings.ignoreSmallAmounts && (
                 <div className="space-y-2">
                   <Label>Valor mínimo: R$ {settings.smallAmountThreshold.toFixed(2)}</Label>
-                  <Input
-                    type="range"
-                    min="1"
-                    max="100"
-                    step="1"
-                    value={settings.smallAmountThreshold}
-                    onChange={(e) => handleSettingsChange('smallAmountThreshold', parseFloat(e.target.value))}
-                    className="w-full"
-                  />
+                  <Input type="range" min="1" max="100" step="1" value={settings.smallAmountThreshold}
+                    onChange={(e) => handleSettingsChange('smallAmountThreshold', parseFloat(e.target.value))} className="w-full" />
                 </div>
               )}
-
-              {/* Consider Account */}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label>Considerar conta na detecção</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Transações da mesma conta têm maior probabilidade de serem duplicatas
-                  </p>
+                  <p className="text-xs text-muted-foreground">Transações da mesma conta têm maior probabilidade de serem duplicatas</p>
                 </div>
-                <Switch
-                  checked={settings.considerAccount}
-                  onCheckedChange={(checked) => handleSettingsChange('considerAccount', checked)}
-                />
+                <Switch checked={settings.considerAccount} onCheckedChange={(checked) => handleSettingsChange('considerAccount', checked)} />
               </div>
-
-              {/* Consider Category */}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label>Considerar categoria na detecção</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Transações da mesma categoria têm maior probabilidade de serem duplicatas
-                  </p>
+                  <p className="text-xs text-muted-foreground">Transações da mesma categoria têm maior probabilidade de serem duplicatas</p>
                 </div>
-                <Switch
-                  checked={settings.considerCategory}
-                  onCheckedChange={(checked) => handleSettingsChange('considerCategory', checked)}
-                />
+                <Switch checked={settings.considerCategory} onCheckedChange={(checked) => handleSettingsChange('considerCategory', checked)} />
               </div>
-
-              {/* Exact Match */}
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label>Exigir valores exatos</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Apenas considerar duplicatas se os valores forem exatamente iguais
-                  </p>
+                  <p className="text-xs text-muted-foreground">Apenas considerar duplicatas se os valores forem exatamente iguais</p>
                 </div>
-                <Switch
-                  checked={settings.exactMatchRequired}
-                  onCheckedChange={(checked) => handleSettingsChange('exactMatchRequired', checked)}
-                />
+                <Switch checked={settings.exactMatchRequired} onCheckedChange={(checked) => handleSettingsChange('exactMatchRequired', checked)} />
               </div>
             </CardContent>
           </Card>

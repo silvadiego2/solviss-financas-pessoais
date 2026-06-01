@@ -116,16 +116,13 @@ export const Planos: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
 
   return (
     <div className="space-y-8">
-      {onBack && <BackHeader title="Planos" onBack={onBack} />}
+      <BackHeader title="Planos" onBack={onBack} />
 
-      {/* Header */}
+      {/* Header descritivo */}
       <div className="text-center space-y-2">
-        <h1 className="text-2xl font-bold">Escolha seu plano</h1>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
           Desbloqueie recursos avançados e tenha controle total das suas finanças.
         </p>
-
-        {/* Toggle mensal/anual */}
         <div className="flex items-center justify-center gap-3 pt-2">
           <button
             onClick={() => setPeriod('monthly')}
@@ -146,9 +143,7 @@ export const Planos: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             }`}
           >
             Anual
-            <Badge variant="secondary" className="text-xs px-1.5 py-0">
-              -25%
-            </Badge>
+            <Badge variant="secondary" className="text-xs px-1.5 py-0">-25%</Badge>
           </button>
         </div>
       </div>
@@ -161,9 +156,7 @@ export const Planos: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
             <Card
               key={plan.id}
               className={`relative flex flex-col ${
-                plan.highlight
-                  ? 'border-primary ring-2 ring-primary/20 shadow-lg'
-                  : ''
+                plan.highlight ? 'border-primary ring-2 ring-primary/20 shadow-lg' : ''
               }`}
             >
               {plan.badge && (
@@ -171,7 +164,6 @@ export const Planos: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   <Badge className="text-xs px-3 py-0.5 shadow-sm">{plan.badge}</Badge>
                 </div>
               )}
-
               <CardHeader className="pb-4 pt-6">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${
                   plan.highlight ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'
@@ -180,8 +172,6 @@ export const Planos: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                 </div>
                 <h2 className="text-lg font-bold">{plan.name}</h2>
                 <p className="text-xs text-muted-foreground">{plan.description}</p>
-
-                {/* Preço */}
                 <div className="mt-3">
                   {price === 0 ? (
                     <div className="flex items-baseline gap-1">
@@ -200,19 +190,11 @@ export const Planos: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                   )}
                 </div>
               </CardHeader>
-
               <CardContent className="flex flex-col flex-1 gap-4">
-                {/* CTA */}
-                <Button
-                  variant={plan.ctaVariant}
-                  className="w-full"
-                  disabled={plan.id === 'free'}
-                >
+                <Button variant={plan.ctaVariant} className="w-full" disabled={plan.id === 'free'}>
                   {plan.id !== 'free' && <CreditCard className="w-4 h-4 mr-2" />}
                   {plan.cta}
                 </Button>
-
-                {/* Features */}
                 <div className="divide-y divide-border/50">
                   {plan.features.map((f) => (
                     <FeatureRow key={f.label} label={f.label} included={f.included} />

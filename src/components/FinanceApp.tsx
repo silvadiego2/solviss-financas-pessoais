@@ -36,8 +36,7 @@ import { TransactionSheet } from './transactions/TransactionSheet';
 // Tabs de primeiro nível da sidebar (não empilham histórico de navegação)
 const ROOT_TABS = new Set([
   'dashboard', 'transactions', 'budgets', 'recurring-transactions',
-  'cash-flow', 'cards', 'goals', 'intelligence', 'reports',
-  'plans', 'more',
+  'cash-flow', 'cards', 'goals', 'intelligence', 'reports', 'more',
 ]);
 
 export const FinanceApp: React.FC = () => {
@@ -94,7 +93,6 @@ export const FinanceApp: React.FC = () => {
         return <RecurringTransactionsManager />;
       case 'cash-flow':
         return <FluxoDeCaixa />;
-      // Abas raiz — sem onBack (são destinos primários da sidebar)
       case 'cards':
         return <CreditCardsList />;
       case 'goals':
@@ -103,11 +101,11 @@ export const FinanceApp: React.FC = () => {
         return <Inteligencia />;
       case 'reports':
         return <SimpleReports />;
-      case 'plans':
-        return <Planos />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} />;
-      // Sub-telas (navegadas a partir do menu Mais)
+      // Sub-telas (navegadas a partir do menu Mais ou sidebar)
+      case 'plans':
+        return <Planos onBack={handleBack} />;
       case 'accounts':
         return <AccountsList onBack={handleBack} />;
       case 'categories':
