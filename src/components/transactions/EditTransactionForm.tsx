@@ -94,7 +94,6 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Resultado do scanner — preenche campos
   const handleScanResult = (data: ScannedData) => {
     if (data.amount)      setAmountMasked(maskBRL(String(Math.round(data.amount * 100))));
     if (data.description) setDescription(data.description);
@@ -180,14 +179,14 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Valor + Data */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2 min-w-0">
-                <Label htmlFor="amount">Valor *</Label>
+            {/* Valor + Data — overflow-hidden impede que input[type=date] nativo estoure o grid */}
+            <div className="grid grid-cols-2 gap-4 overflow-hidden">
+              <div className="space-y-2 min-w-0 overflow-hidden">
+                <Label htmlFor="edit-amount">Valor *</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
                   <Input
-                    id="amount"
+                    id="edit-amount"
                     type="text"
                     inputMode="numeric"
                     placeholder="0,00"
@@ -197,14 +196,15 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                   />
                 </div>
               </div>
-              <div className="space-y-2 min-w-0">
-                <Label htmlFor="date">Data *</Label>
+              <div className="space-y-2 min-w-0 overflow-hidden">
+                <Label htmlFor="edit-date">Data *</Label>
                 <Input
-                  id="date"
+                  id="edit-date"
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full min-w-0"
+                  className="w-full min-w-0 block"
+                  style={{ maxWidth: '100%' }}
                   required
                 />
               </div>
@@ -212,9 +212,9 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
 
             {/* Descrição */}
             <div className="space-y-2">
-              <Label htmlFor="description">Descrição *</Label>
+              <Label htmlFor="edit-description">Descrição *</Label>
               <Input
-                id="description"
+                id="edit-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Ex: Supermercado, Salário..."
@@ -268,9 +268,9 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
 
             {/* Observações */}
             <div className="space-y-2">
-              <Label htmlFor="notes">Observações</Label>
+              <Label htmlFor="edit-notes">Observações</Label>
               <Textarea
-                id="notes"
+                id="edit-notes"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Adicione observações sobre esta transação..."
@@ -297,8 +297,6 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                     onChange={handleFileChange}
                     className="hidden"
                   />
-
-                  {/* Botão scanner — igual ao AddTransactionForm */}
                   <Dialog open={showScanner} onOpenChange={setShowScanner}>
                     <DialogTrigger asChild>
                       <Button
