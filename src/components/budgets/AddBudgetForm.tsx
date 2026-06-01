@@ -1,172 +1,126 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft } from 'lucide-react';
+import { X } from 'lucide-react';
+import { useBudgets, Budget } from '@/hooks/useBudgets';
 import { useCategories } from '@/hooks/useCategories';
-import { useBudgets } from '@/hooks/useBudgets';
-import { toast } from 'sonner';
 
 interface AddBudgetFormProps {
   onClose: () => void;
+  editingBudget?: Budget | null;
 }
 
-export const AddBudgetForm: React.FC<AddBudgetFormProps> = ({ onClose }) => {
-  const [categoryId, setCategoryId] = useState('');
-  const [amount, setAmount] = useState('');
-  const [month, setMonth] = useState((new Date().getMonth() + 1).toString());
-  const [year, setYear] = useState(new Date().getFullYear().toString());
-
+export const AddBudgetForm: React.FC<AddBudgetFormProps> = ({ onClose, editingBudget }) => {
+  const { createBudget, updateBudget, isCreating, isUpdating } = useBudgets();
   const { categories } = useCategories();
-  const { createBudget, isCreating } = useBudgets();
 
-  const expenseCategories = categories.filter(cat => cat.transaction_type === 'expense');
+  const now = new Date();
+  const [formData, setFormData] = useState({
+    category_id: editingBudget?.category_id || '',
+    amount:      editingBudget?.amount      || 0,
+    month:       editingBudget?.month       || now.getMonth() + 1,
+    year:        editingBudget?.year        || now.getFullYear(),
+    spent:       editingBudget?.spent       || 0,
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const expenseCategories = (categories as any[]).filter(
+    c => !c.type || c.type === 'expense'
+  );
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!categoryId || !amount || !month || !year) {
-      toast.error('Por favor, preencha todos os campos obrigatórios');
-      return;
+    if (!formData.category_id || formData.amount <= 0) return;
+    if (editingBudget) {
+      updateBudget({ id: editingBudget.id, ...formData });
+    } else {
+      createBudget(formData);
     }
-
-    const numericAmount = parseFloat(amount.replace(',', '.'));
-    if (isNaN(numericAmount) || numericAmount <= 0) {
-      toast.error('Valor deve ser um número positivo');
-      return;
-    }
-
-    try {
-      createBudget({
-        category_id: categoryId,
-        amount: numericAmount,
-        spent: 0,
-        month: parseInt(month),
-        year: parseInt(year),
-      });
-
-      onClose();
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao criar orçamento');
-    }
+    onClose();
   };
 
-  const monthNames = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ];
-
-  const currentYear = new Date().getFullYear();
-  const years = [currentYear - 1, currentYear, currentYear + 1];
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center space-x-2">
-        <Button 
-          variant="ghost" 
-          size="sm" 
-          onClick={onClose}
-          className="p-2"
-        >
-          <ArrowLeft size={20} />
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-lg">
+          {editingBudget ? 'Editar Limite' : 'Novo Limite de Gasto'}
+        </CardTitle>
+        <Button variant="ghost" size="icon" onClick={onClose}>
+          <X size={20} />
         </Button>
-        <h2 className="text-lg font-semibold">Novo Orçamento</h2>
-      </div>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="category">Categoria *</Label>
+            <select
+              id="category"
+              value={formData.category_id}
+              onChange={e => setFormData({ ...formData, category_id: e.target.value })}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              required
+            >
+              <option value="">Selecione uma categoria</option>
+              {expenseCategories.map((c: any) => (
+                <option key={c.id} value={c.id}>
+                  {c.icon ? `${c.icon} ` : ''}{c.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Definir Orçamento</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="amount">Limite mensal (R$) *</Label>
+            <Input
+              id="amount"
+              type="number"
+              step="0.01"
+              min="1"
+              value={formData.amount}
+              onChange={e => setFormData({ ...formData, amount: Number(e.target.value) })}
+              placeholder="0,00"
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="category">Categoria *</Label>
-              <Select value={categoryId} onValueChange={setCategoryId} required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  {expenseCategories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      <div className="flex items-center space-x-2">
-                        <span>{category.icon}</span>
-                        <span>{category.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="month">Mês</Label>
+              <select
+                id="month"
+                value={formData.month}
+                onChange={e => setFormData({ ...formData, month: Number(e.target.value) })}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((m, i) => (
+                  <option key={i} value={i + 1}>{m}</option>
+                ))}
+              </select>
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="amount">Valor do Orçamento *</Label>
+              <Label htmlFor="year">Ano</Label>
               <Input
-                id="amount"
-                type="text"
-                placeholder="0,00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
+                id="year"
+                type="number"
+                min="2020"
+                max="2099"
+                value={formData.year}
+                onChange={e => setFormData({ ...formData, year: Number(e.target.value) })}
               />
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="month">Mês *</Label>
-                <Select value={month} onValueChange={setMonth} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Mês" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {monthNames.map((monthName, index) => (
-                      <SelectItem key={index + 1} value={(index + 1).toString()}>
-                        {monthName}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="year">Ano *</Label>
-                <Select value={year} onValueChange={setYear} required>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Ano" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {years.map((yearOption) => (
-                      <SelectItem key={yearOption} value={yearOption.toString()}>
-                        {yearOption}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex space-x-2 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={onClose}
-                className="flex-1"
-              >
-                Cancelar
-              </Button>
-              <Button 
-                type="submit" 
-                className="flex-1" 
-                disabled={isCreating}
-              >
-                {isCreating ? 'Criando...' : 'Criar Orçamento'}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          <div className="flex gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isCreating || isUpdating} className="flex-1">
+              {isCreating || isUpdating ? 'Salvando...' : editingBudget ? 'Atualizar' : 'Salvar'}
+            </Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 };

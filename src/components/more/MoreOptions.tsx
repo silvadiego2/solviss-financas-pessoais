@@ -2,7 +2,7 @@ import React from 'react';
 import {
   Download, Upload, Tags, User, Building, ChevronRight,
   Shield, Cloud, Zap, Database, Trash2, BarChart3,
-  Settings, Copy, Sparkles, Bell, CalendarRange,
+  Settings, Copy, Sparkles, Bell,
   ScanLine, Brain, LogOut, Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -24,9 +24,6 @@ interface MenuItem {
   disabled?: boolean;
 }
 
-// ──────────────────────────────────────────────
-// Row simples: ícone + texto + seta
-// ──────────────────────────────────────────────
 const Row: React.FC<MenuItem> = (item) => (
   <button
     onClick={item.disabled ? undefined : item.action}
@@ -51,7 +48,6 @@ const Row: React.FC<MenuItem> = (item) => (
     )}>
       <item.icon size={17} />
     </div>
-
     <div className="flex-1 min-w-0">
       <div className="flex items-center gap-2">
         <span className={cn(
@@ -70,16 +66,12 @@ const Row: React.FC<MenuItem> = (item) => (
         <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</p>
       )}
     </div>
-
     {!item.destructive && (
       <ChevronRight size={15} className="text-muted-foreground/40 flex-shrink-0 group-hover:text-muted-foreground transition-colors" />
     )}
   </button>
 );
 
-// ──────────────────────────────────────────────
-// Grupo com título de seção
-// ──────────────────────────────────────────────
 const Group: React.FC<{ title: string; items: MenuItem[] }> = ({ title, items }) => (
   <section>
     <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-1 mb-1.5">
@@ -93,9 +85,6 @@ const Group: React.FC<{ title: string; items: MenuItem[] }> = ({ title, items })
   </section>
 );
 
-// ──────────────────────────────────────────────
-// Componente principal
-// ──────────────────────────────────────────────
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   const { user } = useAuth();
 
@@ -103,19 +92,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     await supabase.auth.signOut();
   };
 
-  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
+  const displayName  = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
   const displayEmail = user?.email || '';
-  const initial = displayName.charAt(0).toUpperCase();
+  const initial      = displayName.charAt(0).toUpperCase();
 
-  // ── Grupos ──────────────────────────────────
-
+  // "Orçamentos Mensais" removido — agora está em Metas > aba Controlar
   const financeItems: MenuItem[] = [
-    {
-      title: 'Orçamentos Mensais',
-      description: 'Limites de gasto por categoria',
-      icon: CalendarRange,
-      action: () => onNavigate('budgets-list'),
-    },
     {
       title: 'Contas Bancárias',
       description: 'Gerenciar contas e saldos',
@@ -230,8 +212,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
 
   return (
     <div className="space-y-6 pb-8">
-
-      {/* ── Cabeçalho de perfil ── */}
+      {/* Cabeçalho de perfil */}
       <button
         onClick={() => onNavigate('profile')}
         className="w-full flex items-center gap-4 p-4 rounded-2xl bg-card border border-border hover:bg-accent active:bg-accent/80 transition-all text-left group"
@@ -249,14 +230,12 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
         </div>
       </button>
 
-      {/* ── Seções ── */}
-      <Group title="Finanças" items={financeItems} />
-      <Group title="Ferramentas" items={toolsItems} />
-      <Group title="Dados" items={dataItems} />
+      <Group title="Finanças"      items={financeItems}  />
+      <Group title="Ferramentas"   items={toolsItems}    />
+      <Group title="Dados"         items={dataItems}     />
       <Group title="Configurações" items={settingsItems} />
-      <Group title="Avançado" items={dangerItems} />
+      <Group title="Avançado"      items={dangerItems}   />
 
-      {/* ── Sair ── */}
       <button
         onClick={handleLogout}
         className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/8 active:bg-destructive/12 transition-all"
@@ -264,7 +243,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
         <LogOut size={16} />
         Sair da conta
       </button>
-
     </div>
   );
 };
