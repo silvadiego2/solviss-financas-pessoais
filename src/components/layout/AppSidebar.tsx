@@ -4,7 +4,7 @@ import {
   CreditCard, Target, BarChart3, Crown,
   Settings, Moon, Sun, User, LogOut,
   X, PlusCircle, MoreHorizontal,
-  Brain, Repeat, Plus,
+  Brain, Repeat, Plus, CalendarClock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -21,10 +21,10 @@ interface AppSidebarProps {
 // ── Navegação principal (sidebar desktop + "Principal" label) ──────────────
 const PRIMARY_NAV = [
   { id: 'dashboard',    icon: Home,          label: 'Início'       },
-  { id: 'transactions', icon: Receipt,       label: 'Transações'  },
+  { id: 'transactions', icon: Receipt,       label: 'Transações'   },
   { id: 'cards',        icon: CreditCard,    label: 'Cartões'      },
+  { id: 'agenda',       icon: CalendarClock, label: 'Agenda'       },
   { id: 'budgets',      icon: CalendarRange, label: 'Planejamento' },
-  { id: 'reports',      icon: BarChart3,     label: 'Relatórios'  },
 ];
 
 // ── Navegação secundária (Ferramentas) ─────────────────────────────────────
@@ -32,8 +32,8 @@ const SECONDARY_NAV = [
   { id: 'cash-flow',              icon: TrendingUp, label: 'Fluxo de Caixa' },
   { id: 'recurring-transactions', icon: Repeat,     label: 'Recorrentes'    },
   { id: 'goals',                  icon: Target,     label: 'Metas'          },
-  { id: 'intelligence',           icon: Brain,      label: 'Inteligência'  },
-  { id: 'plans',                  icon: Crown,      label: 'Planos'         },
+  { id: 'reports',                icon: BarChart3,  label: 'Relatórios'     },
+  { id: 'intelligence',           icon: Brain,      label: 'Inteligência'   },
 ];
 
 const PRIMARY_IDS = new Set(PRIMARY_NAV.map(n => n.id));
@@ -211,7 +211,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
               <span className="text-[10px] font-medium text-muted-foreground mt-0.5">Adicionar</span>
             </div>
 
-            {/* Cartões — substituiu Relatórios */}
+            {/* Cartões */}
             <MobileTab id="cards" activeTab={activeTab} label="Cartões" onClick={() => handleNav('cards')}>
               <CreditCard size={22} strokeWidth={activeTab === 'cards' ? 2.25 : 1.75} />
             </MobileTab>

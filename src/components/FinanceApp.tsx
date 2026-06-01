@@ -35,7 +35,7 @@ import { TransactionSheet } from './transactions/TransactionSheet';
 
 // Tabs de primeiro nível (não empilham histórico de navegação)
 const ROOT_TABS = new Set([
-  'dashboard', 'transactions', 'cards', 'budgets', 'reports',
+  'dashboard', 'transactions', 'cards', 'agenda', 'budgets', 'reports',
   'recurring-transactions', 'cash-flow', 'goals', 'intelligence', 'more',
 ]);
 
@@ -87,6 +87,8 @@ export const FinanceApp: React.FC = () => {
         return <TransactionsList />;
       case 'cards':
         return <CreditCardsList />;
+      case 'agenda':
+        return <AgendaFinanceira />;
       case 'budgets':
         return <Planejamento />;
       case 'budgets-list':
@@ -138,8 +140,6 @@ export const FinanceApp: React.FC = () => {
         return <DataResetManager onBack={handleBack} />;
       case 'security':
         return <SecurityDashboard onBack={handleBack} />;
-      case 'agenda':
-        return <AgendaFinanceira onBack={handleBack} />;
       default:
         return <DashboardOverview onNavigate={handleTabChange} />;
     }

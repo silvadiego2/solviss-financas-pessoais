@@ -2,8 +2,8 @@ import React from 'react';
 import {
   Download, Upload, Tags, User, Building, ChevronRight,
   Shield, Cloud, Zap, Database, Trash2, BarChart3,
-  Settings, Copy, Sparkles, CalendarClock, Bell, CalendarRange,
-  ScanLine, Brain, LogOut,
+  Settings, Copy, Sparkles, Bell, CalendarRange,
+  ScanLine, Brain, LogOut, Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -103,7 +103,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     await supabase.auth.signOut();
   };
 
-  // Avatar placeholder com inicial do nome/email
   const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
   const displayEmail = user?.email || '';
   const initial = displayName.charAt(0).toUpperCase();
@@ -111,13 +110,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   // ── Grupos ──────────────────────────────────
 
   const financeItems: MenuItem[] = [
-    {
-      title: 'Agenda Financeira',
-      description: 'Contas a pagar e a receber',
-      icon: CalendarClock,
-      action: () => onNavigate('agenda'),
-      highlight: true,
-    },
     {
       title: 'Orçamentos Mensais',
       description: 'Limites de gasto por categoria',
@@ -215,7 +207,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     {
       title: 'Planos e Assinatura',
       description: 'Recursos premium disponíveis',
-      icon: Brain,
+      icon: Crown,
       action: () => onNavigate('plans'),
     },
   ];
@@ -244,16 +236,13 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
         onClick={() => onNavigate('profile')}
         className="w-full flex items-center gap-4 p-4 rounded-2xl bg-card border border-border hover:bg-accent active:bg-accent/80 transition-all text-left group"
       >
-        {/* Avatar */}
         <div className="w-12 h-12 rounded-full bg-primary/15 text-primary flex items-center justify-center text-lg font-bold flex-shrink-0">
           {initial}
         </div>
-
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-foreground text-sm leading-tight truncate">{displayName}</p>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">{displayEmail}</p>
         </div>
-
         <div className="flex items-center gap-1 text-xs text-primary font-medium flex-shrink-0 group-hover:underline">
           Editar perfil
           <ChevronRight size={14} />
