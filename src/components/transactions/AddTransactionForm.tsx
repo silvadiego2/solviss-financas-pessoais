@@ -97,20 +97,32 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  // handleScanResult: respeita source — 'photo-only' só salva a foto sem
+  // sobrescrever campos já preenchidos pelo usuário.
   const handleScanResult = (data: ScannedData) => {
-    if (data.amount)      setAmount(maskBRL(String(Math.round(data.amount * 100))));
-    if (data.description) setDescription(data.description);
-    if (data.date)        setDate(data.date);
+    // Sempre salva o comprovante (thumbnail)
     if (data.thumbnail) {
       setReceiptFile(data.thumbnail);
-      const url = URL.createObjectURL(data.thumbnail);
-      setReceiptPreview(url);
+      setReceiptPreview(URL.createObjectURL(data.thumbnail));
     }
+
+    // Só preenche os campos se o modo foi de extração (qrcode ou ocr)
+    if (data.source !== 'photo-only') {
+      if (data.amount)      setAmount(maskBRL(String(Math.round(data.amount * 100))));
+      if (data.description) setDescription(data.description);
+      if (data.date)        setDate(data.date);
+    }
+
     setShowScanner(false);
-    enhancedToast.success(
-      data.source === 'qrcode' ? 'NF-e lida com sucesso!' : 'Recibo processado!',
-      { description: data.amount ? `Valor: ${formatCurrency(data.amount)}` : 'Confira os dados.' },
-    );
+
+    if (data.source === 'photo-only') {
+      enhancedToast.success('Comprovante salvo!', { description: 'Foto recortada e anexada à transação.' });
+    } else {
+      enhancedToast.success(
+        data.source === 'qrcode' ? 'NF-e lida com sucesso!' : 'Recibo processado!',
+        { description: data.amount ? `Valor: ${formatCurrency(data.amount)}` : 'Confira os dados.' },
+      );
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -183,72 +195,48 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             {/* Tipo */}
             <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => { setType('expense'); setCategoryId(''); }}
+              <button type="button" onClick={() => { setType('expense'); setCategoryId(''); }}
                 className={cn(
                   'flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold border-2 transition-all',
                   type === 'expense'
                     ? 'bg-destructive/10 border-destructive text-destructive'
                     : 'border-border text-muted-foreground hover:border-destructive/50 hover:text-destructive',
-                )}
-              >
+                )}>
                 <ArrowDown size={16} /> Despesa
               </button>
-              <button
-                type="button"
-                onClick={() => { setType('income'); setCategoryId(''); }}
+              <button type="button" onClick={() => { setType('income'); setCategoryId(''); }}
                 className={cn(
                   'flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold border-2 transition-all',
                   type === 'income'
                     ? 'bg-emerald-500/10 border-emerald-500 text-emerald-600 dark:text-emerald-400'
                     : 'border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-600',
-                )}
-              >
+                )}>
                 <ArrowUp size={16} /> Receita
               </button>
             </div>
 
-            {/* Valor — linha própria para não competir com Date */}
+            {/* Valor */}
             <div className="space-y-2">
               <Label htmlFor="amount">Valor *</Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
-                <Input
-                  id="amount"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0,00"
-                  value={amount}
-                  onChange={handleAmountChange}
-                  className="pl-9 w-full"
-                />
+                <Input id="amount" type="text" inputMode="numeric" placeholder="0,00"
+                  value={amount} onChange={handleAmountChange} className="pl-9 w-full" />
               </div>
               {validationErrors.amount && <p className="text-xs text-destructive">{validationErrors.amount}</p>}
             </div>
 
-            {/* Data — linha própria, mesma altura dos demais campos */}
+            {/* Data */}
             <div className="space-y-2">
               <Label htmlFor="date">Data</Label>
-              <Input
-                id="date"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full"
-              />
+              <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
             </div>
 
             {/* Descrição */}
             <div className="space-y-2">
               <Label htmlFor="description">Descrição *</Label>
-              <Input
-                id="description"
-                type="text"
-                placeholder="Ex: Almoço, Salário, Compras..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
+              <Input id="description" type="text" placeholder="Ex: Almoço, Salário, Compras..."
+                value={description} onChange={(e) => setDescription(e.target.value)} />
               {validationErrors.description && <p className="text-xs text-destructive">{validationErrors.description}</p>}
             </div>
 
@@ -257,35 +245,28 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               <div className="space-y-2">
                 <Label>Conta / Cartão *</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {allAccounts.length === 0 ? (
-                      <div className="p-2 text-sm text-muted-foreground text-center">Nenhuma conta cadastrada</div>
-                    ) : (
-                      allAccounts.map((a) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          <span className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
-                            {a.icon}
-                            <span className="truncate min-w-0 flex-1">{a.name}</span>
-                            <span className="text-xs text-muted-foreground flex-shrink-0">{a.label}</span>
-                          </span>
-                        </SelectItem>
-                      ))
-                    )}
+                    {allAccounts.length === 0
+                      ? <div className="p-2 text-sm text-muted-foreground text-center">Nenhuma conta cadastrada</div>
+                      : allAccounts.map((a) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            <span className="flex items-center gap-2 min-w-0 w-full overflow-hidden">
+                              {a.icon}
+                              <span className="truncate min-w-0 flex-1">{a.name}</span>
+                              <span className="text-xs text-muted-foreground flex-shrink-0">{a.label}</span>
+                            </span>
+                          </SelectItem>
+                        ))
+                    }
                   </SelectContent>
                 </Select>
                 {validationErrors.accountId && <p className="text-xs text-destructive">{validationErrors.accountId}</p>}
               </div>
               <div className="space-y-2">
                 <Label>Categoria *</Label>
-                <CategoryCombobox
-                  categories={filteredCategories as any}
-                  value={categoryId}
-                  onChange={setCategoryId}
-                  placeholder="Selecione"
-                />
+                <CategoryCombobox categories={filteredCategories as any} value={categoryId}
+                  onChange={setCategoryId} placeholder="Selecione" />
                 {validationErrors.categoryId && <p className="text-xs text-destructive">{validationErrors.categoryId}</p>}
               </div>
             </div>
@@ -293,11 +274,8 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
             {/* Recorrência */}
             <div className="rounded-xl border border-border p-4 space-y-3">
               <div className="flex items-center gap-2">
-                <Checkbox
-                  id="recurring"
-                  checked={isRecurring}
-                  onCheckedChange={(c) => setIsRecurring(c as boolean)}
-                />
+                <Checkbox id="recurring" checked={isRecurring}
+                  onCheckedChange={(c) => setIsRecurring(c as boolean)} />
                 <Label htmlFor="recurring" className="cursor-pointer flex items-center gap-1.5">
                   <Repeat size={14} className="text-muted-foreground" /> Transação Recorrente
                 </Label>
@@ -318,14 +296,8 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                   </div>
                   <div className="space-y-2 min-w-0">
                     <Label htmlFor="endDate">Data Final</Label>
-                    <Input
-                      id="endDate"
-                      type="date"
-                      value={recurrenceEndDate}
-                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
-                      min={date}
-                      className="w-full"
-                    />
+                    <Input id="endDate" type="date" value={recurrenceEndDate}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value)} min={date} className="w-full" />
                   </div>
                 </div>
               )}
@@ -334,13 +306,10 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
             {/* Comprovante / Nota Fiscal */}
             <div className="space-y-2">
               <Label>Comprovante / Nota Fiscal</Label>
-
               {!receiptPreview ? (
                 <div className="flex gap-2">
-                  <div
-                    className="flex-1 flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors min-w-0"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
+                  <div className="flex-1 flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors min-w-0"
+                    onClick={() => fileInputRef.current?.click()}>
                     <Upload size={15} className="text-muted-foreground flex-shrink-0" />
                     <span className="text-sm text-muted-foreground truncate">Clique para anexar</span>
                   </div>
@@ -348,12 +317,8 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
                   <Dialog open={showScanner} onOpenChange={setShowScanner}>
                     <DialogTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="flex items-center gap-1.5 px-3 flex-shrink-0"
-                        title="Escanear nota fiscal"
-                      >
+                      <Button type="button" variant="outline"
+                        className="flex items-center gap-1.5 px-3 flex-shrink-0" title="Escanear nota fiscal">
                         <Scan size={15} />
                         <span className="text-xs hidden sm:inline">Escanear NF</span>
                       </Button>
@@ -374,18 +339,13 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               ) : (
                 <div className="relative rounded-lg overflow-hidden border border-border">
                   <img src={receiptPreview} alt="Comprovante" className="w-full max-h-40 object-cover" />
-                  <button
-                    type="button"
-                    onClick={removeReceipt}
-                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center transition-colors"
-                  >
+                  <button type="button" onClick={removeReceipt}
+                    className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center transition-colors">
                     <X size={14} className="text-white" />
                   </button>
                   <div className="px-3 py-2 bg-muted/80 text-xs text-muted-foreground flex items-center justify-between">
-                    <span className="truncate">{receiptFile?.name}</span>
-                    <span className="flex-shrink-0 ml-2">
-                      {receiptFile ? `${Math.round(receiptFile.size / 1024)}KB` : ''}
-                    </span>
+                    <span className="truncate">{receiptFile?.name ?? 'Comprovante'}</span>
+                    <span className="flex-shrink-0 ml-2">{receiptFile ? `${Math.round(receiptFile.size / 1024)}KB` : ''}</span>
                   </div>
                 </div>
               )}
@@ -393,13 +353,11 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             {/* Salvar */}
             <Button type="submit" className="w-full h-11 text-sm font-semibold" disabled={loading}>
-              {loading ? (
-                <><Loader2 size={16} className="mr-2 animate-spin" /> Salvando...</>
-              ) : (
-                `Adicionar ${type === 'income' ? 'Receita' : 'Despesa'}`
-              )}
+              {loading
+                ? <><Loader2 size={16} className="mr-2 animate-spin" /> Salvando...</>
+                : `Adicionar ${type === 'income' ? 'Receita' : 'Despesa'}`
+              }
             </Button>
-
           </form>
         </CardContent>
       </Card>

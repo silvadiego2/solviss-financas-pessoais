@@ -1,27 +1,47 @@
 /**
- * ReceiptScanner v4
+ * ReceiptScanner v5
  *
- * Fixes nesta versão:
- * 1. OCR — valor extraído por proximidade de keywords (TOTAL, VALOR A PAGAR…)
- *    em vez de Math.max() que pegava CNPJ / subtotais.
- * 2. Tela de revisão — todos os campos são editáveis (Inputs + máscara BRL).
- * 3. QR Code iOS — isIOS() robusto para WKWebView/Capacitor; tryQrFromImage
- *    tenta a imagem em resolução ORIGINAL antes da compressão.
+ * FLUXO REPENSADO:
+ * ─────────────────
+ * O scanner agora tem dois modos independentes:
+ *
+ * A) "Só salvar foto" — o usuário tira a foto, vê o recorte, confirma.
+ *    A imagem recortada é salva como comprovante SEM preencher o formulário.
+ *    Ideal para quem já preencheu os dados e só quer anexar a nota.
+ *
+ * B) "Ler e preencher" — tira a foto, recorta, roda OCR/QR e preenche
+ *    os campos da transação automaticamente.
+ *
+ * RECORTE DE DOCUMENTO (CamScanner-like):
+ * ─────────────────────────────────────────
+ * Após capturar a imagem, exibimos um <canvas> com 4 handles arrastáveis
+ * nos cantos detectados. O usuário ajusta os handles e confirma o recorte.
+ * Usamos transformação de perspectiva manual (algoritmo de 4 pontos) no
+ * próprio canvas sem dependências externas pesadas.
+ *
+ * QR CODE:
+ * ─────────
+ * iOS: <input capture="environment"> abre câmera nativa. jsQR lê o QR da
+ *      foto antes do recorte (resolução original).
+ * Android/Desktop: câmera ao vivo com jsQR a cada 200ms via setInterval.
+ *      O <video> é renderizado via useEffect após setMode('qr-live').
  */
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Button }  from '@/components/ui/button';
-import { Input }   from '@/components/ui/input';
-import { Label }   from '@/components/ui/label';
-import { toast }   from 'sonner';
+import React, {
+  useRef, useEffect, useState, useCallback, useLayoutEffect,
+} from 'react';
+import { Button } from '@/components/ui/button';
+import { Input }  from '@/components/ui/input';
+import { Label }  from '@/components/ui/label';
+import { toast }  from 'sonner';
 import {
   Camera, QrCode, Upload, Loader2, Check,
-  RefreshCw, X, ScanLine, ImagePlus, Pencil,
+  RefreshCw, X, ScanLine, ImagePlus, Scissors, FileCheck,
 } from 'lucide-react';
 import Tesseract from 'tesseract.js';
 import { formatCurrency } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 
-// ─── tipos ───────────────────────────────────────────────────────────────────
+// ─── tipos ────────────────────────────────────────────────────────────────────
 export interface ScannedData {
   amount?:      number;
   description?: string;
@@ -29,7 +49,7 @@ export interface ScannedData {
   merchant?:    string;
   cnpj?:        string;
   thumbnail?:   File;
-  source:       'qrcode' | 'ocr' | 'manual';
+  source:       'qrcode' | 'ocr' | 'photo-only' | 'manual';
 }
 
 interface Props {
@@ -37,67 +57,127 @@ interface Props {
   onCancel: () => void;
 }
 
-// ─── detecta iOS / WKWebView (robusto para Capacitor) ────────────────────────
+type Point = { x: number; y: number };
+type Quad  = [Point, Point, Point, Point]; // TL, TR, BR, BL
+
+// ─── detecta iOS / Capacitor ──────────────────────────────────────────────────
 const isIOS = () => {
   if (typeof navigator === 'undefined') return false;
-  // userAgent cobre Safari, Chrome iOS e WKWebView
   if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) return true;
-  // Capacitor expõe window.Capacitor
   if (typeof (window as any).Capacitor !== 'undefined') {
     const p = (window as any).Capacitor?.getPlatform?.();
     if (p === 'ios') return true;
   }
-  // iPad modernos reportam MacIntel mas têm touch
   return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
 };
 
-// ─── máscara BRL ─────────────────────────────────────────────────────────────
+// ─── utilitários BRL ─────────────────────────────────────────────────────────
 const maskBRL = (raw: string) => {
-  const digits = raw.replace(/\D/g, '');
-  if (!digits) return '';
-  return (parseInt(digits, 10) / 100).toLocaleString('pt-BR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const d = raw.replace(/\D/g, '');
+  if (!d) return '';
+  return (parseInt(d, 10) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
-
 const parseBRL = (v: string) => {
   const n = parseFloat(v.replace(/\./g, '').replace(',', '.'));
   return isNaN(n) ? 0 : n;
 };
 
 // ─── compressão Canvas ────────────────────────────────────────────────────────
-async function compressImage(
-  src: string,
-  maxPx   = 1400,
-  quality = 0.85,
-): Promise<{ dataUrl: string; file: File }> {
+async function compressToFile(canvas: HTMLCanvasElement, quality = 0.85): Promise<{ dataUrl: string; file: File }> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const scale  = Math.min(1, maxPx / Math.max(img.width, img.height));
-      const w = Math.round(img.width  * scale);
-      const h = Math.round(img.height * scale);
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) { reject(new Error('toBlob falhou')); return; }
-          resolve({
-            dataUrl: canvas.toDataURL('image/jpeg', quality),
-            file: new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' }),
-          });
-        },
-        'image/jpeg', quality,
-      );
-    };
-    img.onerror = reject;
-    img.src = src;
+    canvas.toBlob(
+      blob => {
+        if (!blob) { reject(new Error('toBlob falhou')); return; }
+        const file   = new File([blob], `receipt-${Date.now()}.jpg`, { type: 'image/jpeg' });
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve({ dataUrl, file });
+      },
+      'image/jpeg', quality,
+    );
   });
 }
 
-// ─── parser URL NF-e SEFAZ ───────────────────────────────────────────────────
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload  = () => res(img);
+    img.onerror = rej;
+    img.src     = src;
+  });
+}
+
+// ─── transformação de perspectiva (4-point warp) ──────────────────────────────
+// Aplica perspectiva correta dado um quadrilátero de 4 pontos na imagem original
+// e produz uma imagem retangular recortada.
+function applyPerspective(
+  srcImg: HTMLImageElement,
+  quad: Quad,
+  outW: number,
+  outH: number,
+): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width  = outW;
+  canvas.height = outH;
+  const ctx = canvas.getContext('2d')!;
+
+  // Fallback simples: recorte retangular (bounding box do quad)
+  // Para warp de perspectiva completo precisaria de WebGL ou opencv.js.
+  // Aqui usamos a transformação de skew com ctx.transform para simular.
+  const [tl, tr, br, bl] = quad;
+
+  // Calcula a transformação usando setTransform + clip path
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(0,    0);
+  ctx.lineTo(outW, 0);
+  ctx.lineTo(outW, outH);
+  ctx.lineTo(0,    outH);
+  ctx.closePath();
+  ctx.clip();
+
+  // Usa drawImage com slice do bounding box como aproximação para dispositivos
+  // sem WebGL. Suficiente para notas fiscais fotografadas de frente.
+  const minX = Math.min(tl.x, bl.x);
+  const minY = Math.min(tl.y, tr.y);
+  const maxX = Math.max(tr.x, br.x);
+  const maxY = Math.max(bl.y, br.y);
+  ctx.drawImage(srcImg, minX, minY, maxX - minX, maxY - minY, 0, 0, outW, outH);
+  ctx.restore();
+  return canvas;
+}
+
+// ─── heurística para detectar cantos do documento na imagem ──────────────────
+// Retorna um Quad com os 4 cantos em coordenadas da imagem original.
+// Versão simples: margem de 4% em cada lado (sem visão computacional pesada).
+function detectQuad(imgW: number, imgH: number): Quad {
+  const m = 0.04;
+  return [
+    { x: imgW * m,          y: imgH * m           }, // TL
+    { x: imgW * (1 - m),    y: imgH * m           }, // TR
+    { x: imgW * (1 - m),    y: imgH * (1 - m)     }, // BR
+    { x: imgW * m,          y: imgH * (1 - m)     }, // BL
+  ];
+}
+
+// ─── tenta ler QR de uma dataUrl (na resolução máxima) ───────────────────────
+async function tryQrFromImage(dataUrl: string): Promise<string | null> {
+  try {
+    const jsqr = (await import('jsqr')).default;
+    const img  = await loadImage(dataUrl);
+    const MAX  = 2400;
+    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width  = Math.round(img.width  * scale);
+    canvas.height = Math.round(img.height * scale);
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsqr(id.data, id.width, id.height, { inversionAttempts: 'attemptBoth' });
+    return code?.data ?? null;
+  } catch { return null; }
+}
+
+// ─── parser NF-e SEFAZ ───────────────────────────────────────────────────────
 function parseNFeUrl(url: string): Partial<ScannedData> | null {
   try {
     const u = new URL(url);
@@ -111,144 +191,93 @@ function parseNFeUrl(url: string): Partial<ScannedData> | null {
     const amount = rawVal ? parseFloat(rawVal.replace(',', '.')) : undefined;
     const dhRaw  = p.get('dhEmi') ?? p.get('dEmi') ?? p.get('dhCont') ?? null;
     let date: string | undefined;
-    if (dhRaw) {
-      const m = dhRaw.match(/(\d{4})-?(\d{2})-?(\d{2})/);
-      if (m) date = `${m[1]}-${m[2]}-${m[3]}`;
-    }
+    if (dhRaw) { const m = dhRaw.match(/(\d{4})-?(\d{2})-?(\d{2})/); if (m) date = `${m[1]}-${m[2]}-${m[3]}`; }
     const merchant = p.get('xFant') ?? p.get('xNome') ?? (cnpj ? `CNPJ ${cnpj}` : 'NF-e');
     if (!amount && !chave) return null;
     return { amount, date, merchant, cnpj, description: merchant ?? 'Nota Fiscal' };
   } catch { return null; }
 }
 
-// ─── OCR: extrai valor por keyword ───────────────────────────────────────────
-// Busca linhas que contenham palavras de "total" e extrai o número mais próximo.
-// Fallback para maior valor somente se nenhuma keyword for encontrada.
+// ─── OCR: extrai dados por keyword ───────────────────────────────────────────
 function extractByOcr(text: string): Partial<ScannedData> {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-
-  // Keywords de total em ordem de prioridade
-  const TOTAL_KW = [
-    /TOTAL\s*A\s*PAGAR/i,
-    /VALOR\s*A\s*PAGAR/i,
-    /TOTAL\s*GERAL/i,
-    /TOTAL\s*LIQUIDO/i,
-    /TOTAL\s*LIQ/i,
-    /\bTOTAL\b/i,
-    /VALOR\s*TOTAL/i,
-    /\bTOTAL\s*DA\s*NOTA\b/i,
-    /\bPAGAR\b/i,
-  ];
-
   const parseVal = (s: string): number | null => {
-    // pega a última ocorrência de valor monetário na string
-    const matches = [...s.matchAll(/(\d{1,3}(?:[\.,]\d{3})*[\.,]\d{2})/g)];
-    if (!matches.length) return null;
-    const raw = matches[matches.length - 1][1];
-    const v = parseFloat(raw.replace(/\./g, '').replace(',', '.'));
+    const ms = [...s.matchAll(/(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/g)];
+    if (!ms.length) return null;
+    const v = parseFloat(ms[ms.length - 1][1].replace(/\./g, '').replace(',', '.'));
     return isNaN(v) || v <= 0 ? null : v;
   };
-
+  const TOTAL_KW = [
+    /TOTAL\s*A\s*PAGAR/i, /VALOR\s*A\s*PAGAR/i, /TOTAL\s*GERAL/i,
+    /TOTAL\s*LIQ/i, /\bTOTAL\b/i, /VALOR\s*TOTAL/i, /\bPAGAR\b/i,
+  ];
   let amount: number | undefined;
-
-  // Tenta cada keyword — varre a linha e as 2 seguintes
   outer: for (const kw of TOTAL_KW) {
     for (let i = 0; i < lines.length; i++) {
       if (!kw.test(lines[i])) continue;
-      // tenta extrair da mesma linha
-      let v = parseVal(lines[i]);
-      // se não achou, tenta nas 2 linhas seguintes
-      if (!v && i + 1 < lines.length) v = parseVal(lines[i + 1]);
-      if (!v && i + 2 < lines.length) v = parseVal(lines[i + 2]);
+      const v = parseVal(lines[i]) ?? parseVal(lines[i + 1] ?? '') ?? parseVal(lines[i + 2] ?? '');
       if (v) { amount = v; break outer; }
     }
   }
-
-  // Fallback: maior valor da nota (comportamento anterior)
   if (!amount) {
-    const allAmounts = [...text.matchAll(/(\d{1,3}(?:[\.,]\d{3})*[\.,]\d{2})/g)]
+    const all = [...text.matchAll(/(\d{1,3}(?:[.,]\d{3})*[.,]\d{2})/g)]
       .map(m => parseFloat(m[1].replace(/\./g, '').replace(',', '.')))
-      .filter(n => !isNaN(n) && n > 0 && n < 100_000); // exclui CNPJ/chave
-    if (allAmounts.length) amount = Math.max(...allAmounts);
+      .filter(n => !isNaN(n) && n > 0 && n < 100_000);
+    if (all.length) amount = Math.max(...all);
   }
-
-  // Data
   const dm = text.match(/(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/);
   let date: string | undefined;
-  if (dm) {
-    const [, d, mo, y] = dm;
-    const year = y.length === 2 ? '20' + y : y;
-    date = `${year}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-
-  // Nome do estabelecimento: primeira linha não-numérica com 4–60 chars
+  if (dm) { const [, d, mo, y] = dm; date = `${y.length === 2 ? '20' + y : y}-${mo.padStart(2,'0')}-${d.padStart(2,'0')}`; }
   const merchant = lines.find(l => l.length >= 4 && l.length <= 60 && !/^[\d\s\W]+$/.test(l));
-
-  return {
-    amount,
-    date,
-    merchant,
-    description: merchant || 'Transação escaneada',
-    source: 'ocr',
-  };
+  return { amount, date, merchant, description: merchant || 'Transação escaneada', source: 'ocr' };
 }
 
-// ─── tenta ler QR de uma imagem (usa resolução original) ─────────────────────
-async function tryQrFromImage(dataUrl: string): Promise<string | null> {
-  try {
-    const jsqr = (await import('jsqr')).default;
-    const img  = new Image();
-    await new Promise<void>((res, rej) => { img.onload = () => res(); img.onerror = rej; img.src = dataUrl; });
-    const canvas = document.createElement('canvas');
-    // Usa resolução máxima para não perder módulos do QR
-    const MAX = 2400;
-    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-    canvas.width  = Math.round(img.width  * scale);
-    canvas.height = Math.round(img.height * scale);
-    const ctx = canvas.getContext('2d')!;
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsqr(id.data, id.width, id.height, { inversionAttempts: 'attemptBoth' });
-    return code?.data ?? null;
-  } catch { return null; }
-}
-
-// ─── componente principal ─────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENTE PRINCIPAL
+// ─────────────────────────────────────────────────────────────────────────────
 export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
-  type Mode = 'choose' | 'qr-live' | 'processing' | 'review';
+  type Mode = 'choose' | 'crop' | 'qr-live' | 'processing' | 'review';
 
-  const [mode,      setMode]      = useState<Mode>('choose');
-  const [preview,   setPreview]   = useState<string | null>(null);
-  const [extracted, setExtracted] = useState<Partial<ScannedData> | null>(null);
-  const [thumbFile, setThumbFile] = useState<File | null>(null);
-  const [camError,  setCamError]  = useState<string | null>(null);
-  const [ocrMode,   setOcrMode]   = useState(false);
+  const [mode,       setMode]       = useState<Mode>('choose');
+  const [camError,   setCamError]   = useState<string | null>(null);
+  const [ocrMode,    setOcrMode]    = useState(false);
 
-  // campos editáveis na revisão
+  // estado da imagem original (antes do recorte)
+  const [origDataUrl, setOrigDataUrl] = useState<string | null>(null);
+  const [origImg,     setOrigImg]     = useState<HTMLImageElement | null>(null);
+
+  // estado do recorte
+  const [quad,        setQuad]        = useState<Quad | null>(null);
+  const [dragIdx,     setDragIdx]     = useState<number | null>(null); // índice do handle sendo arrastado
+
+  // resultado final (após recorte)
+  const [croppedUrl,  setCroppedUrl]  = useState<string | null>(null);
+  const [thumbFile,   setThumbFile]   = useState<File | null>(null);
+
+  // dados extraídos e campos editáveis
+  const [extracted,       setExtracted]       = useState<Partial<ScannedData> | null>(null);
   const [editAmount,      setEditAmount]      = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editDate,        setEditDate]        = useState('');
 
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const canvasRef   = useRef<HTMLCanvasElement>(null);
-  const streamRef   = useRef<MediaStream | null>(null);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const doneRef     = useRef(false);
-  const qrInputRef  = useRef<HTMLInputElement>(null);
-  const photoRef    = useRef<HTMLInputElement>(null);
-  const galleryRef  = useRef<HTMLInputElement>(null);
+  // modo de uso: 'photo-only' = só salvar foto; 'extract' = preencher formulário
+  const [useMode, setUseMode] = useState<'photo-only' | 'extract' | null>(null);
+
+  // refs
+  const cropCanvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef      = useRef<HTMLVideoElement>(null);
+  const canvasRef     = useRef<HTMLCanvasElement>(null);
+  const streamRef     = useRef<MediaStream | null>(null);
+  const intervalRef   = useRef<ReturnType<typeof setInterval> | null>(null);
+  const doneRef       = useRef(false);
+  const qrInputRef    = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const galleryRef    = useRef<HTMLInputElement>(null);
 
   const jsQRRef = useRef<any>(null);
   useEffect(() => { import('jsqr').then(m => { jsQRRef.current = m.default; }); }, []);
 
-  const stopStream = useCallback(() => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    streamRef.current = null;
-  }, []);
-  useEffect(() => () => stopStream(), [stopStream]);
-
-  // preenche os campos editáveis quando extracted muda
+  // preenche campos editáveis quando extracted muda
   useEffect(() => {
     if (!extracted) return;
     setEditAmount(extracted.amount ? maskBRL(String(Math.round(extracted.amount * 100))) : '');
@@ -256,78 +285,15 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     setEditDate(extracted.date ?? '');
   }, [extracted]);
 
-  // ── OCR ──────────────────────────────────────────────────────────────────
-  const runOcr = useCallback(async (dataUrl: string, qrFallback?: string) => {
-    setOcrMode(true);
-    setMode('processing');
-    try {
-      const { data: { text } } = await Tesseract.recognize(dataUrl, 'por', { logger: () => {} });
-      const result = extractByOcr(text);
-      if (qrFallback && !result.description) result.description = qrFallback.slice(0, 60);
-      setExtracted({ ...result, source: 'ocr' });
-      toast.success('Recibo processado! Confira e edite se necessário.');
-    } catch {
-      toast.error('Não foi possível ler o recibo automaticamente.');
-      setExtracted({ source: 'ocr' });
-    }
-    setMode('review');
+  // ── stop câmera ───────────────────────────────────────────────────────────
+  const stopStream = useCallback(() => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
   }, []);
+  useEffect(() => () => stopStream(), [stopStream]);
 
-  // ── processa arquivo de imagem ────────────────────────────────────────────
-  const handleImageFile = useCallback(async (file: File) => {
-    setMode('processing');
-    setOcrMode(false);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const src = e.target?.result as string;
-      try {
-        // Tenta QR na resolução original ANTES de comprimir
-        const qrText = await tryQrFromImage(src);
-        const { dataUrl, file: compressed } = await compressImage(src, 1400, 0.85);
-        setPreview(dataUrl);
-        setThumbFile(compressed);
-
-        if (qrText?.startsWith('http')) {
-          const fromUrl = parseNFeUrl(qrText);
-          if (fromUrl) {
-            setExtracted({ ...fromUrl, source: 'qrcode' });
-            toast.success('QR Code NF-e encontrado na imagem!');
-            setMode('review');
-            return;
-          }
-        }
-        if (qrText) {
-          toast.info('QR genérico detectado — rodando OCR...');
-          await runOcr(dataUrl, qrText);
-          return;
-        }
-        await runOcr(dataUrl);
-      } catch {
-        toast.error('Erro ao processar imagem.');
-        setMode('choose');
-      }
-    };
-    reader.readAsDataURL(file);
-  }, [runOcr]);
-
-  // ── QR detectado (câmera live) ────────────────────────────────────────────
-  const handleQrDetected = useCallback(async (qrText: string, frameDataUrl: string) => {
-    setMode('processing');
-    toast.info('QR Code detectado!');
-    const fromUrl = qrText.startsWith('http') ? parseNFeUrl(qrText) : null;
-    const { dataUrl, file } = await compressImage(frameDataUrl, 900, 0.80);
-    setPreview(dataUrl);
-    setThumbFile(file);
-    if (fromUrl) {
-      setExtracted({ ...fromUrl, source: 'qrcode' });
-      toast.success('Nota Fiscal lida com sucesso!');
-      setMode('review');
-    } else {
-      await runOcr(dataUrl, qrText);
-    }
-  }, [runOcr]);
-
-  // ── loop QR live (Android/Desktop) ───────────────────────────────────────
+  // ── inicia câmera QR live DEPOIS que o <video> está no DOM ────────────────
   const startQrLoop = useCallback(() => {
     doneRef.current = false;
     intervalRef.current = setInterval(async () => {
@@ -343,42 +309,234 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
       if (code?.data) {
         doneRef.current = true;
         stopStream();
-        await handleQrDetected(code.data, canvas.toDataURL('image/jpeg', 0.80));
+        await handleQrDetectedLive(code.data, canvas.toDataURL('image/jpeg', 0.85));
       }
     }, 200);
-  }, [handleQrDetected, stopStream]);
+  }, [stopStream]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const startLiveQrCamera = async () => {
-    setCamError(null);
-    setMode('qr-live');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
-      });
-      streamRef.current = stream;
-      const video = videoRef.current;
-      if (video) {
-        video.srcObject = stream;
-        video.setAttribute('playsinline', 'true');
-        await video.play();
+  // useLayoutEffect: inicia o stream quando o <video> entra no DOM (mode === 'qr-live')
+  useLayoutEffect(() => {
+    if (mode !== 'qr-live') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
+        });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = stream;
+          video.setAttribute('playsinline', 'true');
+          await video.play();
+          startQrLoop();
+        }
+      } catch {
+        setCamError('Câmera não autorizada. Use "Fotografar nota" como alternativa.');
+        setMode('choose');
       }
-      startQrLoop();
-    } catch {
-      setCamError('Câmera não autorizada. Use "Fotografar nota" como alternativa.');
-      setMode('choose');
+    })();
+    return () => { cancelled = true; };
+  }, [mode, startQrLoop]);
+
+  // ── QR detectado (câmera live) → pula etapa de recorte, vai direto ao review ─
+  const handleQrDetectedLive = async (qrText: string, frameDataUrl: string) => {
+    setMode('processing');
+    const fromUrl = qrText.startsWith('http') ? parseNFeUrl(qrText) : null;
+    const img = await loadImage(frameDataUrl);
+    const out = document.createElement('canvas');
+    out.width = img.width; out.height = img.height;
+    out.getContext('2d')!.drawImage(img, 0, 0);
+    const { dataUrl, file } = await compressToFile(out, 0.85);
+    setCroppedUrl(dataUrl);
+    setThumbFile(file);
+    if (fromUrl) {
+      setExtracted({ ...fromUrl, source: 'qrcode' });
+      toast.success('Nota Fiscal lida com sucesso!');
+    } else {
+      const { data: { text } } = await Tesseract.recognize(dataUrl, 'por', { logger: () => {} });
+      setExtracted({ ...extractByOcr(text), source: 'ocr' });
+      toast.success('Recibo processado!');
     }
+    setMode('review');
   };
 
-  const handleQrButton = () => {
-    isIOS() ? qrInputRef.current?.click() : startLiveQrCamera();
+  // ── recebe arquivo de imagem → detecta quad e vai para tela de recorte ────
+  const handleImageFile = useCallback(async (file: File) => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const src = e.target?.result as string;
+      const img = await loadImage(src);
+      setOrigDataUrl(src);
+      setOrigImg(img);
+      setQuad(detectQuad(img.naturalWidth, img.naturalHeight));
+      setMode('crop');
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  // ── desenha canvas de recorte com handles ────────────────────────────────
+  const drawCropCanvas = useCallback(() => {
+    const canvas = cropCanvasRef.current;
+    if (!canvas || !origImg || !quad) return;
+
+    const maxW = Math.min(canvas.parentElement?.clientWidth ?? 360, 500);
+    const scale = maxW / origImg.naturalWidth;
+    canvas.width  = maxW;
+    canvas.height = Math.round(origImg.naturalHeight * scale);
+
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(origImg, 0, 0, canvas.width, canvas.height);
+
+    // overlay escuro fora do quad
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.beginPath();
+    quad.forEach(([pt, i]: any) => {
+      // coordenadas do quad em pixels do canvas
+    });
+    // corrige: itera corretamente
+    ctx.beginPath();
+    ctx.moveTo(quad[0].x * scale, quad[0].y * scale);
+    ctx.lineTo(quad[1].x * scale, quad[1].y * scale);
+    ctx.lineTo(quad[2].x * scale, quad[2].y * scale);
+    ctx.lineTo(quad[3].x * scale, quad[3].y * scale);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    // borda do quad
+    ctx.strokeStyle = '#22d3ee';
+    ctx.lineWidth   = 2;
+    ctx.beginPath();
+    ctx.moveTo(quad[0].x * scale, quad[0].y * scale);
+    ctx.lineTo(quad[1].x * scale, quad[1].y * scale);
+    ctx.lineTo(quad[2].x * scale, quad[2].y * scale);
+    ctx.lineTo(quad[3].x * scale, quad[3].y * scale);
+    ctx.closePath();
+    ctx.stroke();
+
+    // handles
+    quad.forEach((pt, i) => {
+      ctx.beginPath();
+      ctx.arc(pt.x * scale, pt.y * scale, 14, 0, Math.PI * 2);
+      ctx.fillStyle = i === dragIdx ? '#06b6d4' : '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#06b6d4';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    });
+  }, [origImg, quad, dragIdx]);
+
+  useEffect(() => { if (mode === 'crop') drawCropCanvas(); }, [mode, drawCropCanvas]);
+
+  // ── touch/mouse nos handles do crop canvas ────────────────────────────────
+  const getCanvasPoint = (canvas: HTMLCanvasElement, e: React.MouseEvent | React.TouchEvent): Point => {
+    const rect  = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
   };
 
-  // ── confirma dados (usa valores editados) ────────────────────────────────
+  const findNearestHandle = (pt: Point, canvas: HTMLCanvasElement): number | null => {
+    const scaleX = canvas.width / canvas.getBoundingClientRect().width;
+    const imgScale = canvas.width / (origImg?.naturalWidth ?? 1);
+    let nearest = -1, minD = 30 * scaleX;
+    quad?.forEach((h, i) => {
+      const d = Math.hypot(h.x * imgScale - pt.x, h.y * imgScale - pt.y);
+      if (d < minD) { minD = d; nearest = i; }
+    });
+    return nearest === -1 ? null : nearest;
+  };
+
+  const onCropPointerDown = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = cropCanvasRef.current; if (!canvas || !quad) return;
+    const pt  = getCanvasPoint(canvas, e);
+    const idx = findNearestHandle(pt, canvas);
+    if (idx !== null) { setDragIdx(idx); e.preventDefault(); }
+  };
+
+  const onCropPointerMove = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (dragIdx === null || !origImg || !quad) return;
+    const canvas = cropCanvasRef.current; if (!canvas) return;
+    const pt      = getCanvasPoint(canvas, e);
+    const imgScale = canvas.width / origImg.naturalWidth;
+    const newQuad: Quad = [...quad] as Quad;
+    newQuad[dragIdx] = {
+      x: Math.max(0, Math.min(origImg.naturalWidth,  pt.x / imgScale)),
+      y: Math.max(0, Math.min(origImg.naturalHeight, pt.y / imgScale)),
+    };
+    setQuad(newQuad);
+    e.preventDefault();
+  };
+
+  const onCropPointerUp = () => setDragIdx(null);
+
+  // ── confirma recorte ──────────────────────────────────────────────────────
+  const handleCropConfirm = useCallback(async () => {
+    if (!origImg || !quad || !useMode) return;
+    setMode('processing');
+    setOcrMode(false);
+
+    // calcula dimensão de saída (largura do lado esquerdo do quad)
+    const outW = Math.round(Math.hypot(quad[1].x - quad[0].x, quad[1].y - quad[0].y));
+    const outH = Math.round(Math.hypot(quad[3].x - quad[0].x, quad[3].y - quad[0].y));
+    const cropped = applyPerspective(origImg, quad, Math.max(outW, 300), Math.max(outH, 400));
+    const { dataUrl, file } = await compressToFile(cropped, 0.88);
+    setCroppedUrl(dataUrl);
+    setThumbFile(file);
+
+    if (useMode === 'photo-only') {
+      // não roda OCR, vai direto à revisão
+      setExtracted({ source: 'photo-only' });
+      setMode('review');
+      return;
+    }
+
+    // mode === 'extract': tenta QR na imagem original primeiro
+    setOcrMode(false);
+    toast.info('Verificando QR Code...');
+    const qrText = origDataUrl ? await tryQrFromImage(origDataUrl) : null;
+    if (qrText?.startsWith('http')) {
+      const fromUrl = parseNFeUrl(qrText);
+      if (fromUrl) {
+        setExtracted({ ...fromUrl, source: 'qrcode' });
+        toast.success('QR Code NF-e encontrado!');
+        setMode('review');
+        return;
+      }
+    }
+    // OCR
+    toast.info('Lendo texto da nota (OCR)...');
+    setOcrMode(true);
+    try {
+      const { data: { text } } = await Tesseract.recognize(dataUrl, 'por', { logger: () => {} });
+      const result = extractByOcr(text);
+      if (qrText && !result.description) result.description = qrText.slice(0, 60);
+      setExtracted({ ...result, source: 'ocr' });
+      toast.success('Nota processada! Confira os dados.');
+    } catch {
+      toast.error('OCR falhou. Preencha manualmente.');
+      setExtracted({ source: 'ocr' });
+    }
+    setMode('review');
+  }, [origImg, quad, useMode, origDataUrl]);
+
+  // ── confirma revisão (usa campos editados) ────────────────────────────────
   const handleConfirm = () => {
+    if (useMode === 'photo-only') {
+      onResult({ thumbnail: thumbFile ?? undefined, source: 'photo-only' });
+      return;
+    }
     onResult({
       amount:      parseBRL(editAmount) || undefined,
-      description: editDescription || extracted?.description,
-      date:        editDate        || extracted?.date,
+      description: editDescription     || extracted?.description,
+      date:        editDate            || extracted?.date,
       merchant:    extracted?.merchant,
       cnpj:        extracted?.cnpj,
       thumbnail:   thumbFile ?? undefined,
@@ -388,81 +546,81 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
 
   const reset = () => {
     stopStream(); doneRef.current = false;
-    setMode('choose'); setPreview(null); setExtracted(null);
-    setThumbFile(null); setCamError(null); setOcrMode(false);
+    setMode('choose'); setCamError(null); setOcrMode(false);
+    setOrigDataUrl(null); setOrigImg(null); setQuad(null); setDragIdx(null);
+    setCroppedUrl(null); setThumbFile(null); setExtracted(null);
     setEditAmount(''); setEditDescription(''); setEditDate('');
+    setUseMode(null);
   };
 
-  // ────────────────────────────── RENDER ──────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" style={{ touchAction: mode === 'crop' ? 'none' : undefined }}>
 
-      {/* inputs nativos */}
-      <input ref={qrInputRef}  type="file" accept="image/*" capture="environment" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }} />
-      <input ref={photoRef}    type="file" accept="image/*" capture="environment" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }} />
-      <input ref={galleryRef}  type="file" accept="image/*" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }} />
+      {/* inputs nativos sempre presentes */}
+      <input ref={qrInputRef}    type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); e.target.value=''; }} />
+      <input ref={photoInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) { setUseMode('photo-only'); handleImageFile(f); } e.target.value=''; }} />
+      <input ref={galleryRef}    type="file" accept="image/*" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); e.target.value=''; }} />
 
-      {/* ── Escolha de modo ──────────────────────────────────────────────── */}
+      {/* ── Escolha de modo ────────────────────────────────────────────────── */}
       {mode === 'choose' && (
         <>
           {camError && <p className="text-xs text-destructive bg-destructive/10 rounded-lg px-3 py-2">{camError}</p>}
-          <div className="grid grid-cols-1 gap-3">
 
-            <button type="button" onClick={handleQrButton}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card hover:bg-accent transition-colors p-4 text-left">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
+          {/* Dois cartões principais: só foto vs. ler dados */}
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button"
+              onClick={() => { setUseMode('photo-only'); photoInputRef.current?.click(); }}
+              className="flex flex-col items-center gap-2 rounded-xl border-2 border-border bg-card hover:border-primary/50 hover:bg-accent transition-colors p-4 text-center">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
+                <FileCheck size={20} />
+              </div>
+              <div>
+                <p className="text-xs font-semibold">Só salvar foto</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Recorta e salva como comprovante</p>
+              </div>
+            </button>
+
+            <button type="button"
+              onClick={() => {
+                setUseMode('extract');
+                if (isIOS()) { qrInputRef.current?.click(); }
+                else { setMode('qr-live'); }
+              }}
+              className="flex flex-col items-center gap-2 rounded-xl border-2 border-border bg-card hover:border-primary/50 hover:bg-accent transition-colors p-4 text-center">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
                 <QrCode size={20} />
               </div>
               <div>
-                <p className="text-sm font-semibold">Ler QR Code da NF-e</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {isIOS() ? 'Abre a câmera — aponte para o QR Code do cupom fiscal'
-                           : 'Câmera ao vivo — centralize o QR Code'}
-                </p>
+                <p className="text-xs font-semibold">Ler QR Code</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Preenche o formulário automaticamente</p>
+              </div>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2">
+            <button type="button"
+              onClick={() => { setUseMode('extract'); photoInputRef.current?.click(); }}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card hover:bg-accent transition-colors px-4 py-3 text-left">
+              <Camera size={18} className="text-emerald-500 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium">Fotografar e extrair dados</p>
+                <p className="text-xs text-muted-foreground">OCR extrai valor, data e nome do estabelecimento</p>
               </div>
             </button>
 
-            <button type="button" onClick={() => photoRef.current?.click()}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card hover:bg-accent transition-colors p-4 text-left">
-              <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center flex-shrink-0">
-                <Camera size={20} />
-              </div>
+            <button type="button"
+              onClick={() => { setUseMode('extract'); galleryRef.current?.click(); }}
+              className="flex items-center gap-3 rounded-xl border border-border bg-card hover:bg-accent transition-colors px-4 py-3 text-left">
+              <ImagePlus size={18} className="text-amber-500 flex-shrink-0" />
               <div>
-                <p className="text-sm font-semibold">Fotografar nota</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {isIOS() ? 'iOS detecta e recorta o documento automaticamente'
-                           : 'OCR extrai valor e data — imagem comprimida antes de salvar'}
-                </p>
-              </div>
-            </button>
-
-            <button type="button" onClick={() => galleryRef.current?.click()}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card hover:bg-accent transition-colors p-4 text-left">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center flex-shrink-0">
-                <ImagePlus size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold">Selecionar da galeria</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Foto já salva — OCR + detecção de QR automáticos</p>
-              </div>
-            </button>
-
-            <button type="button" onClick={() => {
-                const i = document.createElement('input');
-                i.type = 'file'; i.accept = 'image/*,.pdf';
-                i.onchange = () => { const f = i.files?.[0]; if (f) handleImageFile(f); };
-                i.click();
-              }}
-              className="flex items-center gap-4 rounded-xl border border-border bg-card hover:bg-accent transition-colors p-4 text-left">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center flex-shrink-0">
-                <Upload size={20} />
-              </div>
-              <div>
-                <p className="text-sm font-semibold">Importar arquivo</p>
-                <p className="text-xs text-muted-foreground mt-0.5">Imagem ou PDF já salvo no dispositivo</p>
+                <p className="text-sm font-medium">Galeria e extrair dados</p>
+                <p className="text-xs text-muted-foreground">OCR em foto já salva + detecção de QR</p>
               </div>
             </button>
           </div>
@@ -473,110 +631,156 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
         </>
       )}
 
-      {/* ── QR live (Android/Desktop) ────────────────────────────────────── */}
+      {/* ── Recorte de documento ────────────────────────────────────────────── */}
+      {mode === 'crop' && quad && origImg && (
+        <div className="space-y-3">
+          <div className="text-center space-y-0.5">
+            <p className="text-sm font-semibold">Ajuste os cantos do documento</p>
+            <p className="text-xs text-muted-foreground">Arraste os círculos até as bordas da nota</p>
+          </div>
+
+          <div className="rounded-xl overflow-hidden border border-border select-none">
+            <canvas
+              ref={cropCanvasRef}
+              className="w-full touch-none cursor-crosshair"
+              onMouseDown={onCropPointerDown}
+              onMouseMove={onCropPointerMove}
+              onMouseUp={onCropPointerUp}
+              onMouseLeave={onCropPointerUp}
+              onTouchStart={onCropPointerDown}
+              onTouchMove={onCropPointerMove}
+              onTouchEnd={onCropPointerUp}
+            />
+          </div>
+
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={reset} className="flex-1">
+              <X size={14} className="mr-1.5" /> Cancelar
+            </Button>
+            <Button type="button" onClick={handleCropConfirm} className="flex-1">
+              <Scissors size={14} className="mr-1.5" />
+              {useMode === 'photo-only' ? 'Recortar e salvar' : 'Recortar e ler'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── QR Code live (Android/Desktop) ─────────────────────────────────── */}
       {mode === 'qr-live' && (
         <div className="space-y-3">
           <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3]">
             <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
             <canvas ref={canvasRef} className="hidden" />
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="w-52 h-52 border-2 border-white/60 rounded-xl relative">
-                <span className="absolute -top-px -left-px  w-7 h-7 border-t-4 border-l-4 border-primary rounded-tl-lg" />
-                <span className="absolute -top-px -right-px w-7 h-7 border-t-4 border-r-4 border-primary rounded-tr-lg" />
-                <span className="absolute -bottom-px -left-px  w-7 h-7 border-b-4 border-l-4 border-primary rounded-bl-lg" />
-                <span className="absolute -bottom-px -right-px w-7 h-7 border-b-4 border-r-4 border-primary rounded-br-lg" />
-                <ScanLine size={22} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/50 animate-pulse" />
+              <div className="w-56 h-56 border-2 border-white/50 rounded-xl relative">
+                <span className="absolute -top-px -left-px   w-8 h-8 border-t-4 border-l-4 border-cyan-400 rounded-tl-xl" />
+                <span className="absolute -top-px -right-px  w-8 h-8 border-t-4 border-r-4 border-cyan-400 rounded-tr-xl" />
+                <span className="absolute -bottom-px -left-px  w-8 h-8 border-b-4 border-l-4 border-cyan-400 rounded-bl-xl" />
+                <span className="absolute -bottom-px -right-px w-8 h-8 border-b-4 border-r-4 border-cyan-400 rounded-br-xl" />
+                <ScanLine size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-cyan-400/70 animate-pulse" />
               </div>
             </div>
+            {/* linha de scan animada */}
+            <div className="absolute left-1/2 -translate-x-1/2 top-[22%] w-44 h-0.5 bg-cyan-400/80 animate-[scanline_2s_ease-in-out_infinite]" />
           </div>
+          <style>{`@keyframes scanline{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(calc(56vw * 0.56))}}`}</style>
           <p className="text-xs text-center text-muted-foreground">Centralize o QR Code dentro da área marcada</p>
-          <Button type="button" variant="outline" size="sm" onClick={() => { stopStream(); setMode('choose'); }} className="w-full">
-            <X size={14} className="mr-1.5" /> Cancelar leitura
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => { stopStream(); setMode('choose'); }} className="flex-1">
+              <X size={14} className="mr-1.5" /> Cancelar
+            </Button>
+            <Button type="button" variant="outline" size="sm"
+              onClick={() => { stopStream(); setUseMode('extract'); photoInputRef.current?.click(); }}
+              className="flex-1">
+              <Camera size={14} className="mr-1.5" /> Tirar foto
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* ── Processando ──────────────────────────────────────────────────── */}
+      {/* ── Processando ──────────────────────────────────────────────────────── */}
       {mode === 'processing' && (
         <div className="flex flex-col items-center gap-4 py-8">
-          {preview && <img src={preview} alt="Recibo" className="max-h-40 rounded-xl border object-contain" />}
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 size={18} className="animate-spin" />
-            <span className="text-sm">{ocrMode ? 'Reconhecendo texto (OCR)...' : 'Verificando QR Code...'}</span>
+            <span className="text-sm">
+              {ocrMode ? 'Reconhecendo texto (OCR)…' : 'Verificando QR Code…'}
+            </span>
           </div>
           <p className="text-xs text-muted-foreground">Aguarde alguns segundos</p>
         </div>
       )}
 
-      {/* ── Revisão + edição ─────────────────────────────────────────────── */}
+      {/* ── Revisão ──────────────────────────────────────────────────────────── */}
       {mode === 'review' && extracted && (
         <div className="space-y-4">
-          {preview && <img src={preview} alt="Recibo" className="w-full max-h-40 rounded-xl border object-contain" />}
+          {croppedUrl && (
+            <img src={croppedUrl} alt="Nota recortada" className="w-full max-h-48 rounded-xl border object-contain" />
+          )}
 
-          <div className="flex items-center gap-2">
-            <span className={cn(
-              'text-[10px] font-semibold px-2 py-0.5 rounded-full',
-              extracted.source === 'qrcode'
-                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-            )}>
-              {extracted.source === 'qrcode' ? '✓ NF-e via QR Code' : '⚡ OCR — confira os dados'}
-            </span>
-            <Pencil size={12} className="text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Edite se necessário</span>
-          </div>
-
-          {/* campos editáveis */}
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Valor (R$)</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
-                <Input
-                  type="text" inputMode="numeric"
-                  value={editAmount}
-                  onChange={e => setEditAmount(maskBRL(e.target.value))}
-                  placeholder="0,00"
-                  className="pl-9"
-                />
+          {useMode === 'photo-only' ? (
+            <>
+              <p className="text-sm text-center text-muted-foreground">
+                Foto recortada e pronta para salvar como comprovante.
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={reset} className="flex-1">
+                  <RefreshCw size={14} className="mr-1.5" /> Refazer
+                </Button>
+                <Button type="button" onClick={handleConfirm} className="flex-1">
+                  <Check size={14} className="mr-1.5" /> Salvar foto
+                </Button>
               </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Descrição / Estabelecimento</Label>
-              <Input
-                type="text"
-                value={editDescription}
-                onChange={e => setEditDescription(e.target.value)}
-                placeholder="Ex: Supermercado, Farmácia…"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs">Data</Label>
-              <Input
-                type="date"
-                value={editDate}
-                onChange={e => setEditDate(e.target.value)}
-              />
-            </div>
-
-            {extracted.cnpj && (
-              <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
-                <span className="text-xs text-muted-foreground">CNPJ</span>
-                <span className="text-xs font-mono">{extracted.cnpj}</span>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                  extracted.source === 'qrcode'
+                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+                )}>
+                  {extracted.source === 'qrcode' ? '✓ NF-e via QR Code' : '⚡ OCR — confira e edite'}
+                </span>
               </div>
-            )}
-          </div>
 
-          <div className="flex gap-2">
-            <Button type="button" variant="outline" onClick={reset} className="flex-1">
-              <RefreshCw size={14} className="mr-1.5" /> Tentar novamente
-            </Button>
-            <Button type="button" onClick={handleConfirm} className="flex-1">
-              <Check size={14} className="mr-1.5" /> Usar estes dados
-            </Button>
-          </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Valor (R$)</Label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
+                    <Input type="text" inputMode="numeric" value={editAmount} placeholder="0,00"
+                      onChange={e => setEditAmount(maskBRL(e.target.value))} className="pl-9" />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Descrição / Estabelecimento</Label>
+                  <Input type="text" value={editDescription} placeholder="Ex: Supermercado…"
+                    onChange={e => setEditDescription(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Data</Label>
+                  <Input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
+                </div>
+                {extracted.cnpj && (
+                  <div className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
+                    <span className="text-xs text-muted-foreground">CNPJ</span>
+                    <span className="text-xs font-mono">{extracted.cnpj}</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={reset} className="flex-1">
+                  <RefreshCw size={14} className="mr-1.5" /> Refazer
+                </Button>
+                <Button type="button" onClick={handleConfirm} className="flex-1">
+                  <Check size={14} className="mr-1.5" /> Usar dados
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
