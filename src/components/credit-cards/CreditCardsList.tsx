@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard as CreditCardIcon, Calendar, Receipt, Edit, Trash2 } from 'lucide-react';
+import { Plus, CreditCard as CreditCardIcon, Calendar, Receipt, Edit, Trash2, Building2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useCreditCards } from '@/hooks/useCreditCards';
+import { useAccounts } from '@/hooks/useAccounts';
 import { formatCurrency } from '@/utils/formatters';
 import { AddCreditCardForm } from './AddCreditCardForm';
 import { CreditCardInvoices } from './CreditCardInvoices';
 import { EditCreditCardForm } from './EditCreditCardForm';
+import { AccountsList } from '@/components/accounts/AccountsList';
+import { cn } from '@/lib/utils';
 
 const getUsagePercentage = (used: number, limit: number) =>
   limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
@@ -23,8 +26,12 @@ const getPercentageTextClass = (pct: number): string => {
   return 'text-green-500';
 };
 
+type Tab = 'cards' | 'accounts';
+
 export const CreditCardsList: React.FC = () => {
   const { creditCards, loading, deleteCreditCard } = useCreditCards();
+  const { accounts } = useAccounts();
+  const [activeTab, setActiveTab] = useState<Tab>('cards');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCard, setEditingCard] = useState<any>(null);
   const [selectedCardForInvoices, setSelectedCardForInvoices] = useState<any>(null);
@@ -33,9 +40,8 @@ export const CreditCardsList: React.FC = () => {
   const handleEdit = (card: any) => { setEditingCard(card); setShowAddForm(true); };
   const handleCloseForm = () => { setShowAddForm(false); setEditingCard(null); };
 
-  // Totais calculados direto dos dados já agregados pelo useCreditCards (query no Supabase)
   const totalOpenInvoices = creditCards.reduce((s, c) => s + c.used_amount, 0);
-  const totalLimit = creditCards.reduce((s, c) => s + c.limit, 0);
+  const totalLimit        = creditCards.reduce((s, c) => s + c.limit, 0);
 
   if (loading) {
     return (
@@ -46,11 +52,24 @@ export const CreditCardsList: React.FC = () => {
   }
 
   if (showAddForm && !editingCard) return <AddCreditCardForm onClose={handleCloseForm} editingCard={editingCard} />;
-  if (editingCard) return <EditCreditCardForm card={editingCard} onClose={handleCloseForm} />;
-  if (selectedCardForInvoices) return <CreditCardInvoices card={selectedCardForInvoices} onClose={() => setSelectedCardForInvoices(null)} />;
+  if (editingCard)                 return <EditCreditCardForm card={editingCard} onClose={handleCloseForm} />;
+  if (selectedCardForInvoices)     return <CreditCardInvoices card={selectedCardForInvoices} onClose={() => setSelectedCardForInvoices(null)} />;
 
+  // ── Tab: Contas ──────────────────────────────────────────────────────────
+  if (activeTab === 'accounts') {
+    return (
+      <div className="space-y-5">
+        <TabBar active={activeTab} onChange={setActiveTab} cardCount={creditCards.length} accountCount={accounts.length} />
+        <AccountsList />
+      </div>
+    );
+  }
+
+  // ── Tab: Cartões ─────────────────────────────────────────────────────────
   return (
     <div className="space-y-7">
+      <TabBar active={activeTab} onChange={setActiveTab} cardCount={creditCards.length} accountCount={accounts.length} />
+
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Cartões de Crédito</h2>
         <Button onClick={() => setShowAddForm(true)} className="gap-2">
@@ -89,10 +108,10 @@ export const CreditCardsList: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {creditCards.map((card) => {
-            const pct = getUsagePercentage(card.used_amount, card.limit);
+            const pct       = getUsagePercentage(card.used_amount, card.limit);
             const available = card.limit - card.used_amount;
-            const barColor = getBarColor(pct);
-            const pctClass = getPercentageTextClass(pct);
+            const barColor  = getBarColor(pct);
+            const pctClass  = getPercentageTextClass(pct);
 
             return (
               <div key={card.id} className="card-elevated overflow-hidden flex flex-col">
@@ -204,3 +223,61 @@ export const CreditCardsList: React.FC = () => {
     </div>
   );
 };
+
+// ── Tab bar compartilhada ────────────────────────────────────────────────────
+interface TabBarProps {
+  active: Tab;
+  onChange: (t: Tab) => void;
+  cardCount: number;
+  accountCount: number;
+}
+
+const TabBar: React.FC<TabBarProps> = ({ active, onChange, cardCount, accountCount }) => (
+  <div className="flex gap-1 p-1 bg-muted rounded-xl w-fit">
+    <TabBtn
+      active={active === 'cards'}
+      icon={<CreditCardIcon size={14} />}
+      label="Cartões"
+      count={cardCount}
+      onClick={() => onChange('cards')}
+    />
+    <TabBtn
+      active={active === 'accounts'}
+      icon={<Building2 size={14} />}
+      label="Contas"
+      count={accountCount}
+      onClick={() => onChange('accounts')}
+    />
+  </div>
+);
+
+interface TabBtnProps {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  onClick: () => void;
+}
+
+const TabBtn: React.FC<TabBtnProps> = ({ active, icon, label, count, onClick }) => (
+  <button
+    onClick={onClick}
+    className={cn(
+      'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+      active
+        ? 'bg-background text-foreground shadow-sm'
+        : 'text-muted-foreground hover:text-foreground'
+    )}
+  >
+    {icon}
+    {label}
+    {count > 0 && (
+      <span className={cn(
+        'text-[10px] font-semibold px-1.5 py-0.5 rounded-full leading-none',
+        active ? 'bg-primary/15 text-primary' : 'bg-muted-foreground/15 text-muted-foreground'
+      )}>
+        {count}
+      </span>
+    )}
+  </button>
+);
