@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BackHeader } from '@/components/layout/BackHeader';
 import { useAccounts } from '@/hooks/useAccounts';
-import { toast } from 'sonner';
 import { Wallet } from 'lucide-react';
 
 interface EditAccountFormProps {
@@ -17,18 +16,14 @@ interface EditAccountFormProps {
 export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onBack }) => {
   const { updateAccount, isUpdating } = useAccounts();
 
-  // Lê o saldo corretamente: o banco pode usar current_balance ou initial_balance
-  const currentBalance = account.current_balance ?? account.initial_balance ?? account.balance ?? 0;
-
   const [formData, setFormData] = useState({
-    name:         account.name        ?? '',
-    type:         account.type        ?? 'checking',
-    balance:      currentBalance.toString(),
-    bank_name:    account.bank_name   ?? '',
-    color:        account.color       ?? '#6b7280',
-    credit_limit: account.credit_limit?.toString()  ?? '',
-    due_day:      account.due_day?.toString()        ?? '',
-    closing_day:  account.closing_day?.toString()   ?? '',
+    name:         account.name         ?? '',
+    type:         account.type         ?? 'checking',
+    balance:      (account.balance     ?? 0).toString(),
+    bank_name:    account.bank_name    ?? '',
+    credit_limit: account.credit_limit?.toString() ?? '',
+    due_day:      account.due_day?.toString()       ?? '',
+    closing_day:  account.closing_day?.toString()  ?? '',
   });
 
   const set = (field: string, value: string) =>
@@ -37,28 +32,25 @@ export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onBac
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // Apenas colunas que existem no schema do banco
       const payload: Record<string, any> = {
         id:        account.id,
         name:      formData.name,
         type:      formData.type,
+        balance:   parseFloat(formData.balance) || 0,
         bank_name: formData.bank_name || null,
-        color:     formData.color || null,
-        // Atualiza os dois campos de saldo para garantir consistência
-        initial_balance: parseFloat(formData.balance) || 0,
-        current_balance: parseFloat(formData.balance) || 0,
       };
 
       if (formData.type === 'credit_card') {
         payload.credit_limit = parseFloat(formData.credit_limit) || null;
-        payload.due_day      = parseInt(formData.due_day)       || null;
-        payload.closing_day  = parseInt(formData.closing_day)   || null;
+        payload.due_day      = parseInt(formData.due_day)        || null;
+        payload.closing_day  = parseInt(formData.closing_day)    || null;
       }
 
       await updateAccount(payload);
       onBack();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao atualizar conta:', error);
-      toast.error('Erro ao atualizar conta');
     }
   };
 
@@ -126,20 +118,6 @@ export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onBac
               />
             </div>
 
-            <div>
-              <Label htmlFor="color">Cor</Label>
-              <div className="flex items-center gap-3">
-                <input
-                  id="color"
-                  type="color"
-                  value={formData.color}
-                  onChange={e => set('color', e.target.value)}
-                  className="h-9 w-16 rounded border border-input cursor-pointer"
-                />
-                <span className="text-sm text-muted-foreground">{formData.color}</span>
-              </div>
-            </div>
-
             {formData.type === 'credit_card' && (
               <>
                 <div>
@@ -155,23 +133,15 @@ export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onBac
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="closing_day">Dia Fechamento</Label>
-                    <Input
-                      id="closing_day"
-                      type="number"
-                      min="1" max="31"
+                    <Input id="closing_day" type="number" min="1" max="31"
                       value={formData.closing_day}
-                      onChange={e => set('closing_day', e.target.value)}
-                    />
+                      onChange={e => set('closing_day', e.target.value)} />
                   </div>
                   <div>
                     <Label htmlFor="due_day">Dia Vencimento</Label>
-                    <Input
-                      id="due_day"
-                      type="number"
-                      min="1" max="31"
+                    <Input id="due_day" type="number" min="1" max="31"
                       value={formData.due_day}
-                      onChange={e => set('due_day', e.target.value)}
-                    />
+                      onChange={e => set('due_day', e.target.value)} />
                   </div>
                 </div>
               </>

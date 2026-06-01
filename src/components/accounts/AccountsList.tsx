@@ -29,37 +29,25 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
   const [showAddForm, setShowAddForm]       = useState(false);
   const [editingAccount, setEditingAccount] = useState<any | null>(null);
 
-  // ── sub-tela: Adicionar ──
   if (showAddForm) {
     return (
       <AddAccountForm
-        onBack={() => {
-          setShowAddForm(false);
-          refetch();
-        }}
+        onBack={() => { setShowAddForm(false); refetch(); }}
       />
     );
   }
 
-  // ── sub-tela: Editar ──
   if (editingAccount) {
     return (
       <EditAccountForm
         account={editingAccount}
-        onBack={() => {
-          setEditingAccount(null);
-          refetch(); // força re-fetch para refletir edição na lista
-        }}
+        onBack={() => { setEditingAccount(null); refetch(); }}
       />
     );
   }
 
-  // Saldo: usa current_balance se existir, senão initial_balance
-  const getBalance = (a: any) =>
-    typeof a.current_balance === 'number' ? a.current_balance
-    : typeof a.initial_balance === 'number' ? a.initial_balance
-    : 0;
-
+  // balance é o único campo de saldo no schema
+  const getBalance = (a: any): number => a.balance ?? 0;
   const totalBalance = accounts.reduce((sum, a) => sum + getBalance(a), 0);
 
   return (
@@ -77,7 +65,6 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
         }
       />
 
-      {/* Total */}
       <Card className="bg-primary text-primary-foreground">
         <CardContent className="p-4">
           <p className="text-sm opacity-80">Saldo Total</p>
@@ -112,10 +99,7 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3 flex-1">
-                      <div
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
-                        style={{ backgroundColor: account.color || '#6b7280' }}
-                      >
+                      <div className="w-9 h-9 rounded-full flex items-center justify-center bg-primary text-primary-foreground text-sm font-bold flex-shrink-0">
                         {account.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
@@ -141,19 +125,14 @@ export const AccountsList: React.FC<AccountsListProps> = ({ onBack }) => {
                           </span>
                         </div>
                       </div>
-                      <Button
-                        variant="ghost" size="sm"
-                        className="h-8 w-8 p-0"
-                        onClick={() => setEditingAccount(account)}
-                      >
+                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
+                        onClick={() => setEditingAccount(account)}>
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost" size="sm"
+                      <Button variant="ghost" size="sm"
                         className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                         onClick={() => deleteAccount(account.id)}
-                        disabled={isDeleting}
-                      >
+                        disabled={isDeleting}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
