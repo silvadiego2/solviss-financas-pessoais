@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { useBalanceVisibility } from '@/contexts/BalanceVisibilityContext';
 import { TransferForm } from '@/components/accounts/TransferForm';
 import { TransactionSheet } from '@/components/transactions/TransactionSheet';
 import { AgendaWidget } from './AgendaWidget';
@@ -38,7 +39,6 @@ const CHART_COLORS = [
   'hsl(var(--chart-5))',
 ];
 
-// Tooltip personalizado do gráfico diário
 const DayTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload?.length) return null;
   const income  = payload.find((p: any) => p.dataKey === 'income')?.value  ?? 0;
@@ -70,10 +70,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
   } = useDashboardData();
 
   const { user } = useAuth();
-  const [hideBalance, setHideBalance] = useState(false);
-  const [editSheet, setEditSheet]     = useState<EditSheetState>({ mode: 'closed' });
+  // Persistência via context + localStorage (antes era useState local sem persistência)
+  const { hideBalance, toggleHideBalance } = useBalanceVisibility();
+  const [editSheet, setEditSheet] = useState<EditSheetState>({ mode: 'closed' });
 
-  // ── KPIs ───────────────────────────────────────────────────────────────────
   const totalBalance = useMemo(
     () => regularAccounts.reduce((s, a) => s + a.balance, 0),
     [regularAccounts]
@@ -112,11 +112,10 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
     ? activeGoals.reduce((s, g) => s + (g.current_amount / g.target_amount) * 100, 0) / activeGoals.length
     : 0;
 
-  const userName      = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'você';
-  const todayRaw      = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
+  const userName       = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'você';
+  const todayRaw       = format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR });
   const todayFormatted = todayRaw.charAt(0).toUpperCase() + todayRaw.slice(1);
 
-  // Verifica se há qualquer dado no gráfico
   const hasChartData = spendingChartData.some(
     (p: any) => (p.income ?? 0) > 0 || (p.expense ?? 0) > 0
   );
@@ -127,7 +126,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
 
   return (
     <>
-      {/* Sheet de edição de transação (dashboard) */}
       <TransactionSheet
         state={editSheet}
         onClose={() => setEditSheet({ mode: 'closed' })}
@@ -135,7 +133,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
 
       <div className="space-y-8 pb-6">
 
-        {/* ── 1. HEADER ──────────────────────────────────────────────────── */}
+        {/* 1. HEADER */}
         <div className="flex items-start justify-between">
           <div>
             <p className="label-eyebrow">{todayFormatted}</p>
@@ -152,7 +150,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           />
         </div>
 
-        {/* Alert recorrentes */}
         {recurringRisk > 0 && (
           <div className="flex items-center gap-3 rounded-xl bg-warning/10 border border-warning/20 px-4 py-3">
             <AlertTriangle size={16} className="text-warning flex-shrink-0" />
@@ -162,7 +159,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         )}
 
-        {/* ── 2. SALDO TOTAL ───────────────────────────────────────────────── */}
+        {/* 2. SALDO TOTAL */}
         <div className="relative overflow-hidden rounded-2xl bg-primary text-primary-foreground px-7 py-8 shadow-lg">
           <div
             className="absolute inset-0 opacity-[0.04] pointer-events-none"
@@ -177,7 +174,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                 <span className="text-[11px] font-semibold uppercase tracking-widest">Patrimônio Total</span>
               </div>
               <button
-                onClick={() => setHideBalance(b => !b)}
+                onClick={toggleHideBalance}
                 className="opacity-60 hover:opacity-100 transition-opacity p-1"
                 aria-label={hideBalance ? 'Mostrar saldo' : 'Ocultar saldo'}
               >
@@ -229,7 +226,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
 
-        {/* ── 3. KPIs rápidos ────────────────────────────────────────────────────── */}
+        {/* 3. KPIs rápidos */}
         <div className="grid grid-cols-3 gap-3">
           <button
             onClick={() => onNavigate?.('budgets-list')}
@@ -278,7 +275,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </button>
         </div>
 
-        {/* ── 4. GRÁFICO DO MÊS — receitas + despesas por dia ─────────────────────── */}
+        {/* 4. GRÁFICO DO MÊS */}
         <div className="card-elevated rounded-2xl overflow-hidden">
           <div className="px-5 pt-5 pb-2 flex items-center justify-between">
             <div>
@@ -314,7 +311,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                     <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                 <XAxis
                   dataKey="day"
@@ -328,31 +324,14 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                   formatter={(value) => value === 'income' ? 'Receitas' : 'Despesas'}
                   wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
                 />
-
-                <Area
-                  type="monotone"
-                  dataKey="income"
-                  stroke="#10B981"
-                  fill="url(#gradIncome)"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="expense"
-                  stroke="#EF4444"
-                  fill="url(#gradExpense)"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                />
+                <Area type="monotone" dataKey="income"  stroke="#10B981" fill="url(#gradIncome)"  strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="expense" stroke="#EF4444" fill="url(#gradExpense)" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
               </AreaChart>
             </ResponsiveContainer>
           )}
         </div>
 
-        {/* ── 5. TRANSAÇÕES RECENTES ────────────────────────────────────────────── */}
+        {/* 5. TRANSAÇÕES RECENTES */}
         <div className="card-elevated rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 pt-5 pb-3">
             <p className="text-sm font-semibold">Transações Recentes</p>
@@ -364,7 +343,6 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
               Ver todas <ChevronRight size={13} className="ml-1" />
             </Button>
           </div>
-
           <div className="divide-y divide-border">
             {transactions.length === 0 ? (
               <div className="flex items-center justify-center py-10 text-sm text-muted-foreground">
@@ -408,7 +386,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         </div>
 
-        {/* ── 6. DESPESAS POR CATEGORIA ─────────────────────────────────────────── */}
+        {/* 6. DESPESAS POR CATEGORIA */}
         {expensesByCategory.length > 0 && (
           <div className="card-elevated rounded-2xl p-5">
             <p className="text-sm font-semibold mb-4">Despesas por Categoria</p>
@@ -417,8 +395,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
                 <PieChart>
                   <Pie
                     data={expensesByCategory}
-                    dataKey="value"
-                    nameKey="name"
+                    dataKey="value" nameKey="name"
                     cx="50%" cy="50%"
                     innerRadius={32} outerRadius={58}
                     paddingAngle={2} strokeWidth={0}
@@ -451,7 +428,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         )}
 
-        {/* ── 7. CARTÕES DE CRÉDITO ─────────────────────────────────────────────── */}
+        {/* 7. CARTÕES DE CRÉDITO */}
         {creditCards.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -484,7 +461,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onNavigate
           </div>
         )}
 
-        {/* ── 8. AGENDA ─────────────────────────────────────────────────────────────────────── */}
+        {/* 8. AGENDA */}
         <AgendaWidget onNavigate={onNavigate} />
 
       </div>
