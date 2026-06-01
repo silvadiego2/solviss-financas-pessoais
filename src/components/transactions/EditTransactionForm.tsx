@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,9 +10,9 @@ import { CategoryCombobox } from '@/components/ui/category-combobox';
 import { ReceiptScanner, ScannedData } from './ReceiptScanner';
 import {
   X, Upload, ArrowDown, ArrowUp, Loader2,
-  Building, CreditCard as CreditCardIcon, Scan,
+  Building, CreditCard as CreditCardIcon, Scan, ImageOff,
 } from 'lucide-react';
-import { useTransactions, Transaction } from '@/hooks/useTransactions';
+import { useTransactions, Transaction, getReceiptUrl } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useCategories } from '@/hooks/useCategories';
@@ -37,6 +37,16 @@ const numToMask = (value: number | string): string => {
   return maskBRL(String(cents));
 };
 
+/** Lê um File como base64 data URL — persistente, ao contrário de createObjectURL */
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = (e) => resolve(e.target?.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transaction, onClose }) => {
   const { updateTransaction } = useTransactions();
   const { accounts } = useAccounts();
@@ -51,12 +61,22 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
   const [notes, setNotes] = useState(transaction.notes || '');
   const [status, setStatus] = useState(transaction.status);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [receiptPreview, setReceiptPreview] = useState<string | null>(
-    transaction.receipt_image_url || null
-  );
+  // Começa null; carregamos a signed URL via useEffect abaixo
+  const [receiptPreview, setReceiptPreview] = useState<string | null>(null);
+  const [receiptLoading, setReceiptLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Carrega a signed URL do comprovante salvo (funciona com bucket privado)
+  useEffect(() => {
+    if (!transaction.receipt_image_url) return;
+    setReceiptLoading(true);
+    getReceiptUrl(transaction.receipt_image_url)
+      .then(url => setReceiptPreview(url))
+      .catch(() => setReceiptPreview(null))
+      .finally(() => setReceiptLoading(false));
+  }, [transaction.receipt_image_url]);
 
   const filteredCategories = categories.filter(
     cat => cat.transaction_type === transaction.type
@@ -79,13 +99,13 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
     setAmountMasked(maskBRL(e.target.value));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setReceiptFile(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => setReceiptPreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    // FileReader gera data URL persistente (createObjectURL expira com a aba)
+    const dataUrl = await fileToDataUrl(file);
+    setReceiptPreview(dataUrl);
   };
 
   const removeReceipt = () => {
@@ -94,20 +114,32 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleScanResult = (data: ScannedData) => {
-    if (data.amount)      setAmountMasked(maskBRL(String(Math.round(data.amount * 100))));
-    if (data.description) setDescription(data.description);
-    if (data.date)        setDate(data.date);
+  const handleScanResult = async (data: ScannedData) => {
+    // Sempre salva o comprovante com data URL persistente
     if (data.thumbnail) {
       setReceiptFile(data.thumbnail);
-      const url = URL.createObjectURL(data.thumbnail);
-      setReceiptPreview(url);
+      // FIX: FileReader ao invés de createObjectURL (que expira)
+      const dataUrl = await fileToDataUrl(data.thumbnail);
+      setReceiptPreview(dataUrl);
     }
+
+    // Só preenche campos se for extração (qr/ocr), nunca em photo-only
+    if (data.source !== 'photo-only') {
+      if (data.amount)      setAmountMasked(maskBRL(String(Math.round(data.amount * 100))));
+      if (data.description) setDescription(data.description);
+      if (data.date)        setDate(data.date);
+    }
+
     setShowScanner(false);
-    enhancedToast.success(
-      data.source === 'qrcode' ? 'NF-e lida com sucesso!' : 'Recibo processado!',
-      { description: data.amount ? `Valor: ${formatCurrency(data.amount)}` : 'Confira os dados.' },
-    );
+
+    if (data.source === 'photo-only') {
+      enhancedToast.success('Comprovante salvo!', { description: 'Foto recortada e anexada à transação.' });
+    } else {
+      enhancedToast.success(
+        data.source === 'qrcode' ? 'NF-e lida com sucesso!' : 'Recibo processado!',
+        { description: data.amount ? `Valor: ${formatCurrency(data.amount)}` : 'Confira os dados.' },
+      );
+    }
   };
 
   const parseAmount = (masked: string): number => {
@@ -135,6 +167,12 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
         notes,
         status,
         receiptFile: receiptFile || undefined,
+        // Se removeu o comprovante, limpa no banco também
+        receipt_image_url: receiptFile
+          ? undefined                          // será sobrescrito pelo upload
+          : receiptPreview
+            ? transaction.receipt_image_url    // mantém o path existente
+            : undefined,                       // foi removido
       });
       enhancedToast.success('Transação atualizada!', {
         description: `${formatCurrency(numericAmount)} salvo com sucesso.`,
@@ -179,7 +217,7 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Valor + Data — overflow-hidden impede que input[type=date] nativo estoure o grid */}
+            {/* Valor + Data */}
             <div className="grid grid-cols-2 gap-4 overflow-hidden">
               <div className="space-y-2 min-w-0 overflow-hidden">
                 <Label htmlFor="edit-amount">Valor *</Label>
@@ -281,14 +319,25 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
             {/* Comprovante / Nota Fiscal */}
             <div className="space-y-2">
               <Label>Comprovante / Nota Fiscal</Label>
-              {!receiptPreview ? (
+
+              {/* Carregando signed URL do comprovante existente */}
+              {receiptLoading && (
+                <div className="flex items-center gap-2 rounded-lg border border-border px-3 py-3 text-sm text-muted-foreground">
+                  <Loader2 size={15} className="animate-spin flex-shrink-0" />
+                  Carregando comprovante...
+                </div>
+              )}
+
+              {!receiptLoading && !receiptPreview && (
                 <div className="flex gap-2">
                   <div
                     className="flex-1 flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors min-w-0"
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <Upload size={15} className="text-muted-foreground flex-shrink-0" />
-                    <span className="text-sm text-muted-foreground truncate">Clique para anexar</span>
+                    <span className="text-sm text-muted-foreground truncate">
+                      {transaction.receipt_image_url ? 'Comprovante indisponível — clique para substituir' : 'Clique para anexar'}
+                    </span>
                   </div>
                   <input
                     ref={fileInputRef}
@@ -322,22 +371,26 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                     </DialogContent>
                   </Dialog>
                 </div>
-              ) : (
+              )}
+
+              {!receiptLoading && receiptPreview && (
                 <div className="relative rounded-lg overflow-hidden border border-border">
                   <img
                     src={receiptPreview}
                     alt="Comprovante"
                     className="w-full max-h-40 object-cover"
+                    onError={() => setReceiptPreview(null)}
                   />
                   <button
                     type="button"
                     onClick={removeReceipt}
                     className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center transition-colors"
+                    title="Remover comprovante"
                   >
                     <X size={14} className="text-white" />
                   </button>
                   <div className="px-3 py-2 bg-muted/80 text-xs text-muted-foreground flex items-center justify-between">
-                    <span className="truncate">{receiptFile?.name ?? 'Recibo atual'}</span>
+                    <span className="truncate">{receiptFile?.name ?? 'Comprovante salvo'}</span>
                     <span className="flex-shrink-0 ml-2">
                       {receiptFile ? `${Math.round(receiptFile.size / 1024)}KB` : ''}
                     </span>
