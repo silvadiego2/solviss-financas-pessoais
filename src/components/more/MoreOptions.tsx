@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Download, Tags, Building, ChevronRight,
-  Shield, Zap, Database, Trash2,
+  Shield, Database, Trash2,
   Sparkles, Crown, Settings, LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -95,9 +95,7 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   const displayEmail = user?.email || '';
   const initial      = displayName.charAt(0).toUpperCase();
 
-  // Ferramentas: Categorização IA + Automação de Regras fundidos em "Automação"
-  // Scanner de Recibos removido — já integrado no formulário de adicionar transação
-  // Detector de Duplicatas removido — roda em background ao importar
+  // Ferramentas: Automação + Importar/Exportar numa única seção (2 itens, sem overhead)
   const toolsItems: MenuItem[] = [
     {
       title: 'Automação',
@@ -106,11 +104,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       action: () => onNavigate('automation-hub'),
       badge: 'IA',
     },
-  ];
-
-  // Dados: Import + Export fundidos em "Importar / Exportar"
-  // Backup Automático removido — movido para Preferências
-  const dataItems: MenuItem[] = [
     {
       title: 'Importar / Exportar',
       description: 'CSV, Excel ou PDF — entrada e saída de dados',
@@ -119,8 +112,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     },
   ];
 
-  // Notificações removidas — já existem dentro de Preferências (SettingsScreen)
-  // Backup Automático removido — movido para Preferências (SettingsScreen)
   const settingsItems: MenuItem[] = [
     {
       title: 'Contas Bancárias',
@@ -191,7 +182,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       </button>
 
       <Group title="Ferramentas"   items={toolsItems}    />
-      <Group title="Dados"         items={dataItems}     />
       <Group title="Configurações" items={settingsItems} />
       <Group title="Avançado"      items={dangerItems}   />
 
