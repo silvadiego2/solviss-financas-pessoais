@@ -5,10 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { CategoryCombobox } from '@/components/ui/category-combobox';
+import { ReceiptScanner, ScannedData } from './ReceiptScanner';
 import {
   X, Upload, ArrowDown, ArrowUp, Loader2,
-  Building, CreditCard as CreditCardIcon,
+  Building, CreditCard as CreditCardIcon, Scan,
 } from 'lucide-react';
 import { useTransactions, Transaction } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
@@ -23,7 +25,6 @@ interface EditTransactionFormProps {
   onClose: () => void;
 }
 
-// Mesma máscara BRL do AddTransactionForm
 const maskBRL = (raw: string): string => {
   const digits = raw.replace(/\D/g, '');
   if (!digits) return '';
@@ -31,7 +32,6 @@ const maskBRL = (raw: string): string => {
   return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-// Converte número salvo (ex: 123.45) para string mascarada ("123,45")
 const numToMask = (value: number | string): string => {
   const cents = Math.round(Number(value) * 100);
   return maskBRL(String(cents));
@@ -55,6 +55,7 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
     transaction.receipt_image_url || null
   );
   const [loading, setLoading] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredCategories = categories.filter(
@@ -65,10 +66,12 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
     ...accounts.map(a => ({
       id: a.id, name: a.name, type: 'account' as const,
       icon: <Building size={15} className="text-muted-foreground" />,
+      label: '(Conta)',
     })),
     ...creditCards.map(c => ({
       id: c.id, name: c.name, type: 'credit_card' as const,
       icon: <CreditCardIcon size={15} className="text-muted-foreground" />,
+      label: '(Cartão)',
     })),
   ];
 
@@ -89,6 +92,23 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
     setReceiptFile(null);
     setReceiptPreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Resultado do scanner — preenche campos
+  const handleScanResult = (data: ScannedData) => {
+    if (data.amount)      setAmountMasked(maskBRL(String(Math.round(data.amount * 100))));
+    if (data.description) setDescription(data.description);
+    if (data.date)        setDate(data.date);
+    if (data.thumbnail) {
+      setReceiptFile(data.thumbnail);
+      const url = URL.createObjectURL(data.thumbnail);
+      setReceiptPreview(url);
+    }
+    setShowScanner(false);
+    enhancedToast.success(
+      data.source === 'qrcode' ? 'NF-e lida com sucesso!' : 'Recibo processado!',
+      { description: data.amount ? `Valor: ${formatCurrency(data.amount)}` : 'Confira os dados.' },
+    );
   };
 
   const parseAmount = (masked: string): number => {
@@ -140,7 +160,6 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <CardTitle>Editar Transação</CardTitle>
-              {/* Badge visual do tipo — não editável */}
               <span
                 className={cn(
                   'inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full',
@@ -163,7 +182,7 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
 
             {/* Valor + Data */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label htmlFor="amount">Valor *</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
@@ -174,17 +193,18 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                     placeholder="0,00"
                     value={amountMasked}
                     onChange={handleAmountChange}
-                    className="pl-9"
+                    className="pl-9 w-full"
                   />
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label htmlFor="date">Data *</Label>
                 <Input
                   id="date"
                   type="date"
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
+                  className="w-full min-w-0"
                   required
                 />
               </div>
@@ -215,9 +235,7 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                       <SelectItem key={a.id} value={a.id}>
                         <span className="flex items-center gap-2">
                           {a.icon} {a.name}
-                          <span className="text-xs text-muted-foreground">
-                            {a.type === 'credit_card' ? '(Cartão)' : '(Conta)'}
-                          </span>
+                          <span className="text-xs text-muted-foreground">{a.label}</span>
                         </span>
                       </SelectItem>
                     ))}
@@ -260,16 +278,18 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
               />
             </div>
 
-            {/* Comprovante */}
+            {/* Comprovante / Nota Fiscal */}
             <div className="space-y-2">
-              <Label>Comprovante</Label>
+              <Label>Comprovante / Nota Fiscal</Label>
               {!receiptPreview ? (
-                <div
-                  className="flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2 cursor-pointer hover:bg-accent transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload size={16} className="text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Clique para anexar</span>
+                <div className="flex gap-2">
+                  <div
+                    className="flex-1 flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors min-w-0"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload size={15} className="text-muted-foreground flex-shrink-0" />
+                    <span className="text-sm text-muted-foreground truncate">Clique para anexar</span>
+                  </div>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -277,6 +297,32 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                     onChange={handleFileChange}
                     className="hidden"
                   />
+
+                  {/* Botão scanner — igual ao AddTransactionForm */}
+                  <Dialog open={showScanner} onOpenChange={setShowScanner}>
+                    <DialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="flex items-center gap-1.5 px-3 flex-shrink-0"
+                        title="Escanear nota fiscal"
+                      >
+                        <Scan size={15} />
+                        <span className="text-xs hidden sm:inline">Escanear NF</span>
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-sm max-h-[92dvh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                          <Scan size={16} /> Scanner de Nota Fiscal
+                        </DialogTitle>
+                      </DialogHeader>
+                      <ReceiptScanner
+                        onResult={handleScanResult}
+                        onCancel={() => setShowScanner(false)}
+                      />
+                    </DialogContent>
+                  </Dialog>
                 </div>
               ) : (
                 <div className="relative rounded-lg overflow-hidden border border-border">
@@ -292,8 +338,11 @@ export const EditTransactionForm: React.FC<EditTransactionFormProps> = ({ transa
                   >
                     <X size={14} className="text-white" />
                   </button>
-                  <div className="px-3 py-2 bg-muted/80 text-xs text-muted-foreground truncate">
-                    {receiptFile?.name ?? 'Recibo atual'}
+                  <div className="px-3 py-2 bg-muted/80 text-xs text-muted-foreground flex items-center justify-between">
+                    <span className="truncate">{receiptFile?.name ?? 'Recibo atual'}</span>
+                    <span className="flex-shrink-0 ml-2">
+                      {receiptFile ? `${Math.round(receiptFile.size / 1024)}KB` : ''}
+                    </span>
                   </div>
                 </div>
               )}

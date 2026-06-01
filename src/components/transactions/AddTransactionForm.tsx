@@ -59,7 +59,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
 
-  // sugestão automática de categoria
   useEffect(() => {
     if (categoryId || !description) return;
     const suggested = suggestCategoryId(description, filteredCategories as any, type);
@@ -83,7 +82,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) =>
     setAmount(maskBRL(e.target.value));
 
-  // ── anexo manual (sem scanner) ─────────────────────────────────────────────
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -99,7 +97,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // ── resultado do ReceiptScanner ────────────────────────────────────────────
   const handleScanResult = (data: ScannedData) => {
     if (data.amount)      setAmount(maskBRL(String(Math.round(data.amount * 100))));
     if (data.description) setDescription(data.description);
@@ -116,7 +113,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     );
   };
 
-  // ── submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationErrors({});
@@ -153,7 +149,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
         `${type === 'income' ? 'Receita' : 'Despesa'} adicionada!`,
         { description: `${formatCurrency(numericAmount)} registrado com sucesso.` },
       );
-      // reset
       setAmount(''); setDescription(''); setAccountId('');
       setCategoryId(''); setDate(todayISO());
       removeReceipt(); setIsRecurring(false);
@@ -216,7 +211,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             {/* Valor + Data */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label htmlFor="amount">Valor *</Label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground font-medium">R$</span>
@@ -227,14 +222,20 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                     placeholder="0,00"
                     value={amount}
                     onChange={handleAmountChange}
-                    className="pl-9"
+                    className="pl-9 w-full"
                   />
                 </div>
                 {validationErrors.amount && <p className="text-xs text-destructive">{validationErrors.amount}</p>}
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <Label htmlFor="date">Data</Label>
-                <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+                <Input
+                  id="date"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="w-full min-w-0"
+                />
               </div>
             </div>
 
@@ -303,7 +304,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               </div>
               {isRecurring && (
                 <div className="grid grid-cols-2 gap-4 pt-1">
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label htmlFor="frequency">Frequência</Label>
                     <Select value={recurrenceFrequency} onValueChange={(v: any) => setRecurrenceFrequency(v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
@@ -315,9 +316,16 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 min-w-0">
                     <Label htmlFor="endDate">Data Final</Label>
-                    <Input id="endDate" type="date" value={recurrenceEndDate} onChange={(e) => setRecurrenceEndDate(e.target.value)} min={date} />
+                    <Input
+                      id="endDate"
+                      type="date"
+                      value={recurrenceEndDate}
+                      onChange={(e) => setRecurrenceEndDate(e.target.value)}
+                      min={date}
+                      className="w-full min-w-0"
+                    />
                   </div>
                 </div>
               )}
@@ -329,17 +337,15 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
               {!receiptPreview ? (
                 <div className="flex gap-2">
-                  {/* Anexo manual */}
                   <div
-                    className="flex-1 flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors"
+                    className="flex-1 flex items-center gap-2 border border-dashed border-border rounded-lg px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors min-w-0"
                     onClick={() => fileInputRef.current?.click()}
                   >
                     <Upload size={15} className="text-muted-foreground flex-shrink-0" />
-                    <span className="text-sm text-muted-foreground">Clique para anexar</span>
+                    <span className="text-sm text-muted-foreground truncate">Clique para anexar</span>
                   </div>
                   <input ref={fileInputRef} type="file" accept="image/*,.pdf" onChange={handleFileChange} className="hidden" />
 
-                  {/* Botão scanner */}
                   <Dialog open={showScanner} onOpenChange={setShowScanner}>
                     <DialogTrigger asChild>
                       <Button
@@ -366,7 +372,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                   </Dialog>
                 </div>
               ) : (
-                /* preview do comprovante */
                 <div className="relative rounded-lg overflow-hidden border border-border">
                   <img src={receiptPreview} alt="Comprovante" className="w-full max-h-40 object-cover" />
                   <button
