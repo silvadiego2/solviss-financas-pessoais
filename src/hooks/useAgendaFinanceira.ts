@@ -3,14 +3,15 @@
  * ─────────────────────────────────────────────────────────────────────────────
  * Janela de busca: 30 dias passados + 90 dias futuros.
  *
- * O limite superior (+90 dias) é essencial: sem ele a query não retorna
- * transações com data futura (contas a pagar/receber próximos meses),
- * deixando as métricas de "A pagar" / "A receber" zeradas.
+ * Correções em relação à versão anterior:
+ *  • paid_at não existe na tabela transactions (removido do select)
+ *  • status do banco: 'pending' | 'completed' | 'cancelled' — sem 'overdue'/'paid'
+ *    O resolvedStatus é derivado no cliente, não lido do banco.
+ *  • windowEnd (+90 dias) garante que contas futuras apareçam nas métricas.
  *
- * Mapeamento de tabela (fonte única de verdade: `transactions`):
+ * Mapeamento:
  *   income  → receivable (a receber)
  *   expense → payable    (a pagar)
- *   status: pending/overdue derivado de `status` + data de vencimento
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
@@ -34,7 +35,6 @@ export interface AgendaItem {
   recurrent: boolean;
   recurrence_frequency?: 'monthly' | 'weekly' | 'yearly';
   notes?: string;
-  paid_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -53,46 +53,48 @@ export interface CreateAgendaItem {
 
 const QUERY_KEY = (userId: string) => ['agenda-financeira', userId];
 
-/** Janela de busca: hoje − 30 dias */
 function windowStart(): string {
   const d = new Date();
   d.setDate(d.getDate() - 30);
   return d.toISOString().split('T')[0];
 }
 
-/** Janela de busca: hoje + 90 dias (inclui contas futuras) */
 function windowEnd(): string {
   const d = new Date();
   d.setDate(d.getDate() + 90);
-  return d.toISOString().split('T')[0];
+  // T23:59:59 para capturar timestamps UTC do mesmo dia
+  return `${d.toISOString().split('T')[0]}T23:59:59`;
 }
 
 async function fetchAgenda(userId: string): Promise<AgendaItem[]> {
   const today = new Date().toISOString().split('T')[0];
 
+  // paid_at NÃO existe na tabela — removido do select para evitar erro
   const { data, error } = await supabase
     .from('transactions')
     .select(
       'id, user_id, description, amount, type, date, status, ' +
       'category_id, account_id, is_recurring, recurrence_frequency, ' +
-      'notes, paid_at, created_at, updated_at'
+      'notes, created_at, updated_at'
     )
     .eq('user_id', userId)
     .gte('date', windowStart())
-    .lte('date', windowEnd())   // ← antes ausente: transacões futuras ficavam de fora
+    .lte('date', windowEnd())
     .order('date', { ascending: true })
     .limit(500);
 
   if (error) throw error;
 
   return (data ?? []).map((t: any) => {
-    const tDate     = (t.date ?? '').split('T')[0];
-    const rawStatus = t.status ?? 'pending';
-    let resolvedStatus: AgendaStatus;
+    const tDate = (t.date ?? '').split('T')[0];
 
-    if (rawStatus === 'completed' || rawStatus === 'paid') {
+    // status do banco: 'pending' | 'completed' | 'cancelled'
+    // resolvedStatus é derivado no cliente
+    let resolvedStatus: AgendaStatus;
+    const raw = t.status ?? 'pending';
+    if (raw === 'completed') {
       resolvedStatus = 'paid';
-    } else if (rawStatus === 'cancelled') {
+    } else if (raw === 'cancelled') {
       resolvedStatus = 'cancelled';
     } else if (tDate < today) {
       resolvedStatus = 'overdue';
@@ -110,12 +112,11 @@ async function fetchAgenda(userId: string): Promise<AgendaItem[]> {
       status:               resolvedStatus,
       category_id:          t.category_id          ?? undefined,
       account_id:           t.account_id           ?? undefined,
-      recurrent:            t.is_recurring ?? t.recurrent ?? false,
+      recurrent:            t.is_recurring         ?? false,
       recurrence_frequency: t.recurrence_frequency ?? undefined,
-      notes:                t.notes   ?? undefined,
-      paid_at:              t.paid_at ?? undefined,
-      created_at:           t.created_at ?? '',
-      updated_at:           t.updated_at ?? '',
+      notes:                t.notes                ?? undefined,
+      created_at:           t.created_at           ?? '',
+      updated_at:           t.updated_at           ?? '',
     } satisfies AgendaItem;
   });
 }
@@ -137,19 +138,18 @@ export const useAgendaFinanceira = () => {
     },
   });
 
-  // ── createItem ────────────────────────────────────────────────────────────────────
+  // ── createItem ────────────────────────────────────────────────────────────
   const createMutation = useMutation({
     mutationFn: async (data: CreateAgendaItem) => {
       if (!user) throw new Error('Usuário não autenticado');
-
       const payload: Record<string, any> = {
         user_id:     user.id,
         type:        data.type === 'receivable' ? 'income' : 'expense',
         description: data.description,
         amount:      data.amount,
         date:        data.due_date,
-        category_id: data.category_id ?? null,
         account_id:  data.account_id  ?? null,
+        category_id: data.category_id ?? null,
       };
       if (data.recurrent !== undefined)  payload.is_recurring         = data.recurrent;
       if (data.recurrence_frequency)     payload.recurrence_frequency = data.recurrence_frequency;
@@ -165,19 +165,16 @@ export const useAgendaFinanceira = () => {
     onError: (err: any) => toast.error(err.message || 'Erro ao criar lançamento'),
   });
 
-  // ── markAsPaid ──────────────────────────────────────────────────────────────────
+  // ── markAsPaid ────────────────────────────────────────────────────────────
   const markAsPaidMutation = useMutation({
     mutationFn: async (id: string) => {
+      // status válido no banco: 'completed' (não 'paid')
       const { error } = await supabase
         .from('transactions')
         .update({ status: 'completed' })
         .eq('id', id)
         .eq('user_id', user!.id);
-
-      if (error) {
-        if (error.message?.includes('column') || error.message?.includes('does not exist')) return;
-        throw error;
-      }
+      if (error && !error.message?.includes('does not exist')) throw error;
     },
     onSuccess: () => {
       toast.success('Lançamento marcado como pago!');
@@ -186,7 +183,7 @@ export const useAgendaFinanceira = () => {
     onError: (err: any) => toast.error(err.message || 'Erro ao atualizar lançamento'),
   });
 
-  // ── cancelItem ──────────────────────────────────────────────────────────────────
+  // ── cancelItem ────────────────────────────────────────────────────────────
   const cancelMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -194,11 +191,7 @@ export const useAgendaFinanceira = () => {
         .update({ status: 'cancelled' })
         .eq('id', id)
         .eq('user_id', user!.id);
-
-      if (error) {
-        if (error.message?.includes('column') || error.message?.includes('does not exist')) return;
-        throw error;
-      }
+      if (error && !error.message?.includes('does not exist')) throw error;
     },
     onSuccess: () => {
       toast.success('Lançamento cancelado');
@@ -207,7 +200,7 @@ export const useAgendaFinanceira = () => {
     onError: (err: any) => toast.error(err.message || 'Erro ao cancelar lançamento'),
   });
 
-  // ── deleteItem ──────────────────────────────────────────────────────────────────
+  // ── deleteItem ────────────────────────────────────────────────────────────
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
@@ -215,7 +208,6 @@ export const useAgendaFinanceira = () => {
         .delete()
         .eq('id', id)
         .eq('user_id', user!.id);
-
       if (error) throw error;
     },
     onSuccess: () => {
@@ -225,17 +217,24 @@ export const useAgendaFinanceira = () => {
     onError: (err: any) => toast.error(err.message || 'Erro ao remover lançamento'),
   });
 
-  // ── Stats via useMemo ───────────────────────────────────────────────────────────
+  // ── Stats via useMemo ─────────────────────────────────────────────────────
   const stats = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    const next7 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const next7 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+      .toISOString().split('T')[0];
     const active = (s: AgendaStatus) => s !== 'cancelled' && s !== 'paid';
 
     return {
-      totalPayable:    items.filter(i => i.type === 'payable'    && active(i.status)).reduce((s, i) => s + i.amount, 0),
-      totalReceivable: items.filter(i => i.type === 'receivable' && active(i.status)).reduce((s, i) => s + i.amount, 0),
-      overdue:         items.filter(i => i.status === 'overdue').length,
-      dueThisWeek:     items.filter(i => i.due_date >= today && i.due_date <= next7 && i.status === 'pending').length,
+      totalPayable:    items
+        .filter(i => i.type === 'payable'    && active(i.status))
+        .reduce((s, i) => s + i.amount, 0),
+      totalReceivable: items
+        .filter(i => i.type === 'receivable' && active(i.status))
+        .reduce((s, i) => s + i.amount, 0),
+      overdue:     items.filter(i => i.status === 'overdue').length,
+      dueThisWeek: items.filter(
+        i => i.due_date >= today && i.due_date <= next7 && i.status === 'pending'
+      ).length,
     };
   }, [items]);
 

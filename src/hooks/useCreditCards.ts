@@ -24,7 +24,6 @@ function localDateStr(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
-/** Retorna "YYYY-MM-DD" de hoje no horário local. */
 function todayStr(): string {
   return localDateStr(new Date());
 }
@@ -32,54 +31,56 @@ function todayStr(): string {
 /**
  * Ciclo da fatura ATUAL.
  *
- * A lógica correta é:
- *   - Monta a data de fechamento do mês corrente.
- *   - Se hoje > dataFechamentoCorrente → fatura do próximo mês.
- *   - Senão → fatura do mês corrente.
+ * Usa datas reais (não comparação numérica) para evitar bug do último
+ * dia do mês. Ex: 31/Mai com closingDay=30 → closing=30/Mai,
+ * hoje(31)>30/Mai → fatura de Junho. ✓
  *
- * Usar datas reais evita o bug do último dia do mês:
- *   Ex: 31/Mai, closingDay=30 → com números puros (31>30) ia pro Jul;
- *       com datas: closingCorrente=30/Mai, hoje(31)>30/Mai → vai p/ Jun. ✓
+ * Retorna também `endISO` com T23:59:59 para que o `.lte()` no Supabase
+ * capture transações salvas como timestamptz em UTC:
+ *   2026-06-01T03:00:00Z = 01/Jun 00:00 BRT → sem o T23:59:59 ficaria fora.
  */
-function getInvoiceCycle(closingDay: number): { start: string; end: string } {
+function getInvoiceCycle(closingDay: number): {
+  start: string;
+  end: string;
+  endISO: string;
+} {
   const today      = new Date();
   const todayYear  = today.getFullYear();
-  const todayMonth = today.getMonth(); // 0-based
+  const todayMonth = today.getMonth();
 
-  // Data de fechamento no mês corrente (clamped ao último dia do mês)
-  const daysInCurrent   = new Date(todayYear, todayMonth + 1, 0).getDate();
+  const daysInCurrent    = new Date(todayYear, todayMonth + 1, 0).getDate();
   const closingThisMonth = new Date(
     todayYear,
     todayMonth,
     Math.min(closingDay, daysInCurrent)
   );
 
-  // Se hoje JÁ passou do fechamento deste mês → fatura do próximo mês
   const pastClosing = today > closingThisMonth;
 
   let invYear: number;
   let invMonth: number;
   if (pastClosing) {
-    if (todayMonth === 11) { invYear = todayYear + 1; invMonth = 0; }
-    else                   { invYear = todayYear;     invMonth = todayMonth + 1; }
+    invYear  = todayMonth === 11 ? todayYear + 1 : todayYear;
+    invMonth = todayMonth === 11 ? 0 : todayMonth + 1;
   } else {
     invYear  = todayYear;
     invMonth = todayMonth;
   }
 
-  // Fim do ciclo = dia de fechamento no mês da fatura (clamped)
   const daysInInvMonth = new Date(invYear, invMonth + 1, 0).getDate();
   const endDay         = Math.min(closingDay, daysInInvMonth);
   const endDate        = new Date(invYear, invMonth, endDay);
 
-  // Início do ciclo = (dia de fechamento + 1) no mês anterior ao da fatura
   const prevYear  = invMonth === 0 ? invYear - 1 : invYear;
   const prevMonth = invMonth === 0 ? 11 : invMonth - 1;
   const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
   const startDay  = Math.min(closingDay + 1, daysInPrevMonth);
   const startDate = new Date(prevYear, prevMonth, startDay);
 
-  return { start: localDateStr(startDate), end: localDateStr(endDate) };
+  const end    = localDateStr(endDate);
+  const endISO = `${end}T23:59:59`;   // cobre timestamps UTC do mesmo dia
+
+  return { start: localDateStr(startDate), end, endISO };
 }
 
 export const useCreditCards = () => {
@@ -102,9 +103,12 @@ export const useCreditCards = () => {
 
     const results = await Promise.all(
       accounts.map(async (account) => {
-        const closingDay = account.closing_day || 1;
-        const { start, end } = getInvoiceCycle(closingDay);
+        // closing_day nullable → usa 10 como padrão (padrão de mercado)
+        const closingDay = account.closing_day ?? 10;
+        const { start, endISO } = getInvoiceCycle(closingDay);
 
+        // Busca todas as transações do ciclo (pending + completed).
+        // Só exclui cancelled para não inflar o valor.
         const { data: txRows, error: txErr } = await supabase
           .from('transactions')
           .select('amount, type')
@@ -112,13 +116,13 @@ export const useCreditCards = () => {
           .eq('account_id', account.id)
           .neq('status', 'cancelled')
           .gte('date', start)
-          .lte('date', end);
+          .lte('date', endISO);
 
         if (txErr) throw txErr;
 
         const used_amount = (txRows || []).reduce((sum, tx) => {
-          if (tx.type === 'expense') return sum + Number(tx.amount);
-          if (tx.type === 'income')  return sum - Number(tx.amount);
+          if (tx.type === 'expense')  return sum + Number(tx.amount);
+          if (tx.type === 'income')   return sum - Number(tx.amount); // estorno/crédito
           return sum;
         }, 0);
 
@@ -131,7 +135,7 @@ export const useCreditCards = () => {
           limit,
           used_amount: Math.max(0, used_amount),
           closing_day: closingDay,
-          due_day:     account.due_day || 10,
+          due_day:     account.due_day ?? 10,
           is_active:   account.is_active ?? true,
           created_at:  account.created_at || '',
           updated_at:  account.updated_at || '',
@@ -176,31 +180,31 @@ export const useCreditCards = () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Cartão adicionado com sucesso!');
     },
-    onError: (error: any) => toast.error('Erro ao adicionar cartão', { description: error?.message }),
+    onError: (e: any) => toast.error('Erro ao adicionar cartão', { description: e?.message }),
   });
 
   const updateCreditCardMutation = useMutation({
     mutationFn: async ({ id, ...updates }: Partial<CreditCard> & { id: string }) => {
       const updateData: any = {};
-      if (updates.name)                   updateData.name        = updates.name;
-      if (updates.bank_name !== undefined) updateData.bank_name   = updates.bank_name;
-      if (updates.closing_day)             updateData.closing_day = updates.closing_day;
-      if (updates.due_day)                 updateData.due_day     = updates.due_day;
-      if (updates.is_active !== undefined) updateData.is_active   = updates.is_active;
+      if (updates.name)                    updateData.name        = updates.name;
+      if (updates.bank_name !== undefined)  updateData.bank_name   = updates.bank_name;
+      if (updates.closing_day)              updateData.closing_day = updates.closing_day;
+      if (updates.due_day)                  updateData.due_day     = updates.due_day;
+      if (updates.is_active !== undefined)  updateData.is_active   = updates.is_active;
 
       if (updates.limit !== undefined || updates.used_amount !== undefined) {
         let used  = updates.used_amount;
         let limit = updates.limit;
         if (used === undefined || limit === undefined) {
-          const { data: current, error: fetchErr } = await supabase
+          const { data: cur, error: fetchErr } = await supabase
             .from('accounts')
             .select('credit_limit, balance')
             .eq('id', id)
             .eq('user_id', user?.id)
             .single();
           if (fetchErr) throw fetchErr;
-          const cl = Number(current?.credit_limit || 0);
-          const cb = Number(current?.balance      || 0);
+          const cl = Number(cur?.credit_limit || 0);
+          const cb = Number(cur?.balance      || 0);
           if (used  === undefined) used  = cl - cb;
           if (limit === undefined) limit = cl;
         }
@@ -224,7 +228,7 @@ export const useCreditCards = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       toast.success('Cartão atualizado com sucesso!');
     },
-    onError: (error: any) => toast.error('Erro ao atualizar cartão', { description: error?.message }),
+    onError: (e: any) => toast.error('Erro ao atualizar cartão', { description: e?.message }),
   });
 
   const deleteCreditCardMutation = useMutation({
@@ -241,7 +245,7 @@ export const useCreditCards = () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success('Cartão excluído com sucesso!');
     },
-    onError: (error: any) => toast.error('Erro ao excluir cartão', { description: error?.message }),
+    onError: (e: any) => toast.error('Erro ao excluir cartão', { description: e?.message }),
   });
 
   return {
