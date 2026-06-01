@@ -3,9 +3,11 @@ import {
   Download, Upload, Tags, User, Building, ChevronRight,
   Shield, Cloud, Zap, Database, Trash2, BarChart3,
   Settings, Copy, Sparkles, CalendarClock, Bell, CalendarRange,
-  ScanLine, Brain,
+  ScanLine, Brain, LogOut,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/components/auth/AuthProvider';
+import { supabase } from '@/integrations/supabase/client';
 
 interface MoreOptionsProps {
   onNavigate: (tab: string) => void;
@@ -13,72 +15,101 @@ interface MoreOptionsProps {
 
 interface MenuItem {
   title: string;
-  description: string;
+  description?: string;
   icon: React.ElementType;
   action: () => void;
   highlight?: boolean;
   destructive?: boolean;
   badge?: string;
+  disabled?: boolean;
 }
 
-const Section: React.FC<{ title: string; items: MenuItem[] }> = ({ title, items }) => (
-  <section className="space-y-1">
-    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 px-1 mb-2">
+// ──────────────────────────────────────────────
+// Row simples: ícone + texto + seta
+// ──────────────────────────────────────────────
+const Row: React.FC<MenuItem> = (item) => (
+  <button
+    onClick={item.disabled ? undefined : item.action}
+    disabled={item.disabled}
+    className={cn(
+      'flex items-center gap-3 w-full rounded-xl px-4 py-3.5 text-left transition-all group',
+      item.disabled && 'opacity-40 cursor-not-allowed',
+      item.destructive
+        ? 'hover:bg-destructive/8 active:bg-destructive/12'
+        : item.highlight
+        ? 'bg-primary/5 border border-primary/20 hover:bg-primary/10 active:bg-primary/15'
+        : 'hover:bg-accent active:bg-accent/80'
+    )}
+  >
+    <div className={cn(
+      'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors',
+      item.destructive
+        ? 'bg-destructive/10 text-destructive'
+        : item.highlight
+        ? 'bg-primary/15 text-primary'
+        : 'bg-muted text-muted-foreground group-hover:bg-accent-foreground/10 group-hover:text-foreground'
+    )}>
+      <item.icon size={17} />
+    </div>
+
+    <div className="flex-1 min-w-0">
+      <div className="flex items-center gap-2">
+        <span className={cn(
+          'text-sm font-medium leading-snug',
+          item.destructive ? 'text-destructive' : 'text-foreground'
+        )}>
+          {item.title}
+        </span>
+        {item.badge && (
+          <span className="text-[10px] font-semibold bg-primary/15 text-primary px-1.5 py-0.5 rounded-full leading-none">
+            {item.badge}
+          </span>
+        )}
+      </div>
+      {item.description && (
+        <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</p>
+      )}
+    </div>
+
+    {!item.destructive && (
+      <ChevronRight size={15} className="text-muted-foreground/40 flex-shrink-0 group-hover:text-muted-foreground transition-colors" />
+    )}
+  </button>
+);
+
+// ──────────────────────────────────────────────
+// Grupo com título de seção
+// ──────────────────────────────────────────────
+const Group: React.FC<{ title: string; items: MenuItem[] }> = ({ title, items }) => (
+  <section>
+    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 px-1 mb-1.5">
       {title}
     </p>
-    <div className="grid grid-cols-1 gap-1">
+    <div className="bg-card border border-border rounded-2xl overflow-hidden divide-y divide-border">
       {items.map((item) => (
-        <button
-          key={item.title}
-          onClick={item.action}
-          className={cn(
-            'flex items-center gap-3 w-full rounded-xl px-4 py-3 text-left transition-all group',
-            item.destructive
-              ? 'hover:bg-destructive/8 text-destructive'
-              : item.highlight
-              ? 'bg-primary/5 border border-primary/20 hover:bg-primary/10'
-              : 'hover:bg-accent'
-          )}
-        >
-          <div className={cn(
-            'w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors',
-            item.destructive
-              ? 'bg-destructive/10 text-destructive'
-              : item.highlight
-              ? 'bg-primary/15 text-primary'
-              : 'bg-muted text-muted-foreground group-hover:bg-accent-foreground/10 group-hover:text-foreground'
-          )}>
-            <item.icon size={17} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className={cn(
-                'text-sm font-medium',
-                item.destructive ? 'text-destructive' : 'text-foreground'
-              )}>
-                {item.title}
-              </span>
-              {item.badge && (
-                <span className="text-[10px] font-semibold bg-primary/15 text-primary px-1.5 py-0.5 rounded-full">
-                  {item.badge}
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">{item.description}</p>
-          </div>
-          <ChevronRight size={15} className="text-muted-foreground/50 flex-shrink-0 group-hover:text-muted-foreground transition-colors" />
-        </button>
+        <Row key={item.title} {...item} />
       ))}
     </div>
   </section>
 );
 
+// ──────────────────────────────────────────────
+// Componente principal
+// ──────────────────────────────────────────────
 export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
-  // Seção Finanças — apenas itens SEM equivalente na sidebar principal
-  // Removidos (já são tabs de primeiro nível):
-  //   Cartões de Crédito (cards), Metas Financeiras (goals),
-  //   Transações Recorrentes (recurring-transactions),
-  //   Fluxo de Caixa (cash-flow), Inteligência Financeira (intelligence)
+  const { user } = useAuth();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  // Avatar placeholder com inicial do nome/email
+  const displayName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Usuário';
+  const displayEmail = user?.email || '';
+  const initial = displayName.charAt(0).toUpperCase();
+
+  // ── Grupos ──────────────────────────────────
+
   const financeItems: MenuItem[] = [
     {
       title: 'Agenda Financeira',
@@ -93,25 +124,37 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       icon: CalendarRange,
       action: () => onNavigate('budgets-list'),
     },
+    {
+      title: 'Contas Bancárias',
+      description: 'Gerenciar contas e saldos',
+      icon: Building,
+      action: () => onNavigate('accounts'),
+    },
+    {
+      title: 'Categorias',
+      description: 'Criar e editar categorias',
+      icon: Tags,
+      action: () => onNavigate('categories'),
+    },
   ];
 
-  const analyticItems: MenuItem[] = [
+  const toolsItems: MenuItem[] = [
     {
-      title: 'Central de Analytics',
-      description: 'Analytics avançados',
+      title: 'Analytics Avançado',
+      description: 'Gráficos e indicadores detalhados',
       icon: BarChart3,
       action: () => onNavigate('analytics'),
     },
     {
-      title: 'Categorização Automática',
-      description: 'Classificação por IA',
+      title: 'Categorização por IA',
+      description: 'Classificação automática de gastos',
       icon: Sparkles,
       action: () => onNavigate('auto-categorization'),
       badge: 'IA',
     },
     {
-      title: 'Automação Financeira',
-      description: 'Regras automáticas',
+      title: 'Automação de Regras',
+      description: 'Ações automáticas em transações',
       icon: Zap,
       action: () => onNavigate('auto-rules'),
     },
@@ -121,57 +164,39 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       icon: Copy,
       action: () => onNavigate('duplicate-detection'),
     },
+    {
+      title: 'Scanner de Recibos',
+      description: 'Escanear comprovantes por foto',
+      icon: ScanLine,
+      action: () => onNavigate('receipt-scanner'),
+    },
   ];
 
   const dataItems: MenuItem[] = [
     {
-      title: 'Contas Bancárias',
-      description: 'Gerenciar contas e saldos',
-      icon: Building,
-      action: () => onNavigate('accounts'),
-    },
-    {
-      title: 'Gerenciar Categorias',
-      description: 'Criar e editar categorias',
-      icon: Tags,
-      action: () => onNavigate('categories'),
-    },
-    {
-      title: 'Scanner de Recibos',
-      description: 'Escanear comprovantes',
-      icon: ScanLine,
-      action: () => onNavigate('receipt-scanner'),
-    },
-    {
       title: 'Importar Transações',
-      description: 'Importar de CSV ou Excel',
+      description: 'CSV ou Excel',
       icon: Upload,
       action: () => onNavigate('import-transactions'),
     },
     {
       title: 'Exportar Relatórios',
-      description: 'Baixar dados financeiros',
+      description: 'Baixar dados em planilha ou PDF',
       icon: Download,
       action: () => onNavigate('export'),
     },
     {
       title: 'Backup Automático',
-      description: 'Configurar backup na nuvem',
+      description: 'Sincronização na nuvem',
       icon: Cloud,
       action: () => onNavigate('auto-backup'),
     },
   ];
 
-  const accountItems: MenuItem[] = [
-    {
-      title: 'Perfil do Usuário',
-      description: 'Editar informações pessoais',
-      icon: User,
-      action: () => onNavigate('profile'),
-    },
+  const settingsItems: MenuItem[] = [
     {
       title: 'Configurações',
-      description: 'Tema, moeda, notificações',
+      description: 'Tema, moeda e preferências',
       icon: Settings,
       action: () => onNavigate('settings'),
     },
@@ -182,26 +207,29 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       action: () => onNavigate('notifications'),
     },
     {
-      title: 'Segurança e Auditoria',
-      description: 'Log de atividades e sessões',
+      title: 'Segurança',
+      description: 'Log de atividades e sessões ativas',
       icon: Shield,
       action: () => onNavigate('security'),
     },
     {
       title: 'Planos e Assinatura',
-      description: 'Ver planos premium disponíveis',
+      description: 'Recursos premium disponíveis',
       icon: Brain,
       action: () => onNavigate('plans'),
     },
+  ];
+
+  const dangerItems: MenuItem[] = [
     {
       title: 'Dados de Demonstração',
-      description: 'Criar dados de exemplo',
+      description: 'Preencher conta com dados de exemplo',
       icon: Database,
       action: () => onNavigate('demo-data'),
     },
     {
       title: 'Limpar Todos os Dados',
-      description: 'Remover todos os dados (irreversível)',
+      description: 'Remove todas as transações (irreversível)',
       icon: Trash2,
       action: () => onNavigate('data-reset'),
       destructive: true,
@@ -209,16 +237,45 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
   ];
 
   return (
-    <div className="space-y-8 pb-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Mais opções</h1>
-        <p className="text-sm text-muted-foreground mt-1">Gerencie todas as funções do Solviss</p>
-      </div>
+    <div className="space-y-6 pb-8">
 
-      <Section title="Finanças" items={financeItems} />
-      <Section title="Análise & Automação" items={analyticItems} />
-      <Section title="Dados & Importação" items={dataItems} />
-      <Section title="Conta" items={accountItems} />
+      {/* ── Cabeçalho de perfil ── */}
+      <button
+        onClick={() => onNavigate('profile')}
+        className="w-full flex items-center gap-4 p-4 rounded-2xl bg-card border border-border hover:bg-accent active:bg-accent/80 transition-all text-left group"
+      >
+        {/* Avatar */}
+        <div className="w-12 h-12 rounded-full bg-primary/15 text-primary flex items-center justify-center text-lg font-bold flex-shrink-0">
+          {initial}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-foreground text-sm leading-tight truncate">{displayName}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 truncate">{displayEmail}</p>
+        </div>
+
+        <div className="flex items-center gap-1 text-xs text-primary font-medium flex-shrink-0 group-hover:underline">
+          Editar perfil
+          <ChevronRight size={14} />
+        </div>
+      </button>
+
+      {/* ── Seções ── */}
+      <Group title="Finanças" items={financeItems} />
+      <Group title="Ferramentas" items={toolsItems} />
+      <Group title="Dados" items={dataItems} />
+      <Group title="Configurações" items={settingsItems} />
+      <Group title="Avançado" items={dangerItems} />
+
+      {/* ── Sair ── */}
+      <button
+        onClick={handleLogout}
+        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border border-destructive/30 text-destructive text-sm font-medium hover:bg-destructive/8 active:bg-destructive/12 transition-all"
+      >
+        <LogOut size={16} />
+        Sair da conta
+      </button>
+
     </div>
   );
 };
