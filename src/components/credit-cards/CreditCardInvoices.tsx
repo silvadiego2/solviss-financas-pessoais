@@ -6,7 +6,9 @@ import {
   ArrowLeft, Calendar, Receipt, ChevronDown, ChevronUp,
   Pencil, Trash2, CreditCard as CardIcon,
 } from 'lucide-react';
-import { useTransactions, Transaction } from '@/hooks/useTransactions';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { CreditCard } from '@/hooks/useCreditCards';
 import { TransactionSheet } from '@/components/transactions/TransactionSheet';
 import {
@@ -17,6 +19,7 @@ import {
 import { formatCurrency, formatDateBR } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { Transaction } from '@/hooks/useTransactions';
 
 interface Props {
   card: CreditCard;
@@ -30,9 +33,24 @@ const MONTH_NAMES = [
   'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro',
 ];
 
-// Retorna o período de fatura (ano/mês) de uma transação, levando em conta o dia de fechamento
-function invoicePeriod(date: Date, closingDay: number): { year: number; month: number } {
-  const d = date.getDate();
+/**
+ * Converte "YYYY-MM-DD" em Date LOCAL sem deslocamento UTC.
+ * new Date("2026-06-01") = UTC midnight = 31/Mai 21:00 BRT → errado.
+ * new Date(2026, 5, 1)   = local midnight               → correto.
+ */
+function parseDateLocal(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/**
+ * Retorna o período de fatura (ano/mês) de uma transação,
+ * levando em conta o dia de fechamento.
+ * Usa a data LOCAL da transação (não UTC).
+ */
+function invoicePeriod(dateStr: string, closingDay: number): { year: number; month: number } {
+  const date = parseDateLocal(dateStr);
+  const d    = date.getDate();
   if (d > closingDay) {
     const next = new Date(date.getFullYear(), date.getMonth() + 1, 1);
     return { year: next.getFullYear(), month: next.getMonth() };
@@ -40,24 +58,77 @@ function invoicePeriod(date: Date, closingDay: number): { year: number; month: n
   return { year: date.getFullYear(), month: date.getMonth() };
 }
 
+/** Busca TODAS as transações de um cartão sem limite de paginação. */
+async function fetchAllCardTransactions(userId: string, accountId: string) {
+  const PAGE = 1000;
+  let from    = 0;
+  let rows: any[] = [];
+
+  while (true) {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`
+        *,
+        category:categories(id, name, icon, color)
+      `)
+      .eq('user_id', userId)
+      .eq('account_id', accountId)
+      .or('status.is.null,status.neq.cancelled')
+      .order('date', { ascending: false })
+      .range(from, from + PAGE - 1);
+
+    if (error) throw error;
+    rows = rows.concat(data ?? []);
+    if (!data || data.length < PAGE) break;
+    from += PAGE;
+  }
+
+  return rows.map((t: any) => ({
+    ...t,
+    amount:        Number(t.amount),
+    category_name: t.category?.name ?? null,
+  })) as Transaction[];
+}
+
 export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
-  // Busca apenas transações deste cartão — sem carregar tudo em memória
-  const { transactions, deleteTransaction, loading } = useTransactions({ account_id: card.id });
+  const { user }    = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data: transactions = [], isLoading: loading } = useQuery({
+    queryKey:  ['card-invoices', card.id],
+    queryFn:   () => fetchAllCardTransactions(user!.id, card.id),
+    enabled:   !!user,
+    staleTime: 0,
+  });
 
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<SheetState>({ mode: 'closed' });
+  const [sheet, setSheet]             = useState<SheetState>({ mode: 'closed' });
 
   const closingDay = card.closing_day || 1;
   const dueDay     = card.due_day     || 10;
   const limit      = card.limit       || 0;
   const used       = card.used_amount || 0;
+  const available  = limit - used;
   const usedPct    = limit > 0 ? Math.min(100, (used / limit) * 100) : 0;
+
+  const handleDeleteTx = async (id: string, desc: string) => {
+    const { error } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user?.id);
+    if (error) { toast.error('Erro ao excluir transação'); return; }
+    queryClient.invalidateQueries({ queryKey: ['card-invoices', card.id] });
+    queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
+    queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    toast.success(`"${desc}" excluída`);
+  };
 
   // Agrupa transações por período de fatura
   const invoices = useMemo(() => {
     const grouped: Record<string, Transaction[]> = {};
     for (const t of transactions) {
-      const { year, month } = invoicePeriod(new Date(t.date), closingDay);
+      const { year, month } = invoicePeriod(t.date, closingDay);
       const key = `${year}-${String(month).padStart(2, '0')}`;
       (grouped[key] ??= []).push(t);
     }
@@ -66,8 +137,16 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
     return Object.entries(grouped)
       .map(([key, txs]) => {
         const [y, m] = key.split('-').map(Number);
-        const total = txs.reduce((s, t) => s + t.amount, 0);
-        const closingDate = new Date(y, m, closingDay);
+
+        // Total da fatura: soma expenses, subtrai incomes (estornos/créditos)
+        const total = txs.reduce((s, t) => {
+          if (t.type === 'expense') return s + t.amount;
+          if (t.type === 'income')  return s - t.amount;
+          return s;
+        }, 0);
+
+        const daysInClosingMonth = new Date(y, m + 1, 0).getDate();
+        const closingDate = new Date(y, m, Math.min(closingDay, daysInClosingMonth));
         const dueDate     = new Date(y, m + 1, dueDay);
         const isClosed    = now > closingDate;
         const isOverdue   = isClosed && now > dueDate;
@@ -83,19 +162,11 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
   const openInvoices   = invoices.filter(i => !i.isClosed);
   const closedInvoices = invoices.filter(i =>  i.isClosed);
 
-  const handleDelete = async (id: string, desc: string) => {
-    try {
-      await deleteTransaction(id);
-      toast.success(`"${desc}" excluída`);
-    } catch {
-      toast.error('Erro ao excluir transação');
-    }
-  };
-
   // Subtotais por categoria dentro da fatura
   const categoryBreakdown = (txs: Transaction[]) => {
     const map: Record<string, { name: string; icon: string; total: number }> = {};
     for (const t of txs) {
+      if (t.type !== 'expense') continue; // só despesas no breakdown
       const id   = t.category?.name ?? 'Sem categoria';
       const icon = t.category?.icon ?? '•';
       if (!map[id]) map[id] = { name: id, icon, total: 0 };
@@ -105,7 +176,7 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
   };
 
   const renderInvoice = (inv: typeof invoices[0]) => {
-    const isOpen = expandedKey === inv.key;
+    const isOpen    = expandedKey === inv.key;
     const breakdown = categoryBreakdown(inv.txs);
 
     return (
@@ -131,7 +202,6 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
-                {/* Badge de status */}
                 {inv.isOverdue ? (
                   <Badge variant="destructive" className="text-[10px] py-0">Vencida</Badge>
                 ) : inv.isClosed ? (
@@ -155,7 +225,6 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
               </div>
             </div>
 
-            {/* Mini-resumo (itens + categorias top) */}
             <div className="flex items-center gap-3 mt-2">
               <span className="text-xs text-muted-foreground">
                 {inv.txs.length} lançamento{inv.txs.length !== 1 ? 's' : ''}
@@ -175,7 +244,6 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
           <CollapsibleContent>
             <div className="border-t border-border">
 
-              {/* Subtotais por categoria */}
               {breakdown.length > 1 && (
                 <div className="px-5 py-3 bg-muted/20 flex flex-wrap gap-x-4 gap-y-1">
                   {breakdown.map(b => (
@@ -187,10 +255,9 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
                 </div>
               )}
 
-              {/* Lista de transações */}
               <div className="divide-y divide-border">
                 {inv.txs
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                  .sort((a, b) => b.date.localeCompare(a.date))
                   .map(t => (
                     <div key={t.id} className="flex items-center gap-3 px-5 py-3 hover:bg-muted/20 group">
                       <div className="flex-1 min-w-0">
@@ -201,8 +268,11 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
                         </p>
                       </div>
 
-                      <span className="text-sm font-semibold tabular-nums text-destructive flex-shrink-0">
-                        -{formatCurrency(t.amount)}
+                      <span className={cn(
+                        'text-sm font-semibold tabular-nums flex-shrink-0',
+                        t.type === 'income' ? 'text-green-500' : 'text-destructive'
+                      )}>
+                        {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                       </span>
 
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
@@ -233,7 +303,7 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction
-                                onClick={() => handleDelete(t.id, t.description)}
+                                onClick={() => handleDeleteTx(t.id, t.description)}
                                 className="bg-destructive hover:bg-destructive/90"
                               >
                                 Excluir
@@ -246,13 +316,11 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
                   ))}
               </div>
 
-              {/* Rodapé da fatura */}
               <div className="px-5 py-3 border-t border-border bg-muted/10 flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">
                   {inv.isClosed ? 'Fechada em' : 'Fecha em'}{' '}
                   {inv.closingDate.toLocaleDateString('pt-BR')}
-                  {' · '}
-                  Vence {inv.dueDate.toLocaleDateString('pt-BR')}
+                  {' · '}Vence {inv.dueDate.toLocaleDateString('pt-BR')}
                 </span>
                 <span className="text-sm font-bold tabular-nums">
                   Total: {formatCurrency(inv.total)}
@@ -277,7 +345,11 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
       {sheet.mode === 'edit' && (
         <TransactionSheet
           state={sheet}
-          onClose={() => setSheet({ mode: 'closed' })}
+          onClose={() => {
+            setSheet({ mode: 'closed' });
+            queryClient.invalidateQueries({ queryKey: ['card-invoices', card.id] });
+            queryClient.invalidateQueries({ queryKey: ['credit_cards'] });
+          }}
         />
       )}
 
@@ -303,25 +375,26 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
           <div className="flex items-end justify-between">
             <div>
               <p className="text-2xl font-bold tabular-nums">{formatCurrency(used)}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">de {formatCurrency(limit)} disponível</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {formatCurrency(available)} disponível de {formatCurrency(limit)}
+              </p>
             </div>
             <p className={cn(
               'text-lg font-bold tabular-nums',
               usedPct >= 90 ? 'text-destructive' :
               usedPct >= 70 ? 'text-orange-500' :
-              'text-chart-income'
+              'text-green-500'
             )}>
               {usedPct.toFixed(0)}%
             </p>
           </div>
-          {/* Barra de progresso */}
           <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
             <div
               className={cn(
                 'h-full rounded-full transition-all duration-500',
                 usedPct >= 90 ? 'bg-destructive' :
                 usedPct >= 70 ? 'bg-orange-500' :
-                'bg-chart-income'
+                'bg-green-500'
               )}
               style={{ width: `${usedPct}%` }}
             />
@@ -338,14 +411,14 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
           </div>
         </div>
 
-        {/* Faturas abertas */}
+        {/* Faturas em aberto */}
         <section className="space-y-3">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
             Em aberto ({openInvoices.length})
           </h3>
           {loading ? (
             <div className="space-y-2">
-              {[1,2].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}
+              {[1, 2].map(i => <div key={i} className="h-20 rounded-2xl bg-muted animate-pulse" />)}
             </div>
           ) : openInvoices.length === 0 ? (
             <EmptyState label="Nenhuma fatura em aberto" />
@@ -364,6 +437,7 @@ export const CreditCardInvoices: React.FC<Props> = ({ card, onClose }) => {
           )}
           {closedInvoices.map(renderInvoice)}
         </section>
+
       </div>
     </>
   );
