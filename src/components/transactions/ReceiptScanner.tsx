@@ -1,18 +1,31 @@
 /**
- * ReceiptScanner — scanner inteligente de notas fiscais
+ * ReceiptScanner v3 — scanner inteligente de notas fiscais
  *
- * Modos de operação:
- *  1. QR Code ao vivo  — getUserMedia + jsQR, lê QR NF-e em tempo real
- *  2. Foto / câmera    — input capture, comprime via Canvas antes de salvar
- *  3. Upload galeria   — mesmo pipeline de compressão
- *  4. OCR fallback     — Tesseract.js quando não há QR Code detectável
+ * Estratégia por plataforma:
  *
- * Fixes:
- *  - jsQR importado UMA VEZ no mount (jsQRRef) — sem falha silenciosa no primeiro tick
- *  - Loop usa setInterval (200 ms) em vez de requestAnimationFrame para funcionar
- *    dentro de Dialog no iOS Safari (rAF é throttled em backgrounds/overlays)
- *  - handleQrDetected é useCallback com deps corretas — sem stale closure
- *  - Parser NF-e cobre todos os formatos SEFAZ (chave 44 dígitos, nfv/vNF, dhEmi)
+ * iOS (Safari / WKWebView)
+ * ─────────────────────────
+ *  • getUserMedia dentro de Dialog falha silenciosamente por causa do
+ *    pointer-events:none que o Radix aplica durante a animação de entrada.
+ *  • Solução: NÃO usamos live-camera QR no iOS. Em vez disso:
+ *    – "Ler QR Code" → abre a câmera nativa via <input capture="environment">
+ *      O iOS decodifica QR Codes nativamente desde o iOS 11 (Vision framework)
+ *      e o usuário pode TAMBÉM tirar uma foto que capturamos via jsQR + OCR.
+ *    – "Fotografar nota" → <input capture="environment" accept="image/*">
+ *      O iOS ativa automaticamente o modo "Documento" (igual ao app Notas /
+ *      Arquivos) detectando bordas e recortando a nota fiscalmente.
+ *    – "Da galeria" → <input accept="image/*"> sem capture, abre o seletor.
+ *
+ * Android / Desktop
+ * ─────────────────
+ *  • getUserMedia funciona normalmente. Usamos live-camera com jsQR (setInterval
+ *    200 ms, mais confiável que rAF dentro de modais).
+ *  • Fallback idêntico ao iOS caso getUserMedia seja negado.
+ *
+ * Campo Data
+ * ──────────
+ *  • Input.tsx agora força h-10 + appearance-none em type="date",
+ *    garantindo altura idêntica aos demais campos do formulário.
  */
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -41,11 +54,16 @@ interface Props {
   onCancel: () => void;
 }
 
+// ─── detecta iOS ─────────────────────────────────────────────────────────────
+const isIOS = () =>
+  /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
 // ─── compressão Canvas ────────────────────────────────────────────────────────
 async function compressImage(
   src: string,
-  maxPx   = 900,
-  quality = 0.72,
+  maxPx   = 1200,
+  quality = 0.80,
 ): Promise<{ dataUrl: string; file: File }> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -74,25 +92,18 @@ async function compressImage(
 }
 
 // ─── parser URL NF-e SEFAZ ───────────────────────────────────────────────────
-// Formatos cobertos:
-//   NFCe SP/RS/MG: https://www.nfce.fazenda.sp.gov.br/...?chNFe=...&nfv=10.50
-//   NFCe RJ/BA:    ...?vNF=10.50&vTotTrib=...
-//   NFe genérica:  chave de 44 dígitos no path ou query
 function parseNFeUrl(url: string): Partial<ScannedData> | null {
   try {
     const u      = new URL(url);
     const params = u.searchParams;
 
-    // chave de acesso (44 dígitos consecutivos)
     const chaveMatch = url.match(/\b(\d{44})\b/);
     const chave      = chaveMatch?.[1];
 
-    // CNPJ emitente: dígitos 7..20 da chave
     const cnpj = chave
       ? chave.slice(6, 20).replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
       : (params.get('cNPJ') ?? params.get('CNPJ') ?? undefined);
 
-    // valor total
     const rawVal =
       params.get('nfv')      ??
       params.get('vNF')      ??
@@ -101,7 +112,6 @@ function parseNFeUrl(url: string): Partial<ScannedData> | null {
       null;
     const amount = rawVal ? parseFloat(rawVal.replace(',', '.')) : undefined;
 
-    // data de emissão
     const dhRaw =
       params.get('dhEmi')  ??
       params.get('dEmi')   ??
@@ -113,14 +123,12 @@ function parseNFeUrl(url: string): Partial<ScannedData> | null {
       if (m) date = `${m[1]}-${m[2]}-${m[3]}`;
     }
 
-    // nome estabelecimento
     const merchant =
       params.get('xFant') ??
       params.get('xNome') ??
       (cnpj ? `CNPJ ${cnpj}` : 'NF-e');
 
     if (!amount && !chave) return null;
-
     return { amount, date, merchant, cnpj, description: merchant ?? 'Nota Fiscal' };
   } catch {
     return null;
@@ -149,34 +157,57 @@ function extractByOcr(text: string): Partial<ScannedData> {
   return { amount, date, merchant, description: merchant || 'Transação escaneada', source: 'ocr' };
 }
 
+// ─── tenta ler QR de uma imagem via jsQR ─────────────────────────────────────
+async function tryQrFromImage(dataUrl: string): Promise<string | null> {
+  try {
+    const jsqr = (await import('jsqr')).default;
+    const img  = new Image();
+    await new Promise<void>((res, rej) => {
+      img.onload  = () => res();
+      img.onerror = rej;
+      img.src     = dataUrl;
+    });
+    const canvas  = document.createElement('canvas');
+    canvas.width  = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+    const code      = jsqr(imageData.data, imageData.width, imageData.height);
+    return code?.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── componente principal ─────────────────────────────────────────────────────
 export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
-  type Mode    = 'choose' | 'qr-live' | 'processing' | 'review';
-  type SubMode = 'qr' | 'photo' | 'upload';
+  type Mode = 'choose' | 'qr-live' | 'processing' | 'review';
 
   const [mode,      setMode]      = useState<Mode>('choose');
-  const [subMode,   setSubMode]   = useState<SubMode | null>(null);
   const [preview,   setPreview]   = useState<string | null>(null);
   const [extracted, setExtracted] = useState<Partial<ScannedData> | null>(null);
   const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [camError,  setCamError]  = useState<string | null>(null);
+  const [ocrMode,   setOcrMode]   = useState(false); // true = OCR, false = QR
 
   const videoRef    = useRef<HTMLVideoElement>(null);
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const streamRef   = useRef<MediaStream | null>(null);
-  // Usamos setInterval em vez de rAF para funcionar dentro de Dialog no iOS Safari
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const fileRef     = useRef<HTMLInputElement>(null);
-  const photoRef    = useRef<HTMLInputElement>(null);
-  const doneRef     = useRef(false); // evita chamar handleQrDetected mais de uma vez
+  const doneRef     = useRef(false);
 
-  // jsQR importado UMA VEZ no mount
+  // inputs nativos separados para cada função
+  const qrInputRef    = useRef<HTMLInputElement>(null);   // câmera QR (iOS)
+  const photoInputRef = useRef<HTMLInputElement>(null);   // câmera documento
+  const galleryRef    = useRef<HTMLInputElement>(null);   // galeria
+
   const jsQRRef = useRef<((data: Uint8ClampedArray, w: number, h: number) => { data: string } | null) | null>(null);
   useEffect(() => {
     import('jsqr').then(m => { jsQRRef.current = m.default; }).catch(() => {});
   }, []);
 
-  // ── para câmera ─────────────────────────────────────────────────────────────
+  // ── stop câmera ──────────────────────────────────────────────────────────
   const stopStream = useCallback(() => {
     if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
     streamRef.current?.getTracks().forEach(t => t.stop());
@@ -185,8 +216,9 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
 
   useEffect(() => () => stopStream(), [stopStream]);
 
-  // ── OCR ─────────────────────────────────────────────────────────────────────
+  // ── OCR ─────────────────────────────────────────────────────────────────
   const runOcr = useCallback(async (dataUrl: string, qrFallback?: string) => {
+    setOcrMode(true);
     setMode('processing');
     try {
       const { data: { text } } = await Tesseract.recognize(dataUrl, 'por', { logger: () => {} });
@@ -201,52 +233,79 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     setMode('review');
   }, []);
 
-  // ── QR detectado ─────────────────────────────────────────────────────────────
+  // ── processa qualquer imagem: tenta QR primeiro, depois OCR ─────────────
+  const handleImageFile = useCallback(async (file: File, forceOcr = false) => {
+    setMode('processing');
+    setOcrMode(false);
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const src = e.target?.result as string;
+      try {
+        const { dataUrl, file: compressed } = await compressImage(src, 1200, 0.80);
+        setPreview(dataUrl);
+        setThumbFile(compressed);
+
+        if (!forceOcr) {
+          // Tenta ler QR da imagem (útil quando o user fotografou o cupom)
+          const qrText = await tryQrFromImage(dataUrl);
+          if (qrText?.startsWith('http')) {
+            const fromUrl = parseNFeUrl(qrText);
+            if (fromUrl) {
+              setExtracted({ ...fromUrl, source: 'qrcode' });
+              toast.success('QR Code NF-e encontrado na imagem!');
+              setMode('review');
+              return;
+            }
+          }
+          if (qrText) {
+            toast.info('QR genérico detectado — rodando OCR...');
+            await runOcr(dataUrl, qrText);
+            return;
+          }
+        }
+        // sem QR → OCR
+        await runOcr(dataUrl);
+      } catch {
+        toast.error('Erro ao processar imagem.');
+        setMode('choose');
+      }
+    };
+    reader.readAsDataURL(file);
+  }, [runOcr]);
+
+  // ── QR detectado via câmera live ─────────────────────────────────────────
   const handleQrDetected = useCallback(async (qrText: string, frameDataUrl: string) => {
     setMode('processing');
-    setSubMode('qr');
     toast.info('QR Code detectado! Extraindo dados...');
-
     const fromUrl = qrText.startsWith('http') ? parseNFeUrl(qrText) : null;
-
     const { dataUrl, file } = await compressImage(frameDataUrl, 900, 0.72);
     setPreview(dataUrl);
     setThumbFile(file);
-
     if (fromUrl) {
       setExtracted({ ...fromUrl, source: 'qrcode' });
       toast.success('Nota Fiscal lida com sucesso!');
       setMode('review');
     } else {
-      toast.info('QR genérico — rodando OCR...');
       await runOcr(dataUrl, qrText);
     }
   }, [runOcr]);
 
-  // ── loop QR com setInterval (200 ms) ─────────────────────────────────────────
-  // setInterval é mais confiável que rAF dentro de modais no iOS Safari
+  // ── loop QR câmera live (Android/Desktop) ─────────────────────────────────
   const startQrLoop = useCallback(() => {
     doneRef.current = false;
-
     intervalRef.current = setInterval(async () => {
       if (doneRef.current) return;
-
       const video  = videoRef.current;
       const canvas = canvasRef.current;
       const jsQR   = jsQRRef.current;
-
-      // Aguarda vídeo e jsQR prontos
       if (!video || !canvas || !jsQR) return;
       if (video.readyState < 2 || video.videoWidth === 0) return;
-
       canvas.width  = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(video, 0, 0);
-
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const code = jsQR(imageData.data, imageData.width, imageData.height);
-
       if (code?.data) {
         doneRef.current = true;
         stopStream();
@@ -255,11 +314,10 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     }, 200);
   }, [handleQrDetected, stopStream]);
 
-  // ── inicia câmera QR ─────────────────────────────────────────────────────────
-  const startQrCamera = async () => {
+  // ── inicia câmera QR live (Android/Desktop) ───────────────────────────────
+  const startLiveQrCamera = async () => {
     setCamError(null);
     setMode('qr-live');
-    setSubMode('qr');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
@@ -268,34 +326,25 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
       const video = videoRef.current;
       if (video) {
         video.srcObject = stream;
-        video.setAttribute('playsinline', 'true'); // iOS obrigatório
+        video.setAttribute('playsinline', 'true');
         await video.play();
       }
       startQrLoop();
     } catch {
-      setCamError('Câmera não autorizada. Use "Upload" ou "Foto" como alternativa.');
+      setCamError('Câmera não autorizada. Use uma das opções abaixo.');
       setMode('choose');
     }
   };
 
-  // ── foto / upload ─────────────────────────────────────────────────────────
-  const handleImageFile = async (file: File) => {
-    setMode('processing');
-    setSubMode('photo');
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const src = e.target?.result as string;
-      try {
-        const { dataUrl, file: compressed } = await compressImage(src, 900, 0.72);
-        setPreview(dataUrl);
-        setThumbFile(compressed);
-        await runOcr(dataUrl);
-      } catch {
-        toast.error('Erro ao processar imagem.');
-        setMode('choose');
-      }
-    };
-    reader.readAsDataURL(file);
+  // ── aciona câmera QR (iOS usa input nativo; outros usam live) ─────────────
+  const handleQrButton = () => {
+    if (isIOS()) {
+      // No iOS, o Scanner nativo de QR Code já está integrado na câmera.
+      // O usuário aponta → iOS detecta → retorna a foto; nós extraímos o QR da imagem.
+      qrInputRef.current?.click();
+    } else {
+      startLiveQrCamera();
+    }
   };
 
   // ── confirma dados ────────────────────────────────────────────────────────
@@ -316,18 +365,46 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
     stopStream();
     doneRef.current = false;
     setMode('choose');
-    setSubMode(null);
     setPreview(null);
     setExtracted(null);
     setThumbFile(null);
     setCamError(null);
+    setOcrMode(false);
   };
 
-  // ──────────────────────────────── RENDER ────────────────────────────────────
+  // ──────────────────────────────── RENDER ──────────────────────────────────
   return (
     <div className="space-y-4">
 
-      {/* ── Seleção de modo ──────────────────────────────────────────────────── */}
+      {/* ── Inputs nativos (sempre presentes no DOM para .click() funcionar) ── */}
+      {/* QR: iOS usa câmera nativa com suporte a QR embutido */}
+      <input
+        ref={qrInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f, false); }}
+      />
+      {/* Foto documento: capture sem accept="video" → iOS oferece modo Documento */}
+      <input
+        ref={photoInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f, false); }}
+      />
+      {/* Galeria: sem capture → seletor de arquivos / galeria */}
+      <input
+        ref={galleryRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f, false); }}
+      />
+
+      {/* ── Seleção de modo ──────────────────────────────────────────────── */}
       {mode === 'choose' && (
         <>
           {camError && (
@@ -340,7 +417,8 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
 
             {/* QR Code */}
             <button
-              onClick={startQrCamera}
+              type="button"
+              onClick={handleQrButton}
               className="flex items-center gap-4 rounded-xl border border-border bg-card hover:bg-accent transition-colors p-4 text-left"
             >
               <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center flex-shrink-0">
@@ -349,14 +427,17 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
               <div>
                 <p className="text-sm font-semibold">Ler QR Code da NF-e</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Aponte a câmera para o QR Code do cupom fiscal — dados preenchidos automaticamente
+                  {isIOS()
+                    ? 'Abre a câmera — aponte para o QR Code do cupom fiscal'
+                    : 'Câmera ao vivo — centralize o QR Code para leitura automática'}
                 </p>
               </div>
             </button>
 
-            {/* Tirar foto */}
+            {/* Fotografar nota — iOS ativa detecção de documento automaticamente */}
             <button
-              onClick={() => photoRef.current?.click()}
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
               className="flex items-center gap-4 rounded-xl border border-border bg-card hover:bg-accent transition-colors p-4 text-left"
             >
               <div className="w-10 h-10 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center flex-shrink-0">
@@ -365,22 +446,17 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
               <div>
                 <p className="text-sm font-semibold">Fotografar nota</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  OCR extrai valor e data; imagem comprimida para ~80KB antes de salvar
+                  {isIOS()
+                    ? 'iOS detecta e recorta o documento automaticamente (igual ao app Notas)'
+                    : 'OCR extrai valor e data — imagem comprimida antes de salvar'}
                 </p>
               </div>
             </button>
-            <input
-              ref={photoRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }}
-            />
 
-            {/* Upload galeria */}
+            {/* Galeria */}
             <button
-              onClick={() => fileRef.current?.click()}
+              type="button"
+              onClick={() => galleryRef.current?.click()}
               className="flex items-center gap-4 rounded-xl border border-border bg-card hover:bg-accent transition-colors p-4 text-left"
             >
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center flex-shrink-0">
@@ -389,26 +465,37 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
               <div>
                 <p className="text-sm font-semibold">Selecionar da galeria</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Escolha uma foto já salva — mesma compressão automática
+                  Escolha uma foto já salva — OCR + detecção de QR automáticos
                 </p>
               </div>
             </button>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f); }}
-            />
+
+            {/* Upload arquivo */}
+            <button
+              type="button"
+              onClick={() => { const i = document.createElement('input'); i.type='file'; i.accept='image/*,.pdf'; i.onchange=()=>{ const f=i.files?.[0]; if(f) handleImageFile(f,false); }; i.click(); }}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card hover:bg-accent transition-colors p-4 text-left"
+            >
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center flex-shrink-0">
+                <Upload size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Importar arquivo</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Imagem ou PDF já salvo no dispositivo
+                </p>
+              </div>
+            </button>
+
           </div>
 
-          <Button variant="ghost" size="sm" onClick={onCancel} className="w-full text-muted-foreground">
+          <Button type="button" variant="ghost" size="sm" onClick={onCancel} className="w-full text-muted-foreground">
             <X size={14} className="mr-1.5" /> Cancelar
           </Button>
         </>
       )}
 
-      {/* ── Câmera QR ao vivo ─────────────────────────────────────────────────── */}
+      {/* ── Câmera QR live (Android/Desktop) ─────────────────────────────── */}
       {mode === 'qr-live' && (
         <div className="space-y-3">
           <div className="relative rounded-xl overflow-hidden bg-black aspect-[4/3]">
@@ -433,13 +520,13 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
           <p className="text-xs text-center text-muted-foreground">
             Centralize o QR Code dentro da área marcada
           </p>
-          <Button variant="outline" size="sm" onClick={() => { stopStream(); setMode('choose'); }} className="w-full">
+          <Button type="button" variant="outline" size="sm" onClick={() => { stopStream(); setMode('choose'); }} className="w-full">
             <X size={14} className="mr-1.5" /> Cancelar leitura
           </Button>
         </div>
       )}
 
-      {/* ── Processando ───────────────────────────────────────────────────────── */}
+      {/* ── Processando ───────────────────────────────────────────────── */}
       {mode === 'processing' && (
         <div className="flex flex-col items-center gap-4 py-8">
           {preview && (
@@ -448,14 +535,14 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 size={18} className="animate-spin" />
             <span className="text-sm">
-              {subMode === 'qr' ? 'Extraindo dados do QR Code...' : 'Reconhecendo texto (OCR)...'}
+              {ocrMode ? 'Reconhecendo texto (OCR)...' : 'Verificando QR Code...'}
             </span>
           </div>
           <p className="text-xs text-muted-foreground">Aguarde alguns segundos</p>
         </div>
       )}
 
-      {/* ── Revisão dos dados ─────────────────────────────────────────────────── */}
+      {/* ── Revisão ───────────────────────────────────────────────────── */}
       {mode === 'review' && extracted && (
         <div className="space-y-4">
           {preview && (
@@ -473,7 +560,7 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
             </span>
             {thumbFile && (
               <span className="text-[10px] text-muted-foreground">
-                Imagem: {Math.round(thumbFile.size / 1024)}KB
+                {Math.round(thumbFile.size / 1024)}KB
               </span>
             )}
           </div>
@@ -507,16 +594,16 @@ export const ReceiptScanner: React.FC<Props> = ({ onResult, onCancel }) => {
             )}
             {!extracted.amount && !extracted.description && (
               <div className="px-4 py-4 text-center text-xs text-muted-foreground">
-                Nenhum dado extraído automaticamente. Preencha manualmente.
+                Nenhum dado extraído. Preencha manualmente.
               </div>
             )}
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={reset} className="flex-1">
+            <Button type="button" variant="outline" onClick={reset} className="flex-1">
               <RefreshCw size={14} className="mr-1.5" /> Tentar novamente
             </Button>
-            <Button onClick={handleConfirm} className="flex-1">
+            <Button type="button" onClick={handleConfirm} className="flex-1">
               <Check size={14} className="mr-1.5" /> Usar estes dados
             </Button>
           </div>
