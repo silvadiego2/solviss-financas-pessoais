@@ -15,32 +15,33 @@ import { useIsMobile } from '@/hooks/use-mobile';
 interface AppSidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
-  onOpenAddSheet: () => void;          // ← novo: FAB e botão sidebar usam isso
+  onOpenAddSheet: () => void;
 }
 
+// ── Navegação principal (sidebar desktop + "Principal" label) ──────────────
 const PRIMARY_NAV = [
-  { id: 'dashboard',    icon: Home,           label: 'Início' },
-  { id: 'transactions', icon: Receipt,        label: 'Transações' },
-  { id: 'budgets',      icon: CalendarRange,  label: 'Planejamento' },
-  { id: 'reports',      icon: BarChart3,      label: 'Relatórios' },
-  { id: 'more',         icon: MoreHorizontal, label: 'Mais' },
+  { id: 'dashboard',    icon: Home,          label: 'Início'       },
+  { id: 'transactions', icon: Receipt,       label: 'Transações'  },
+  { id: 'cards',        icon: CreditCard,    label: 'Cartões'      },
+  { id: 'budgets',      icon: CalendarRange, label: 'Planejamento' },
+  { id: 'reports',      icon: BarChart3,     label: 'Relatórios'  },
 ];
 
+// ── Navegação secundária (Ferramentas) ─────────────────────────────────────
 const SECONDARY_NAV = [
   { id: 'cash-flow',              icon: TrendingUp, label: 'Fluxo de Caixa' },
-  { id: 'recurring-transactions', icon: Repeat,     label: 'Recorrentes' },
-  { id: 'cards',                  icon: CreditCard, label: 'Cartões' },
-  { id: 'goals',                  icon: Target,     label: 'Metas' },
-  { id: 'intelligence',           icon: Brain,      label: 'Inteligência' },
-  { id: 'plans',                  icon: Crown,      label: 'Planos' },
+  { id: 'recurring-transactions', icon: Repeat,     label: 'Recorrentes'    },
+  { id: 'goals',                  icon: Target,     label: 'Metas'          },
+  { id: 'intelligence',           icon: Brain,      label: 'Inteligência'  },
+  { id: 'plans',                  icon: Crown,      label: 'Planos'         },
 ];
 
 const PRIMARY_IDS = new Set(PRIMARY_NAV.map(n => n.id));
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, onOpenAddSheet }) => {
-  const { user, signOut } = useAuth();
-  const { theme, toggleTheme } = useTheme();
-  const isMobile = useIsMobile();
+  const { user, signOut }          = useAuth();
+  const { theme, toggleTheme }     = useTheme();
+  const isMobile                   = useIsMobile();
   const [mobileOpen,    setMobileOpen]    = useState(false);
   const [secondaryOpen, setSecondaryOpen] = useState(false);
 
@@ -49,7 +50,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
     if (isMobile) setMobileOpen(false);
   };
 
-  // ── conteúdo da sidebar (desktop + drawer mobile) ─────────────────────
+  // ── Conteúdo compartilhado sidebar/drawer ─────────────────────────────────
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Brand */}
@@ -67,10 +68,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
         )}
       </div>
 
-      {/* Botão Nova Transação — abre Sheet */}
+      {/* Botão Nova Transação */}
       <div className="px-4 py-4">
         <Button
-          onClick={onOpenAddSheet}       // ← corrigido
+          onClick={onOpenAddSheet}
           className="w-full gap-2 shadow-premium-sm"
           size="default"
         >
@@ -79,12 +80,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
         </Button>
       </div>
 
-      {/* Nav primária */}
+      {/* Nav principal */}
       <nav className="px-3 space-y-0.5">
         <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
           Principal
         </p>
-        {PRIMARY_NAV.filter(i => i.id !== 'more').map((item) => {
+        {PRIMARY_NAV.map((item) => {
           const isActive = activeTab === item.id;
           return (
             <button
@@ -104,7 +105,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
         })}
       </nav>
 
-      {/* Nav secundária */}
+      {/* Nav ferramentas */}
       <nav className="px-3 mt-3 space-y-0.5">
         <button
           onClick={() => setSecondaryOpen(!secondaryOpen)}
@@ -187,22 +188,21 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
           </aside>
         )}
 
-        {/* Bottom Tab Bar */}
+        {/* Bottom Tab Bar: Início · Transações · [+] · Cartões · Mais */}
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-sm border-t border-border">
           <div className="flex items-end h-16 max-w-md mx-auto">
-            {/* Início */}
-            <MobileTab id="dashboard" activeTab={activeTab} label="Início"      onClick={() => handleNav('dashboard')}>
-              <Home    size={22} strokeWidth={activeTab === 'dashboard'    ? 2.25 : 1.75} />
+            <MobileTab id="dashboard" activeTab={activeTab} label="Início" onClick={() => handleNav('dashboard')}>
+              <Home size={22} strokeWidth={activeTab === 'dashboard' ? 2.25 : 1.75} />
             </MobileTab>
-            {/* Transações */}
+
             <MobileTab id="transactions" activeTab={activeTab} label="Transações" onClick={() => handleNav('transactions')}>
               <Receipt size={22} strokeWidth={activeTab === 'transactions' ? 2.25 : 1.75} />
             </MobileTab>
 
-            {/* FAB central — abre Sheet */}
+            {/* FAB central */}
             <div className="flex-1 flex flex-col items-center pb-1">
               <button
-                onClick={onOpenAddSheet}   // ← corrigido
+                onClick={onOpenAddSheet}
                 aria-label="Nova transação"
                 className="w-12 h-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/30 -mt-4 active:scale-95 transition-transform"
               >
@@ -211,10 +211,11 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
               <span className="text-[10px] font-medium text-muted-foreground mt-0.5">Adicionar</span>
             </div>
 
-            {/* Relatórios */}
-            <MobileTab id="reports" activeTab={activeTab} label="Relatórios" onClick={() => handleNav('reports')}>
-              <BarChart3 size={22} strokeWidth={activeTab === 'reports' ? 2.25 : 1.75} />
+            {/* Cartões — substituiu Relatórios */}
+            <MobileTab id="cards" activeTab={activeTab} label="Cartões" onClick={() => handleNav('cards')}>
+              <CreditCard size={22} strokeWidth={activeTab === 'cards' ? 2.25 : 1.75} />
             </MobileTab>
+
             {/* Mais — abre drawer */}
             <MobileTab
               id="more"
@@ -242,7 +243,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
   );
 };
 
-// ─ sub-componente interno para tab mobile ────────────────────────────────
+// ─ Sub-componente tab mobile ─────────────────────────────────────────────────
 const MobileTab: React.FC<{
   id: string;
   activeTab: string;

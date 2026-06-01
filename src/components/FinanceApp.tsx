@@ -33,15 +33,15 @@ import { Inteligencia } from '@/pages/Inteligencia';
 import { Planos } from '@/pages/Planos';
 import { TransactionSheet } from './transactions/TransactionSheet';
 
-// Tabs de primeiro nível da sidebar (não empilham histórico de navegação)
+// Tabs de primeiro nível (não empilham histórico de navegação)
 const ROOT_TABS = new Set([
-  'dashboard', 'transactions', 'budgets', 'recurring-transactions',
-  'cash-flow', 'cards', 'goals', 'intelligence', 'reports', 'more',
+  'dashboard', 'transactions', 'cards', 'budgets', 'reports',
+  'recurring-transactions', 'cash-flow', 'goals', 'intelligence', 'more',
 ]);
 
 export const FinanceApp: React.FC = () => {
-  const [activeTab, setActiveTab]     = useState('dashboard');
-  const [tabHistory, setTabHistory]   = useState<string[]>([]);
+  const [activeTab, setActiveTab]       = useState('dashboard');
+  const [tabHistory, setTabHistory]     = useState<string[]>([]);
   const [addSheetOpen, setAddSheetOpen] = useState(false);
 
   const { user, loading } = useAuth();
@@ -72,7 +72,7 @@ export const FinanceApp: React.FC = () => {
 
   const handleBack = () => {
     setTabHistory(prev => {
-      const next = [...prev];
+      const next   = [...prev];
       const origin = next.pop() ?? 'more';
       setActiveTab(origin);
       return next;
@@ -85,6 +85,8 @@ export const FinanceApp: React.FC = () => {
         return <DashboardOverview onNavigate={handleTabChange} />;
       case 'transactions':
         return <TransactionsList />;
+      case 'cards':
+        return <CreditCardsList />;
       case 'budgets':
         return <Planejamento />;
       case 'budgets-list':
@@ -93,8 +95,6 @@ export const FinanceApp: React.FC = () => {
         return <RecurringTransactionsManager />;
       case 'cash-flow':
         return <FluxoDeCaixa />;
-      case 'cards':
-        return <CreditCardsList />;
       case 'goals':
         return <SimpleGoals />;
       case 'intelligence':
@@ -103,7 +103,7 @@ export const FinanceApp: React.FC = () => {
         return <SimpleReports />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} />;
-      // Sub-telas (navegadas a partir do menu Mais ou sidebar)
+      // Sub-telas
       case 'plans':
         return <Planos onBack={handleBack} />;
       case 'accounts':
