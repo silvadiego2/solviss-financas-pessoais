@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Download, Tags, Building, ChevronRight,
+  Download, Tags, ChevronRight,
   Shield, Database, Trash2,
   Sparkles, Crown, Settings, LogOut,
 } from 'lucide-react';
@@ -111,16 +111,8 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
     },
   ];
 
-  // Seção renomeada: 'Configurações' → 'Minha Conta'
-  // Evita ambiguidade com o item 'Preferências' (que também era chamado de Configurações)
-  // Os itens desta seção são dados e estrutura da conta, não preferências do app
+  // 'Contas Bancárias' removido — migrou para a aba Cartões (tab switcher Cartões|Contas)
   const accountItems: MenuItem[] = [
-    {
-      title: 'Contas Bancárias',
-      description: 'Gerenciar contas e saldos',
-      icon: Building,
-      action: () => onNavigate('accounts'),
-    },
     {
       title: 'Categorias',
       description: 'Criar e editar categorias',
@@ -165,7 +157,6 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Cabeçalho de perfil */}
       <button
         onClick={() => onNavigate('profile')}
         className="w-full flex items-center gap-4 p-4 rounded-2xl bg-card border border-border hover:bg-accent active:bg-accent/80 transition-all text-left group"
@@ -183,9 +174,9 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
         </div>
       </button>
 
-      <Group title="Ferramentas"  items={toolsItems}   />
-      <Group title="Minha Conta"  items={accountItems} />
-      <Group title="Avançado"     items={dangerItems}  />
+      <Group title="Ferramentas" items={toolsItems}   />
+      <Group title="Minha Conta" items={accountItems} />
+      <Group title="Avançado"    items={dangerItems}  />
 
       <button
         onClick={handleLogout}
