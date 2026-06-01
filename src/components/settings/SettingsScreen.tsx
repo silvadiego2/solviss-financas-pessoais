@@ -1,11 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { BackHeader } from '@/components/layout/BackHeader';
-import { useTheme } from '@/hooks/useTheme';
-import { Settings, Moon, Sun, Bell, Shield, Database, Trash2, Download, Upload, HelpCircle, ChevronRight } from 'lucide-react';
+import { useTheme } from '@/contexts/ThemeContext';
+import { Settings, Moon, Sun, Shield, Database, Trash2, Download, Upload, ChevronRight } from 'lucide-react';
 
 interface SettingsScreenProps {
   onBack?: () => void;
@@ -13,7 +11,7 @@ interface SettingsScreenProps {
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onNavigate }) => {
-  const { theme, setTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
 
   const sections = [
     {
@@ -25,7 +23,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onNaviga
           description: 'Alterna entre tema claro e escuro',
           type: 'toggle' as const,
           value: theme === 'dark',
-          onChange: (v: boolean) => setTheme(v ? 'dark' : 'light'),
+          onChange: () => toggleTheme(),
         },
       ],
     },
@@ -120,7 +118,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, onNaviga
                       <Switch
                         checked={(item as any).value}
                         onCheckedChange={(item as any).onChange}
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e: React.MouseEvent) => e.stopPropagation()}
                       />
                     ) : (
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
