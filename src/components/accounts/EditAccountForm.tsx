@@ -1,55 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BackHeader } from '@/components/layout/BackHeader';
-import { useAccounts, Account } from '@/hooks/useAccounts';
+import { useAccounts } from '@/hooks/useAccounts';
 import { toast } from 'sonner';
+import { Wallet } from 'lucide-react';
 
 interface EditAccountFormProps {
-  account: Account;
-  onClose: () => void;
+  account: any;
+  onBack: () => void;
 }
 
-export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onClose }) => {
+export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onBack }) => {
   const { updateAccount, isUpdating } = useAccounts();
+
+  // Lê o saldo corretamente: o banco pode usar current_balance ou initial_balance
+  const currentBalance = account.current_balance ?? account.initial_balance ?? account.balance ?? 0;
+
   const [formData, setFormData] = useState({
-    name: account.name,
-    type: account.type,
-    balance: account.balance.toString(),
-    bank_name: account.bank_name || '',
-    credit_limit: account.credit_limit?.toString() || '',
-    due_day: account.due_day?.toString() || '',
-    closing_day: account.closing_day?.toString() || ''
+    name:         account.name        ?? '',
+    type:         account.type        ?? 'checking',
+    balance:      currentBalance.toString(),
+    bank_name:    account.bank_name   ?? '',
+    color:        account.color       ?? '#6b7280',
+    credit_limit: account.credit_limit?.toString()  ?? '',
+    due_day:      account.due_day?.toString()        ?? '',
+    closing_day:  account.closing_day?.toString()   ?? '',
   });
 
-  const handleInputChange = (field: string, value: string) => {
+  const set = (field: string, value: string) =>
     setFormData(prev => ({ ...prev, [field]: value }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
-      const updatedAccount: Partial<Account> & { id: string } = {
-        id: account.id,
-        name: formData.name,
-        type: formData.type as Account['type'],
-        balance: parseFloat(formData.balance) || 0,
+      const payload: Record<string, any> = {
+        id:        account.id,
+        name:      formData.name,
+        type:      formData.type,
         bank_name: formData.bank_name || null,
+        color:     formData.color || null,
+        // Atualiza os dois campos de saldo para garantir consistência
+        initial_balance: parseFloat(formData.balance) || 0,
+        current_balance: parseFloat(formData.balance) || 0,
       };
 
-      // Adicionar campos específicos de cartão de crédito se necessário
       if (formData.type === 'credit_card') {
-        updatedAccount.credit_limit = parseFloat(formData.credit_limit) || null;
-        updatedAccount.due_day = parseInt(formData.due_day) || null;
-        updatedAccount.closing_day = parseInt(formData.closing_day) || null;
+        payload.credit_limit = parseFloat(formData.credit_limit) || null;
+        payload.due_day      = parseInt(formData.due_day)       || null;
+        payload.closing_day  = parseInt(formData.closing_day)   || null;
       }
 
-      await updateAccount(updatedAccount);
-      onClose();
+      await updateAccount(payload);
+      onBack();
     } catch (error) {
       console.error('Erro ao atualizar conta:', error);
       toast.error('Erro ao atualizar conta');
@@ -58,30 +64,33 @@ export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onClo
 
   return (
     <div className="space-y-4">
-      <BackHeader title="Editar Conta" onBack={onClose} />
-      
+      <BackHeader
+        title="Editar Conta"
+        subtitle={account.name}
+        icon={<Wallet className="h-6 w-6" />}
+        onBack={onBack}
+      />
+
       <Card>
         <CardHeader>
-          <CardTitle>Editar Conta</CardTitle>
+          <CardTitle className="text-base">Informações da Conta</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+
             <div>
               <Label htmlFor="name">Nome da Conta</Label>
               <Input
                 id="name"
                 value={formData.name}
-                onChange={(e) => handleInputChange('name', e.target.value)}
+                onChange={e => set('name', e.target.value)}
                 required
               />
             </div>
 
             <div>
               <Label htmlFor="type">Tipo da Conta</Label>
-              <Select 
-                value={formData.type} 
-                onValueChange={(value) => handleInputChange('type', value)}
-              >
+              <Select value={formData.type} onValueChange={v => set('type', v)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
@@ -96,24 +105,39 @@ export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onClo
             </div>
 
             <div>
-              <Label htmlFor="balance">Saldo Atual</Label>
+              <Label htmlFor="balance">Saldo Atual (R$)</Label>
               <Input
                 id="balance"
                 type="number"
                 step="0.01"
                 value={formData.balance}
-                onChange={(e) => handleInputChange('balance', e.target.value)}
+                onChange={e => set('balance', e.target.value)}
                 required
               />
             </div>
 
             <div>
-              <Label htmlFor="bank_name">Nome do Banco (opcional)</Label>
+              <Label htmlFor="bank_name">Banco (opcional)</Label>
               <Input
                 id="bank_name"
                 value={formData.bank_name}
-                onChange={(e) => handleInputChange('bank_name', e.target.value)}
+                onChange={e => set('bank_name', e.target.value)}
+                placeholder="Ex: Nubank, Itaú, Bradesco"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="color">Cor</Label>
+              <div className="flex items-center gap-3">
+                <input
+                  id="color"
+                  type="color"
+                  value={formData.color}
+                  onChange={e => set('color', e.target.value)}
+                  className="h-9 w-16 rounded border border-input cursor-pointer"
+                />
+                <span className="text-sm text-muted-foreground">{formData.color}</span>
+              </div>
             </div>
 
             {formData.type === 'credit_card' && (
@@ -125,45 +149,43 @@ export const EditAccountForm: React.FC<EditAccountFormProps> = ({ account, onClo
                     type="number"
                     step="0.01"
                     value={formData.credit_limit}
-                    onChange={(e) => handleInputChange('credit_limit', e.target.value)}
+                    onChange={e => set('credit_limit', e.target.value)}
                   />
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="closing_day">Dia do Fechamento</Label>
+                    <Label htmlFor="closing_day">Dia Fechamento</Label>
                     <Input
                       id="closing_day"
                       type="number"
-                      min="1"
-                      max="31"
+                      min="1" max="31"
                       value={formData.closing_day}
-                      onChange={(e) => handleInputChange('closing_day', e.target.value)}
+                      onChange={e => set('closing_day', e.target.value)}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="due_day">Dia do Vencimento</Label>
+                    <Label htmlFor="due_day">Dia Vencimento</Label>
                     <Input
                       id="due_day"
                       type="number"
-                      min="1"
-                      max="31"
+                      min="1" max="31"
                       value={formData.due_day}
-                      onChange={(e) => handleInputChange('due_day', e.target.value)}
+                      onChange={e => set('due_day', e.target.value)}
                     />
                   </div>
                 </div>
               </>
             )}
 
-            <div className="flex space-x-3">
+            <div className="flex gap-3 pt-2">
               <Button type="submit" disabled={isUpdating} className="flex-1">
-                {isUpdating ? 'Atualizando...' : 'Salvar Alterações'}
+                {isUpdating ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
-              <Button type="button" variant="outline" onClick={onClose}>
+              <Button type="button" variant="outline" onClick={onBack}>
                 Cancelar
               </Button>
             </div>
+
           </form>
         </CardContent>
       </Card>
