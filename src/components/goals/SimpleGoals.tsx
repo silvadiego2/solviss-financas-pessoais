@@ -11,8 +11,8 @@ import { formatCurrency } from '@/utils/formatters';
 
 export const SimpleGoals: React.FC = () => {
   const { goals, updateGoal, deleteGoal, isDeletingGoal, isUpdatingGoal } = useGoals();
-  const [showAddForm,  setShowAddForm]  = useState(false);
-  const [editingGoal,  setEditingGoal]  = useState<Goal | null>(null);
+  const [showAddForm,   setShowAddForm]   = useState(false);
+  const [editingGoal,   setEditingGoal]   = useState<Goal | null>(null);
   const [depositGoalId, setDepositGoalId] = useState<string | null>(null);
   const [depositValue,  setDepositValue]  = useState('');
 
@@ -51,8 +51,8 @@ export const SimpleGoals: React.FC = () => {
   const handleDeposit = (goal: Goal) => {
     const parsed = parseFloat(depositValue.replace(',', '.'));
     if (isNaN(parsed) || parsed <= 0) return;
-    const newAmount = goal.current_amount + parsed;
-    const isCompleted = newAmount >= goal.target_amount;
+    const newAmount    = goal.current_amount + parsed;
+    const isCompleted  = newAmount >= goal.target_amount;
     updateGoal({
       id: goal.id,
       current_amount: Math.min(newAmount, goal.target_amount),
@@ -68,9 +68,9 @@ export const SimpleGoals: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Objetivos Financeiros</h2>
+        <h2 className="text-lg font-semibold">Metas</h2>
         <Button onClick={() => setShowAddForm(true)} size="sm">
-          <Plus size={16} className="mr-2" /> Adicionar Meta
+          <Plus size={16} className="mr-2" /> Nova Meta
         </Button>
       </div>
 
@@ -80,10 +80,10 @@ export const SimpleGoals: React.FC = () => {
             <Target size={40} className="mx-auto text-muted-foreground/40 mb-3" />
             <p className="font-medium text-muted-foreground">Nenhuma meta cadastrada</p>
             <p className="text-sm text-muted-foreground/70 mt-1 mb-4">
-              Defina objetivos financeiros e acompanhe o progresso
+              Defina um valor alvo e acompanhe o progresso dos seus sonhos
             </p>
             <Button onClick={() => setShowAddForm(true)} size="sm">
-              <Plus size={16} className="mr-2" /> Adicionar Primeira Meta
+              <Plus size={16} className="mr-2" /> Criar Primeira Meta
             </Button>
           </CardContent>
         </Card>
@@ -115,7 +115,7 @@ export const SimpleGoals: React.FC = () => {
                               ? 'bg-destructive/10 text-destructive'
                               : 'bg-primary/10 text-primary'}
                         >
-                          {goal.is_completed ? 'Concluído' : overdue ? 'Atrasado' : `${daysRemaining}d`}
+                          {goal.is_completed ? 'Concluída' : overdue ? 'Atrasada' : `${daysRemaining}d`}
                         </Badge>
                       )}
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(goal)} className="h-7 w-7">
@@ -167,7 +167,7 @@ export const SimpleGoals: React.FC = () => {
                           value={depositValue}
                           onChange={e => setDepositValue(e.target.value)}
                           onKeyDown={e => {
-                            if (e.key === 'Enter') handleDeposit(goal);
+                            if (e.key === 'Enter')  handleDeposit(goal);
                             if (e.key === 'Escape') closeDeposit();
                           }}
                           className="h-8 text-sm"

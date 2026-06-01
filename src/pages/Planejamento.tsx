@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { CalendarRange, AlertCircle, TrendingDown } from 'lucide-react';
+import { AlertCircle, TrendingDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useTransactions } from '@/hooks/useTransactions';
@@ -23,7 +23,6 @@ const getPriority = (index: number, total: number): { label: string; variant: 'd
   return { label: 'Baixa', variant: 'secondary' };
 };
 
-// Estimativa simples de meses para quitação usando juros compostos (snowball pelo mínimo)
 const estimateMonths = (debts: Debt[]): number => {
   let months = 0;
   const balances = debts.map((d) => ({ balance: d.amount, rate: d.interest_rate / 100, min: d.minimum_payment }));
@@ -55,8 +54,8 @@ export const Planejamento: React.FC<{ onBack?: () => void }> = () => {
   }, [transactions]);
 
   const totalDebt = debts.reduce((s, d) => s + d.amount, 0);
-  const totalMin = debts.reduce((s, d) => s + d.minimum_payment, 0);
-  const months = debts.length > 0 ? estimateMonths(debts) : 0;
+  const totalMin  = debts.reduce((s, d) => s + d.minimum_payment, 0);
+  const months    = debts.length > 0 ? estimateMonths(debts) : 0;
 
   return (
     <div className="space-y-6">
@@ -65,14 +64,12 @@ export const Planejamento: React.FC<{ onBack?: () => void }> = () => {
         <h1 className="text-2xl font-bold mt-1">Planejamento Financeiro</h1>
       </div>
 
-      {/* Prioridade de Dívidas */}
       <section className="space-y-4">
         <div className="flex items-center gap-2">
           <TrendingDown className="w-5 h-5 text-destructive" />
-          <h2 className="text-lg font-semibold">Prioridade de Dívidas</h2>
+          <h2 className="text-lg font-semibold">Suas Dívidas</h2>
         </div>
 
-        {/* Resumo */}
         <div className="grid gap-3 sm:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
@@ -99,21 +96,20 @@ export const Planejamento: React.FC<{ onBack?: () => void }> = () => {
             <CardContent>
               <p className="text-2xl font-bold">{months > 0 ? `${months} meses` : '—'}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {months > 0 ? `~${Math.ceil(months / 12)} ano(s) pagando o mínimo` : 'sem dívidas ativas'}
+                {months > 0 ? `~${Math.ceil(months / 12)} ano(s) pagando o mínimo` : 'Sem dívidas ativas'}
               </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Lista */}
         {loading ? (
           <Card className="p-8 text-center text-muted-foreground">Carregando...</Card>
         ) : debts.length === 0 ? (
           <Card className="p-8 text-center">
             <AlertCircle className="w-10 h-10 text-muted-foreground mx-auto mb-2" />
-            <p className="text-muted-foreground">Nenhuma dívida cadastrada.</p>
+            <p className="font-medium text-muted-foreground">Nenhuma dívida cadastrada</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Marque uma despesa como dívida (is_debt) para vê-la aqui, ordenada por maior taxa de juros.
+              Marque uma despesa como dívida para vê-la aqui, ordenada por maior taxa de juros.
             </p>
           </Card>
         ) : (
@@ -144,12 +140,6 @@ export const Planejamento: React.FC<{ onBack?: () => void }> = () => {
           </div>
         )}
       </section>
-
-      <div className="bg-card rounded-2xl border border-border p-12 text-center">
-        <CalendarRange className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-        <p className="text-muted-foreground">Mais ferramentas de planejamento em breve.</p>
-        <p className="text-xs text-muted-foreground mt-2">Orçamentos por categoria e metas mensais.</p>
-      </div>
     </div>
   );
 };

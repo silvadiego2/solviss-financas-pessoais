@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Home, Receipt, CalendarRange, TrendingUp,
-  CreditCard, Target, BarChart3, Crown,
+  CreditCard, Target, BarChart3,
   Settings, Moon, Sun, User, LogOut,
   X, PlusCircle, MoreHorizontal,
   Brain, Repeat, Plus, CalendarClock,
@@ -18,20 +18,20 @@ interface AppSidebarProps {
   onOpenAddSheet: () => void;
 }
 
-// ── Navegação principal (sidebar desktop + "Principal" label) ──────────────
+// ── Navegação principal ───────────────────────────────────────────────────
 const PRIMARY_NAV = [
   { id: 'dashboard',    icon: Home,          label: 'Início'       },
   { id: 'transactions', icon: Receipt,       label: 'Transações'   },
   { id: 'cards',        icon: CreditCard,    label: 'Cartões'      },
   { id: 'agenda',       icon: CalendarClock, label: 'Agenda'       },
+  { id: 'goals',        icon: Target,        label: 'Metas'        },
   { id: 'budgets',      icon: CalendarRange, label: 'Planejamento' },
 ];
 
-// ── Navegação secundária (Ferramentas) ─────────────────────────────────────
+// ── Navegação secundária (Ferramentas) ────────────────────────────────────
 const SECONDARY_NAV = [
   { id: 'cash-flow',              icon: TrendingUp, label: 'Fluxo de Caixa' },
   { id: 'recurring-transactions', icon: Repeat,     label: 'Recorrentes'    },
-  { id: 'goals',                  icon: Target,     label: 'Metas'          },
   { id: 'reports',                icon: BarChart3,  label: 'Relatórios'     },
   { id: 'intelligence',           icon: Brain,      label: 'Inteligência'   },
 ];
@@ -39,9 +39,9 @@ const SECONDARY_NAV = [
 const PRIMARY_IDS = new Set(PRIMARY_NAV.map(n => n.id));
 
 export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, onOpenAddSheet }) => {
-  const { user, signOut }          = useAuth();
-  const { theme, toggleTheme }     = useTheme();
-  const isMobile                   = useIsMobile();
+  const { user, signOut }      = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const isMobile               = useIsMobile();
   const [mobileOpen,    setMobileOpen]    = useState(false);
   const [secondaryOpen, setSecondaryOpen] = useState(false);
 
@@ -50,7 +50,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
     if (isMobile) setMobileOpen(false);
   };
 
-  // ── Conteúdo compartilhado sidebar/drawer ─────────────────────────────────
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Brand */}
@@ -70,11 +69,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
 
       {/* Botão Nova Transação */}
       <div className="px-4 py-4">
-        <Button
-          onClick={onOpenAddSheet}
-          className="w-full gap-2 shadow-premium-sm"
-          size="default"
-        >
+        <Button onClick={onOpenAddSheet} className="w-full gap-2 shadow-premium-sm" size="default">
           <PlusCircle size={16} />
           <span className="font-medium">Nova Transação</span>
         </Button>
@@ -211,12 +206,10 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
               <span className="text-[10px] font-medium text-muted-foreground mt-0.5">Adicionar</span>
             </div>
 
-            {/* Cartões */}
             <MobileTab id="cards" activeTab={activeTab} label="Cartões" onClick={() => handleNav('cards')}>
               <CreditCard size={22} strokeWidth={activeTab === 'cards' ? 2.25 : 1.75} />
             </MobileTab>
 
-            {/* Mais — abre drawer */}
             <MobileTab
               id="more"
               activeTab={activeTab}
@@ -229,13 +222,12 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
           </div>
         </nav>
 
-        {/* Espaçador */}
         <div className="h-16 flex-shrink-0" />
       </>
     );
   }
 
-  // ── Desktop sidebar ────────────────────────────────────────────────────────
+  // ── Desktop sidebar ───────────────────────────────────────────────────────
   return (
     <aside className="sticky top-0 h-screen w-60 bg-card border-r border-border flex-shrink-0">
       {sidebarContent}
@@ -243,7 +235,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ activeTab, onTabChange, 
   );
 };
 
-// ─ Sub-componente tab mobile ─────────────────────────────────────────────────
 const MobileTab: React.FC<{
   id: string;
   activeTab: string;

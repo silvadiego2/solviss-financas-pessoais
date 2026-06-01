@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,63 +15,44 @@ interface AddGoalFormProps {
 export const AddGoalForm: React.FC<AddGoalFormProps> = ({ onClose, editingGoal }) => {
   const { addGoal, updateGoal, isAddingGoal, isUpdatingGoal } = useGoals();
   const [formData, setFormData] = useState({
-    name: editingGoal?.name || '',
-    description: editingGoal?.description || '',
-    target_amount: editingGoal?.target_amount || 0,
+    name:           editingGoal?.name           || '',
+    description:    editingGoal?.description    || '',
+    target_amount:  editingGoal?.target_amount  || 0,
     current_amount: editingGoal?.current_amount || 0,
-    target_date: editingGoal?.target_date || '',
-    is_completed: editingGoal?.is_completed || false,
+    target_date:    editingGoal?.target_date    || '',
+    is_completed:   editingGoal?.is_completed   || false,
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.name.trim()) {
-      return;
-    }
-
+    if (!formData.name.trim()) return;
     if (editingGoal) {
-      updateGoal({
-        id: editingGoal.id,
-        ...formData,
-      });
+      updateGoal({ id: editingGoal.id, ...formData });
     } else {
       addGoal(formData);
     }
-    
     onClose();
-  };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(value);
   };
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">
-          {editingGoal ? 'Editar Meta' : 'Nova Meta Financeira'}
+          {editingGoal ? 'Editar Meta' : 'Nova Meta'}
         </CardTitle>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-        >
+        <Button variant="ghost" size="icon" onClick={onClose}>
           <X size={20} />
         </Button>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Nome da Meta *</Label>
+            <Label htmlFor="name">Nome *</Label>
             <Input
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Ex: Reserva de Emergência"
+              placeholder="Ex: Reserva de emergência"
               required
             />
           </div>
@@ -83,14 +63,14 @@ export const AddGoalForm: React.FC<AddGoalFormProps> = ({ onClose, editingGoal }
               id="description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Descreva sua meta financeira"
+              placeholder="Para que é essa meta?"
               rows={2}
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="target_amount">Valor Alvo *</Label>
+              <Label htmlFor="target_amount">Valor alvo *</Label>
               <Input
                 id="target_amount"
                 type="number"
@@ -104,7 +84,7 @@ export const AddGoalForm: React.FC<AddGoalFormProps> = ({ onClose, editingGoal }
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="current_amount">Valor Atual</Label>
+              <Label htmlFor="current_amount">Valor atual</Label>
               <Input
                 id="current_amount"
                 type="number"
@@ -118,7 +98,7 @@ export const AddGoalForm: React.FC<AddGoalFormProps> = ({ onClose, editingGoal }
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="target_date">Data Limite (Opcional)</Label>
+            <Label htmlFor="target_date">Prazo (opcional)</Label>
             <Input
               id="target_date"
               type="date"
@@ -136,25 +116,16 @@ export const AddGoalForm: React.FC<AddGoalFormProps> = ({ onClose, editingGoal }
                 onChange={(e) => setFormData({ ...formData, is_completed: e.target.checked })}
                 className="rounded"
               />
-              <Label htmlFor="is_completed">Meta concluída</Label>
+              <Label htmlFor="is_completed">Marcar como concluída</Label>
             </div>
           )}
 
           <div className="flex gap-3 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onClose}
-              className="flex-1"
-            >
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1">
               Cancelar
             </Button>
-            <Button
-              type="submit"
-              disabled={isAddingGoal || isUpdatingGoal}
-              className="flex-1"
-            >
-              {isAddingGoal || isUpdatingGoal ? 'Salvando...' : editingGoal ? 'Atualizar' : 'Adicionar'}
+            <Button type="submit" disabled={isAddingGoal || isUpdatingGoal} className="flex-1">
+              {isAddingGoal || isUpdatingGoal ? 'Salvando...' : editingGoal ? 'Atualizar' : 'Salvar'}
             </Button>
           </div>
         </form>
