@@ -119,7 +119,7 @@ export const FinanceApp: React.FC = () => {
         
       // 🚀 NOVA ROTA: Onde a tela que criamos vai renderizar
       case 'importar-extrato':
-        return <ImportarExtrato />;
+        return <ImportarExtrato onBack={handleBack} />;
         
       case 'profile':
         return <UserProfile onBack={handleBack} />;
