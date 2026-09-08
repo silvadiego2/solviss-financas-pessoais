@@ -29,6 +29,9 @@ import { Inteligencia } from '@/pages/Inteligencia';
 import { Planos } from '@/pages/Planos';
 import { TransactionSheet } from './transactions/TransactionSheet';
 
+// 🚀 NOVO IMPORT: Nossa página de importação de OFX/CSV
+import { ImportarExtrato } from '@/pages/ImportarExtrato'; 
+
 // Tabs de primeiro nível (não empilham histórico de navegação)
 const ROOT_TABS = new Set([
   'dashboard', 'transactions', 'cards', 'agenda', 'budgets', 'reports',
@@ -101,6 +104,7 @@ export const FinanceApp: React.FC = () => {
         return <SimpleReports />;
       case 'more':
         return <MoreOptions onNavigate={handleTabChange} />;
+      
       // Sub-telas
       case 'plans':
         return <Planos onBack={handleBack} />;
@@ -112,6 +116,11 @@ export const FinanceApp: React.FC = () => {
         return <ExportReports onBack={handleBack} />;
       case 'import-transactions':
         return <ImportTransactions onBack={handleBack} />;
+        
+      // 🚀 NOVA ROTA: Onde a tela que criamos vai renderizar
+      case 'importar-extrato':
+        return <ImportarExtrato />;
+        
       case 'profile':
         return <UserProfile onBack={handleBack} />;
       case 'settings':
