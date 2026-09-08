@@ -3,6 +3,7 @@ import {
   Download, Tags, ChevronRight,
   Shield, Database, Trash2,
   Sparkles, Crown, Settings, LogOut,
+  UploadCloud // 🚀 Adicionamos o ícone de Upload aqui
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -103,15 +104,21 @@ export const MoreOptions: React.FC<MoreOptionsProps> = ({ onNavigate }) => {
       action: () => onNavigate('automation-hub'),
       badge: 'IA',
     },
+    // 🚀 Aqui dividimos em duas opções limpas e funcionais!
     {
-      title: 'Importar / Exportar',
-      description: 'CSV, Excel ou PDF — entrada e saída de dados',
+      title: 'Importar Extratos',
+      description: 'Arquivos bancários (OFX e CSV)',
+      icon: UploadCloud,
+      action: () => onNavigate('importar-extrato'),
+    },
+    {
+      title: 'Exportar Relatórios',
+      description: 'Baixe seus dados para planilhas',
       icon: Download,
-      action: () => onNavigate('data-transfer'),
+      action: () => onNavigate('export'),
     },
   ];
 
-  // 'Contas Bancárias' removido — migrou para a aba Cartões (tab switcher Cartões|Contas)
   const accountItems: MenuItem[] = [
     {
       title: 'Categorias',
