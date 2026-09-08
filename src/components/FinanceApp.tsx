@@ -83,7 +83,7 @@ export const FinanceApp: React.FC = () => {
       case 'dashboard':
         return <DashboardOverview onNavigate={handleTabChange} />;
       case 'transactions':
-        return <TransactionsList />;
+      return <TransactionsList onNavigate={handleTabChange} />;
       case 'cards':
         return <CreditCardsList />;
       case 'agenda':

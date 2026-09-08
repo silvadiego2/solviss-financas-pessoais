@@ -5,8 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Edit, Trash2, Repeat, Search, ArrowUpRight, ArrowDownRight,
-  X, SlidersHorizontal, Loader2, Plus, ArrowUpDown,
-} from 'lucide-react';
+  X, SlidersHorizontal, Loader2, Plus, ArrowUpDown, UploadCloud
+} from 'lucide-react'; // 🚀 Adicionei o UploadCloud aqui
 import { useTransactions, Transaction, TransactionFilters } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useCategories } from '@/hooks/useCategories';
@@ -34,15 +34,20 @@ const TYPE_PILLS: { value: TypeFilter; label: string; icon: React.ReactNode }[] 
   { value: 'expense', label: 'Despesas', icon: <ArrowDownRight className="w-3 h-3" /> },
 ];
 
-export const TransactionsList: React.FC = () => {
-  const [search,         setSearch]         = useState('');
-  const [filterType,     setFilterType]     = useState<TypeFilter>('all');
-  const [filterCategory, setFilterCategory] = useState('');
-  const [filterAccount,  setFilterAccount]  = useState('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo,   setFilterDateTo]   = useState('');
-  const [showAdvanced,   setShowAdvanced]   = useState(false);
-  const [sheet,          setSheet]          = useState<SheetState>({ mode: 'closed' });
+// 🚀 Criamos a interface para receber o onNavigate
+interface TransactionsListProps {
+  onNavigate?: (tab: string) => void;
+}
+
+export const TransactionsList: React.FC<TransactionsListProps> = ({ onNavigate }) => {
+  const [search,          setSearch]         = useState('');
+  const [filterType,      setFilterType]     = useState<TypeFilter>('all');
+  const [filterCategory,  setFilterCategory] = useState('');
+  const [filterAccount,   setFilterAccount]  = useState('');
+  const [filterDateFrom,  setFilterDateFrom] = useState('');
+  const [filterDateTo,    setFilterDateTo]   = useState('');
+  const [showAdvanced,    setShowAdvanced]   = useState(false);
+  const [sheet,           setSheet]          = useState<SheetState>({ mode: 'closed' });
 
   const debouncedSearch = useDebounce(search, 350);
 
@@ -118,48 +123,53 @@ export const TransactionsList: React.FC = () => {
 
       <div className="space-y-5">
 
-        {/* ── Título + botão ─────────────────────────────────────────────────
-            mobile: título menor (text-2xl) + botão fica embaixo em telas xs
-            sm+: lado a lado como antes
-        */}
+        {/* ── Título + botões ───────────────────────────────────────────────── */}
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="label-eyebrow">Transações</p>
             <h1 className="text-2xl sm:text-3xl font-semibold mt-0.5 tracking-tight">Movimentações</h1>
           </div>
-          <Button
-            onClick={() => setSheet({ mode: 'add' })}
-            size="sm"
-            className="flex items-center gap-1.5 flex-shrink-0 mt-1"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden xs:inline">Nova</span>
-            <span className="hidden sm:inline"> Transação</span>
-          </Button>
+          
+          {/* 🚀 Adicionamos a div agrupadora para os dois botões */}
+          <div className="flex items-center gap-2 flex-shrink-0 mt-1">
+            {onNavigate && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onNavigate('importar-extrato')}
+                className="flex items-center gap-1.5"
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span className="hidden xs:inline">Importar</span>
+              </Button>
+            )}
+
+            <Button
+              onClick={() => setSheet({ mode: 'add' })}
+              size="sm"
+              className="flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden xs:inline">Nova</span>
+              <span className="hidden sm:inline"> Transação</span>
+            </Button>
+          </div>
         </div>
 
-        {/* ── KPIs ────────────────────────────────────────────────────────────
-            3 colunas sempre, mas padding e fonte adaptativos.
-            min-w-0 + truncate impedem transbordamento do valor.
-        */}
+        {/* ── KPIs ──────────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-3 gap-2 sm:gap-4">
-          {/* Receitas */}
           <div className="card-elevated p-3 sm:p-5 min-w-0">
             <p className="label-eyebrow text-[10px] sm:text-xs truncate">Receitas</p>
-            <p className="font-bold tabular-nums mt-1 text-success truncate
-                          text-sm sm:text-xl lg:text-2xl">
+            <p className="font-bold tabular-nums mt-1 text-success truncate text-sm sm:text-xl lg:text-2xl">
               {formatCurrency(totalIncome)}
             </p>
           </div>
-          {/* Despesas */}
           <div className="card-elevated p-3 sm:p-5 min-w-0">
             <p className="label-eyebrow text-[10px] sm:text-xs truncate">Despesas</p>
-            <p className="font-bold tabular-nums mt-1 text-destructive truncate
-                          text-sm sm:text-xl lg:text-2xl">
+            <p className="font-bold tabular-nums mt-1 text-destructive truncate text-sm sm:text-xl lg:text-2xl">
               {formatCurrency(totalExpense)}
             </p>
           </div>
-          {/* Balanço */}
           <div className="card-elevated p-3 sm:p-5 min-w-0">
             <p className="label-eyebrow text-[10px] sm:text-xs truncate">Balanço</p>
             <p className={cn(
@@ -171,13 +181,8 @@ export const TransactionsList: React.FC = () => {
           </div>
         </div>
 
-        {/* ── BARRA DE FILTROS ─────────────────────────────────────────────────
-            mobile: busca em cima (linha 1), pills + botão embaixo (linha 2)
-            sm+:    tudo em uma linha
-        */}
+        {/* ── BARRA DE FILTROS ───────────────────────────────────────────────── */}
         <div className="space-y-2">
-
-          {/* Linha 1 (mobile): campo de busca */}
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <Input
@@ -197,7 +202,6 @@ export const TransactionsList: React.FC = () => {
             )}
           </div>
 
-          {/* Linha 2: pills + botão filtros avançados */}
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 bg-muted rounded-lg p-0.5 flex-1 sm:flex-none">
               {TYPE_PILLS.map(pill => {
@@ -254,7 +258,6 @@ export const TransactionsList: React.FC = () => {
             </button>
           </div>
 
-          {/* Filtros avançados colapsáveis */}
           <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
             <CollapsibleContent>
               <div className="p-4 rounded-xl border border-border bg-muted/30 space-y-3">
@@ -355,7 +358,6 @@ export const TransactionsList: React.FC = () => {
                   {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                 </p>
 
-                {/* Botões de ação — visíveis no hover (desktop) ou sempre no mobile */}
                 <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-all">
                   <button
                     onClick={() => setSheet({ mode: 'edit', transaction: t })}
@@ -397,7 +399,6 @@ export const TransactionsList: React.FC = () => {
           )}
         </div>
 
-        {/* Carregar mais */}
         {hasNextPage && (
           <div className="flex justify-center pt-2">
             <Button
