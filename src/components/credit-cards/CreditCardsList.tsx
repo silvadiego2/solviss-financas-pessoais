@@ -4,6 +4,7 @@ import { Plus, CreditCard as CreditCardIcon, Calendar, Receipt, Edit, Trash2, Bu
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useAccounts } from '@/hooks/useAccounts';
+import { useTransactions } from '@/hooks/useTransactions'; // NOVO: Importado para calcular a fatura
 import { formatCurrency } from '@/utils/formatters';
 import { AddCreditCardForm } from './AddCreditCardForm';
 import { CreditCardInvoices } from './CreditCardInvoices';
@@ -31,6 +32,8 @@ type Tab = 'cards' | 'accounts';
 export const CreditCardsList: React.FC = () => {
   const { creditCards, loading, deleteCreditCard } = useCreditCards();
   const { accounts } = useAccounts();
+  const { transactions } = useTransactions(); // NOVO: Hook de transações
+  
   const [activeTab, setActiveTab] = useState<Tab>('cards');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCard, setEditingCard] = useState<any>(null);
@@ -40,7 +43,31 @@ export const CreditCardsList: React.FC = () => {
   const handleEdit = (card: any) => { setEditingCard(card); setShowAddForm(true); };
   const handleCloseForm = () => { setShowAddForm(false); setEditingCard(null); };
 
-  const totalOpenInvoices = creditCards.reduce((s, c) => s + c.used_amount, 0);
+  // NOVO: Função para calcular a fatura atual dinamicamente
+  const calculateCurrentInvoice = (cardId: string) => {
+    if (!transactions) return 0;
+    
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+
+    return transactions
+      .filter((t: any) => {
+        const txDate = new Date(t.date);
+        const isCurrentMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+        
+        return (
+          t.credit_card_id === cardId && 
+          t.type === 'expense' && // Considera apenas despesas
+          t.category !== 'Pagamento de Fatura' && // Ignora pagamentos de fatura
+          isCurrentMonth
+        );
+      })
+      .reduce((acc: number, t: any) => acc + t.amount, 0);
+  };
+
+  // ATUALIZADO: Calcula o total das faturas baseado na nova função em vez de usar card.used_amount
+  const totalOpenInvoices = creditCards.reduce((s, c) => s + calculateCurrentInvoice(c.id), 0);
   const totalLimit        = creditCards.reduce((s, c) => s + c.limit, 0);
 
   if (loading) {
@@ -108,10 +135,12 @@ export const CreditCardsList: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {creditCards.map((card) => {
-            const pct       = getUsagePercentage(card.used_amount, card.limit);
-            const available = card.limit - card.used_amount;
-            const barColor  = getBarColor(pct);
-            const pctClass  = getPercentageTextClass(pct);
+            // ATUALIZADO: Substituição de card.used_amount pela fatura calculada
+            const invoiceAmount = calculateCurrentInvoice(card.id);
+            const pct           = getUsagePercentage(invoiceAmount, card.limit);
+            const available     = card.limit - invoiceAmount;
+            const barColor      = getBarColor(pct);
+            const pctClass      = getPercentageTextClass(pct);
 
             return (
               <div key={card.id} className="card-elevated overflow-hidden flex flex-col">
@@ -138,9 +167,9 @@ export const CreditCardsList: React.FC = () => {
                 <div className="p-5 space-y-5 flex-1">
                   <div>
                     <div className="flex justify-between items-baseline mb-2">
-                      <span className="text-xs text-muted-foreground font-medium">Limite Utilizado</span>
+                      <span className="text-xs text-muted-foreground font-medium">Fatura Atual</span>
                       <span className="figure text-sm">
-                        {formatCurrency(card.used_amount)}{' '}
+                        {formatCurrency(invoiceAmount)}{' '}
                         <span className="text-muted-foreground font-normal">/ {formatCurrency(card.limit)}</span>
                       </span>
                     </div>
