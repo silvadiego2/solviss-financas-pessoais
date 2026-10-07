@@ -15,10 +15,11 @@ import { ReceiptScanner, ScannedData } from './ReceiptScanner';
 import {
   CreditCard, Building, Upload, X,
   Scan, Loader2, Repeat, ArrowDown, ArrowUp,
+  Info
 } from 'lucide-react';
 import { enhancedToast } from '@/components/ui/enhanced-toast';
 import { validateTransaction, parseAmount } from '@/utils/transactionSchema';
-import { todayISO, formatDateBR } from '@/utils/dateHelpers';
+import { todayISO } from '@/utils/dateHelpers';
 import { suggestCategoryId } from '@/utils/autoCategorize';
 import { formatCurrency } from '@/utils/formatters';
 import { cn } from '@/lib/utils';
@@ -34,7 +35,6 @@ const maskBRL = (raw: string): string => {
   return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-/** Lê um File como base64 data URL — persistente, ao contrário de createObjectURL */
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -45,36 +45,42 @@ function fileToDataUrl(file: File): Promise<string> {
 }
 
 export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose }) => {
-  const [type,                setType]                = useState<'income' | 'expense'>('expense');
-  const [amount,              setAmount]              = useState('');
-  const [description,         setDescription]         = useState('');
-  const [accountId,           setAccountId]           = useState('');
-  const [categoryId,          setCategoryId]          = useState('');
-  const [date,                setDate]                = useState(todayISO());
-  const [receiptFile,         setReceiptFile]         = useState<File | null>(null);
-  const [receiptPreview,      setReceiptPreview]      = useState<string | null>(null);
-  const [loading,             setLoading]             = useState(false);
-  const [isRecurring,         setIsRecurring]         = useState(false);
-  const [recurrenceFrequency, setRecurrenceFrequency] = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
-  const [recurrenceEndDate,   setRecurrenceEndDate]   = useState('');
-  const [showScanner,         setShowScanner]         = useState(false);
-  const [validationErrors,    setValidationErrors]    = useState<Record<string, string>>({});
+  const [type,                 setType]                 = useState<'income' | 'expense'>('expense');
+  const [amount,               setAmount]               = useState('');
+  const [description,          setDescription]          = useState('');
+  const [accountId,            setAccountId]            = useState('');
+  const [categoryId,           setCategoryId]           = useState('');
+  const [date,                 setDate]                 = useState(todayISO());
+  const [receiptFile,          setReceiptFile]          = useState<File | null>(null);
+  const [receiptPreview,       setReceiptPreview]       = useState<string | null>(null);
+  const [loading,              setLoading]              = useState(false);
+  
+  // Recorrência
+  const [isRecurring,          setIsRecurring]          = useState(false);
+  const [recurrenceFrequency,  setRecurrenceFrequency]  = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [recurrenceEndDate,    setRecurrenceEndDate]    = useState('');
+  
+  // Pagamento de Fatura (Novo estado)
+  const [isInvoicePayment,     setIsInvoicePayment]     = useState(false);
+
+  const [showScanner,          setShowScanner]          = useState(false);
+  const [validationErrors,     setValidationErrors]     = useState<Record<string, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { accounts }                 = useAccounts();
-  const { creditCards }              = useCreditCards();
-  const { categories }               = useCategories();
-  const { createTransactionAsync }   = useTransactions();
+  const { accounts }           = useAccounts();
+  const { creditCards }        = useCreditCards();
+  const { categories }         = useCategories();
+  const { createTransactionAsync } = useTransactions();
 
   const filteredCategories = categories.filter(cat => cat.transaction_type === type);
+  const isCreditCardSelected = creditCards.some(c => c.id === accountId);
 
   useEffect(() => {
     if (categoryId || !description) return;
     const suggested = suggestCategoryId(description, filteredCategories as any, type);
-    if (suggested) setCategoryId(suggested);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [description, type, categories]);
+    if (suggested && !isInvoicePayment) setCategoryId(suggested);
+  }, [description, type, categories, isInvoicePayment]);
 
   const allAccounts = [
     ...accounts.map(a => ({
@@ -128,6 +134,15 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     }
   };
 
+  // Quando marca "Pagamento de Fatura", força a ser receita
+  const handleInvoicePaymentToggle = (checked: boolean) => {
+    setIsInvoicePayment(checked);
+    if (checked) {
+      setType('income');
+      setDescription(description || 'Pagamento de Fatura');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationErrors({});
@@ -151,23 +166,28 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     const numericAmount = parseAmount(amount);
     setLoading(true);
     try {
-      // mutateAsync: aguarda o upload do comprovante antes de fechar o form
       await createTransactionAsync({
-        type, amount: numericAmount, description,
-        account_id: accountId, category_id: categoryId, date,
+        type, 
+        amount: numericAmount, 
+        description,
+        account_id: accountId, 
+        category_id: categoryId, 
+        date,
         status: 'completed',
         receiptFile: receiptFile || undefined,
         is_recurring: isRecurring,
         recurrence_frequency: isRecurring ? recurrenceFrequency : undefined,
         recurrence_end_date:  isRecurring && recurrenceEndDate ? recurrenceEndDate : undefined,
       });
+      
       enhancedToast.success(
-        `${type === 'income' ? 'Receita' : 'Despesa'} adicionada!`,
+        isInvoicePayment ? 'Pagamento de fatura registrado!' : `${type === 'income' ? 'Receita' : 'Despesa'} adicionada!`,
         { description: `${formatCurrency(numericAmount)} registrado com sucesso.` },
       );
+      
       setAmount(''); setDescription(''); setAccountId('');
       setCategoryId(''); setDate(todayISO());
-      removeReceipt(); setIsRecurring(false);
+      removeReceipt(); setIsRecurring(false); setIsInvoicePayment(false);
       setRecurrenceFrequency('monthly'); setRecurrenceEndDate('');
       setValidationErrors({});
       if (onClose) onClose();
@@ -199,7 +219,7 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
 
             {/* Tipo */}
             <div className="grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => { setType('expense'); setCategoryId(''); }}
+              <button type="button" onClick={() => { setType('expense'); setCategoryId(''); setIsInvoicePayment(false); }}
                 className={cn(
                   'flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold border-2 transition-all',
                   type === 'expense'
@@ -218,6 +238,30 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
                 <ArrowUp size={16} /> Receita
               </button>
             </div>
+
+            {/* Alerta de Pagamento de Cartão */}
+            {isCreditCardSelected && type === 'income' && (
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 flex items-start gap-2">
+                <Info size={16} className="text-emerald-600 mt-0.5" />
+                <p className="text-xs text-emerald-700 leading-relaxed">
+                  Adicionar uma receita ao cartão vai liberar limite disponível. Use isso para registrar o pagamento da sua fatura.
+                </p>
+              </div>
+            )}
+
+            {/* Pagamento de Fatura Toggle */}
+            {isCreditCardSelected && (
+              <div className="flex items-center gap-2 bg-muted/50 p-3 rounded-lg border border-border">
+                <Checkbox 
+                  id="invoicePayment" 
+                  checked={isInvoicePayment}
+                  onCheckedChange={(c) => handleInvoicePaymentToggle(c as boolean)} 
+                />
+                <Label htmlFor="invoicePayment" className="cursor-pointer font-medium text-sm">
+                  Esta transação é o pagamento da fatura
+                </Label>
+              </div>
+            )}
 
             {/* Valor */}
             <div className="space-y-2">
