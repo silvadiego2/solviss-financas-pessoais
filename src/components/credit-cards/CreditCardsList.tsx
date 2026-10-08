@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, CreditCard as CreditCardIcon, Calendar, Receipt, Edit, Trash2, Building2 } from 'lucide-react';
+import { Plus, CreditCard as CreditCardIcon, Calendar, Receipt, Edit, Trash2, Building2, TrendingUp, Wallet } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useAccounts } from '@/hooks/useAccounts';
-import { useTransactions } from '@/hooks/useTransactions'; // NOVO: Importado para calcular a fatura
+import { useTransactions } from '@/hooks/useTransactions';
 import { formatCurrency } from '@/utils/formatters';
 import { AddCreditCardForm } from './AddCreditCardForm';
 import { CreditCardInvoices } from './CreditCardInvoices';
@@ -32,7 +32,7 @@ type Tab = 'cards' | 'accounts';
 export const CreditCardsList: React.FC = () => {
   const { creditCards, loading, deleteCreditCard } = useCreditCards();
   const { accounts } = useAccounts();
-  const { transactions } = useTransactions(); // NOVO: Hook de transações
+  const { transactions } = useTransactions();
   
   const [activeTab, setActiveTab] = useState<Tab>('cards');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -43,7 +43,8 @@ export const CreditCardsList: React.FC = () => {
   const handleEdit = (card: any) => { setEditingCard(card); setShowAddForm(true); };
   const handleCloseForm = () => { setShowAddForm(false); setEditingCard(null); };
 
-  // NOVO: Função para calcular a fatura atual dinamicamente
+  // CALCULO DA FATURA: Soma estritamente as DESPESAS do cartão.
+  // Receitas injetadas (pagamentos de fatura) restauram o limite no banco, mas não afetam a soma abaixo.
   const calculateCurrentInvoice = (cardId: string) => {
     if (!transactions) return 0;
     
@@ -55,18 +56,13 @@ export const CreditCardsList: React.FC = () => {
       .filter((t: any) => {
         const txDate = new Date(t.date);
         const isCurrentMonth = txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+        const isThisCard = t.credit_card_id === cardId || t.account_id === cardId;
         
-        return (
-          t.credit_card_id === cardId && 
-          t.type === 'expense' && // Considera apenas despesas
-          t.category !== 'Pagamento de Fatura' && // Ignora pagamentos de fatura
-          isCurrentMonth
-        );
+        return isThisCard && t.type === 'expense' && isCurrentMonth;
       })
       .reduce((acc: number, t: any) => acc + t.amount, 0);
   };
 
-  // ATUALIZADO: Calcula o total das faturas baseado na nova função em vez de usar card.used_amount
   const totalOpenInvoices = creditCards.reduce((s, c) => s + calculateCurrentInvoice(c.id), 0);
   const totalLimit        = creditCards.reduce((s, c) => s + c.limit, 0);
 
@@ -82,7 +78,6 @@ export const CreditCardsList: React.FC = () => {
   if (editingCard)                 return <EditCreditCardForm card={editingCard} onClose={handleCloseForm} />;
   if (selectedCardForInvoices)     return <CreditCardInvoices card={selectedCardForInvoices} onClose={() => setSelectedCardForInvoices(null)} />;
 
-  // ── Tab: Contas ──────────────────────────────────────────────────────────
   if (activeTab === 'accounts') {
     return (
       <div className="space-y-5">
@@ -92,7 +87,6 @@ export const CreditCardsList: React.FC = () => {
     );
   }
 
-  // ── Tab: Cartões ─────────────────────────────────────────────────────────
   return (
     <div className="space-y-7">
       <TabBar active={activeTab} onChange={setActiveTab} cardCount={creditCards.length} accountCount={accounts.length} />
@@ -135,10 +129,9 @@ export const CreditCardsList: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {creditCards.map((card) => {
-            // ATUALIZADO: Substituição de card.used_amount pela fatura calculada
             const invoiceAmount = calculateCurrentInvoice(card.id);
+            const available     = card.limit - card.used_amount;
             const pct           = getUsagePercentage(invoiceAmount, card.limit);
-            const available     = card.limit - invoiceAmount;
             const barColor      = getBarColor(pct);
             const pctClass      = getPercentageTextClass(pct);
 
@@ -156,20 +149,26 @@ export const CreditCardsList: React.FC = () => {
                     </div>
                     <CreditCardIcon size={22} className="opacity-70 flex-shrink-0" />
                   </div>
-                  <div className="relative mt-7">
-                    <p className="text-[10px] uppercase tracking-[0.14em] opacity-60 font-semibold">Limite Disponível</p>
-                    <p className={`figure-hero text-2xl mt-1 ${available < 0 ? 'text-destructive-foreground/90' : ''}`}>
-                      {formatCurrency(available)}
-                    </p>
+                  <div className="relative mt-7 flex justify-between items-end">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.14em] opacity-60 font-semibold flex items-center gap-1">
+                        <Wallet className="h-3 w-3" /> Limite Disponível
+                      </p>
+                      <p className={`figure-hero text-2xl mt-1 ${available < 0 ? 'text-destructive-foreground/90' : ''}`}>
+                        {formatCurrency(available)}
+                      </p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="p-5 space-y-5 flex-1">
                   <div>
                     <div className="flex justify-between items-baseline mb-2">
-                      <span className="text-xs text-muted-foreground font-medium">Fatura Atual</span>
+                      <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3" /> Fatura Atual
+                      </span>
                       <span className="figure text-sm">
-                        {formatCurrency(invoiceAmount)}{' '}
+                        <span className="text-destructive font-bold">{formatCurrency(invoiceAmount)}</span>{' '}
                         <span className="text-muted-foreground font-normal">/ {formatCurrency(card.limit)}</span>
                       </span>
                     </div>
@@ -181,10 +180,9 @@ export const CreditCardsList: React.FC = () => {
                     </div>
                     <div className="flex items-center justify-between mt-1.5">
                       <p className={`text-xs font-semibold ${pctClass}`}>
-                        {card.limit > 0 ? `${pct.toFixed(1)}% utilizado` : 'Limite não definido'}
+                        {card.limit > 0 ? `${pct.toFixed(1)}% do limite` : 'Limite não definido'}
                       </p>
-                      {pct >= 80 && <p className="text-xs text-destructive font-medium">⚠️ Limite crítico</p>}
-                      {pct >= 60 && pct < 80 && <p className="text-xs text-yellow-500 font-medium">Atenção</p>}
+                      {pct >= 80 && <p className="text-xs text-destructive font-medium">⚠️ Fatura alta</p>}
                     </div>
                   </div>
 
@@ -253,7 +251,6 @@ export const CreditCardsList: React.FC = () => {
   );
 };
 
-// ── Tab bar compartilhada ────────────────────────────────────────────────────
 interface TabBarProps {
   active: Tab;
   onChange: (t: Tab) => void;
