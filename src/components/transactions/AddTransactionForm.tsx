@@ -55,12 +55,10 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
   const [receiptPreview,       setReceiptPreview]       = useState<string | null>(null);
   const [loading,              setLoading]              = useState(false);
   
-  // Recorrência
   const [isRecurring,          setIsRecurring]          = useState(false);
   const [recurrenceFrequency,  setRecurrenceFrequency]  = useState<'daily' | 'weekly' | 'monthly' | 'yearly'>('monthly');
   const [recurrenceEndDate,    setRecurrenceEndDate]    = useState('');
   
-  // Pagamento de Fatura (Novo estado)
   const [isInvoicePayment,     setIsInvoicePayment]     = useState(false);
 
   const [showScanner,          setShowScanner]          = useState(false);
@@ -134,12 +132,12 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
     }
   };
 
-  // Quando marca "Pagamento de Fatura", força a ser receita
   const handleInvoicePaymentToggle = (checked: boolean) => {
     setIsInvoicePayment(checked);
     if (checked) {
       setType('income');
       setDescription(description || 'Pagamento de Fatura');
+      setCategoryId(''); // Reseta a categoria para o usuário escolher uma válida de "receita"
     }
   };
 
@@ -217,7 +215,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
 
-            {/* Tipo */}
             <div className="grid grid-cols-2 gap-2">
               <button type="button" onClick={() => { setType('expense'); setCategoryId(''); setIsInvoicePayment(false); }}
                 className={cn(
@@ -239,17 +236,15 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               </button>
             </div>
 
-            {/* Alerta de Pagamento de Cartão */}
             {isCreditCardSelected && type === 'income' && (
               <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-3 flex items-start gap-2">
-                <Info size={16} className="text-emerald-600 mt-0.5" />
+                <Info size={16} className="text-emerald-600 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-emerald-700 leading-relaxed">
-                  Adicionar uma receita ao cartão vai liberar limite disponível. Use isso para registrar o pagamento da sua fatura.
+                  Adicionar uma receita ao cartão libera o limite disponível. Use isso para registrar o pagamento da sua fatura.
                 </p>
               </div>
             )}
 
-            {/* Pagamento de Fatura Toggle */}
             {isCreditCardSelected && (
               <div className="flex items-center gap-2 bg-muted/50 p-3 rounded-lg border border-border">
                 <Checkbox 
@@ -263,7 +258,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               </div>
             )}
 
-            {/* Valor */}
             <div className="space-y-2">
               <Label htmlFor="amount">Valor *</Label>
               <div className="relative">
@@ -274,13 +268,11 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               {validationErrors.amount && <p className="text-xs text-destructive">{validationErrors.amount}</p>}
             </div>
 
-            {/* Data */}
             <div className="space-y-2">
               <Label htmlFor="date">Data</Label>
               <Input id="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
             </div>
 
-            {/* Descrição */}
             <div className="space-y-2">
               <Label htmlFor="description">Descrição *</Label>
               <Input id="description" type="text" placeholder="Ex: Almoço, Salário, Compras..."
@@ -288,7 +280,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               {validationErrors.description && <p className="text-xs text-destructive">{validationErrors.description}</p>}
             </div>
 
-            {/* Conta + Categoria */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Conta / Cartão *</Label>
@@ -319,7 +310,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               </div>
             </div>
 
-            {/* Recorrência */}
             <div className="rounded-xl border border-border p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Checkbox id="recurring" checked={isRecurring}
@@ -351,7 +341,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               )}
             </div>
 
-            {/* Comprovante */}
             <div className="space-y-2">
               <Label>Comprovante / Nota Fiscal</Label>
               {!receiptPreview ? (
@@ -397,7 +386,6 @@ export const AddTransactionForm: React.FC<AddTransactionFormProps> = ({ onClose 
               )}
             </div>
 
-            {/* Salvar */}
             <Button type="submit" className="w-full h-11 text-sm font-semibold" disabled={loading}>
               {loading
                 ? <><Loader2 size={16} className="mr-2 animate-spin" /> Salvando...</>
